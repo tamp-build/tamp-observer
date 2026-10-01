@@ -19,7 +19,9 @@ class Build : TampBuild
 
     // ----- SonarCloud (SonarQube Cloud) -----
 
-    [NuGetPackage("dotnet-sonarscanner", Version = "10.4.1")]
+    // dotnet-sonarscanner is a DLL-based .NET tool; install it globally in CI
+    // (`dotnet tool install --global dotnet-sonarscanner`) and resolve the apphost from PATH.
+    [FromPath("dotnet-sonarscanner")]
     readonly Tool SonarTool = null!;
 
     [Secret("SonarCloud token", EnvironmentVariable = "SONAR_TOKEN")]
