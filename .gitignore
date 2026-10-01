@@ -1,3 +1,6 @@
+# ---- tamp build tooling (downloaded tools, temp) ----
+.tamp/
+
 # ---- .NET ----
 bin/
 obj/
