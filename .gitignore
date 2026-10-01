@@ -23,9 +23,11 @@ src/collector/_dist/
 vendor/
 
 # ---- Node / Svelte (frontend) ----
+# NOTE: do NOT blanket-ignore `build/` here — that is the tamp build-script project
+# at the repo root (build/Build.cs). Scope SvelteKit's adapter-static output to the
+# frontend path instead when the frontend lands (e.g. src/frontend/build/).
 node_modules/
 .svelte-kit/
-build/
 .vite/
 dist/
 *.tsbuildinfo
