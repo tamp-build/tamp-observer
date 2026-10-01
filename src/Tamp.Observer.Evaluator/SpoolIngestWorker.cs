@@ -8,24 +8,25 @@ namespace Tamp.Observer.Evaluator;
 /// poll cadence is fine because the rawfile exporter's durable landing means nothing is lost between
 /// polls; a future tier can switch to a push/stream drain without changing the evaluator.
 /// </summary>
-public sealed class SpoolIngestWorker(
+public sealed partial class SpoolIngestWorker(
     IngestEvaluator evaluator,
     ILogger<SpoolIngestWorker> logger) : BackgroundService
 {
+    private readonly ILogger<SpoolIngestWorker> _logger = logger;
+
     /// <summary>How often to drain the spool.</summary>
     public TimeSpan Interval { get; init; } = TimeSpan.FromSeconds(2);
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        logger.LogInformation("spool ingest worker started (interval {Interval})", Interval);
+        LogStarted(Interval);
         while (!stoppingToken.IsCancellationRequested)
         {
             try
             {
                 var stats = await evaluator.DrainAsync(stoppingToken);
                 if (stats.Total > 0)
-                    logger.LogInformation("drained {Total} (admitted {Admitted}, quarantined {Quarantined})",
-                        stats.Total, stats.Admitted, stats.Quarantined);
+                    LogDrained(stats.Total, stats.Admitted, stats.Quarantined);
             }
             catch (OperationCanceledException)
             {
@@ -33,11 +34,20 @@ public sealed class SpoolIngestWorker(
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "spool drain failed; will retry next interval");
+                LogDrainFailed(ex);
             }
 
             try { await Task.Delay(Interval, stoppingToken); }
             catch (OperationCanceledException) { break; }
         }
     }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "spool ingest worker started (interval {Interval})")]
+    private partial void LogStarted(TimeSpan interval);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "drained {Total} (admitted {Admitted}, quarantined {Quarantined})")]
+    private partial void LogDrained(int total, int admitted, int quarantined);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "spool drain failed; will retry next interval")]
+    private partial void LogDrainFailed(Exception ex);
 }

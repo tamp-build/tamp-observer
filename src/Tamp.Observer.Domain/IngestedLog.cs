@@ -27,7 +27,7 @@ public class IngestedLog
 
     public string InstanceId { get; set; } = Synthetic.UnknownInstance;
 
-    public Dictionary<string, string> Attributes { get; set; } = new();
+    public Dictionary<string, string> Attributes { get; set; } = [];
 
     // Provenance from the raw envelope (ADR 0003).
     public required string ReceiptId { get; set; }

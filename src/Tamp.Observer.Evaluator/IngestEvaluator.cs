@@ -17,16 +17,22 @@ public readonly record struct DrainStats(int Admitted, int Quarantined)
 /// the batch through <see cref="IEventSink"/>) or rejects (quarantine with a reason). Every event leaves
 /// the spool for exactly one of {store, quarantine}.
 /// </summary>
-public sealed class IngestEvaluator(
+public sealed partial class IngestEvaluator(
     IDocumentStore store,
     SpoolReader spool,
     IEventSink sink,
-    ILogger<IngestEvaluator>? logger = null)
+    ILogger<IngestEvaluator> logger)
 {
     private readonly IDocumentStore _store = store;
     private readonly SpoolReader _spool = spool;
     private readonly IEventSink _sink = sink;
-    private readonly ILogger<IngestEvaluator>? _log = logger;
+    private readonly ILogger<IngestEvaluator> _log = logger;
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "admitted receipt {ReceiptId} ({Signal})")]
+    private partial void LogAdmitted(string receiptId, string signal);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "quarantined receipt {ReceiptId}: {Reason}")]
+    private partial void LogQuarantined(string receiptId, string reason);
 
     /// <summary>Process every ready event currently in the spool.</summary>
     public async Task<DrainStats> DrainAsync(CancellationToken ct = default)
@@ -174,7 +180,7 @@ public sealed class IngestEvaluator(
             resolver.NewServices, resolver.NewEnvironments, resolver.NewVersions, spans, logs);
         await _sink.WriteAsync(batch, ct);
 
-        _log?.LogDebug("admitted receipt {ReceiptId} ({Signal})", item.Envelope.ReceiptId, item.Envelope.Signal);
+        LogAdmitted(item.Envelope.ReceiptId, item.Envelope.Signal);
         return true;
     }
 
@@ -193,6 +199,6 @@ public sealed class IngestEvaluator(
             PayloadBytes = item.Payload.Length,
         });
         await session.SaveChangesAsync(ct);
-        _log?.LogInformation("quarantined receipt {ReceiptId}: {Reason}", item.Envelope.ReceiptId, reason);
+        LogQuarantined(item.Envelope.ReceiptId, reason);
     }
 }

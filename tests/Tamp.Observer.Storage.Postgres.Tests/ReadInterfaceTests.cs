@@ -16,7 +16,7 @@ public sealed class ReadInterfaceTests : IAsyncLifetime
 {
     private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:16-alpine").Build();
     private IDocumentStore _store = null!;
-    private IObservabilityStore _reads = null!;
+    private MartenObservabilityStore _reads = null!;
 
     public async Task InitializeAsync()
     {

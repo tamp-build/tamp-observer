@@ -16,8 +16,8 @@ public sealed class ClickHouseTierTests : IAsyncLifetime
 {
     private readonly ClickHouseContainer _clickhouse = new ClickHouseBuilder("clickhouse/clickhouse-server:24.8-alpine").Build();
     private string _conn = null!;
-    private IEventSink _sink = null!;
-    private IObservabilityStore _reads = null!;
+    private ClickHouseEventSink _sink = null!;
+    private ClickHouseObservabilityStore _reads = null!;
 
     public async Task InitializeAsync()
     {

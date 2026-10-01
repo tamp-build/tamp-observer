@@ -12,7 +12,7 @@ public sealed class EventSinkTests : IAsyncLifetime
 {
     private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:16-alpine").Build();
     private IDocumentStore _store = null!;
-    private IEventSink _sink = null!;
+    private MartenEventSink _sink = null!;
 
     public async Task InitializeAsync()
     {
