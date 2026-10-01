@@ -112,13 +112,13 @@ class Build : TampBuild
             .SetProperty("sonar.go.coverage.reportPaths", GoCoverage.Value)));
 
     Target SonarEnd => _ => _
-        .After(nameof(Test), nameof(CollectorTest))
+        .After(nameof(Test), nameof(CollectorCoverageMap))
         .DependsOn(nameof(SonarBegin))
         .Description("Finalize SonarCloud and submit results.")
         .Executes(() => SonarScanner.End(SonarTool, s => s.SetToken(SonarToken)));
 
     Target Sonar => _ => _
-        .DependsOn(nameof(SonarBegin), nameof(Test), nameof(CollectorTest), nameof(SonarEnd))
+        .DependsOn(nameof(SonarBegin), nameof(Test), nameof(CollectorCoverageMap), nameof(SonarEnd))
         .Description("Full SonarCloud analysis: begin, .NET build + test coverage, Go test coverage, end.");
 
     // ----- Go collector targets (dogfood Tamp.Go, rule #3) -----
@@ -151,6 +151,21 @@ class Build : TampBuild
                 .SetCoverMode("atomic")
                 .SetCoverProfile(GoCoverage.Value)
                 .AllPackages());
+        });
+
+    Target CollectorCoverageMap => _ => _
+        .DependsOn(nameof(CollectorTest))
+        .Description("Rewrite Go coverage paths from module import paths to repo-relative paths for SonarCloud.")
+        .Executes(() =>
+        {
+            // go writes coverage paths as module import paths; rewrite the module prefix to the
+            // repo-relative source path so SonarCloud maps coverage onto the indexed Go files.
+            var cov = GoCoverage.Value;
+            var text = System.IO.File.ReadAllText(cov).Replace(
+                "github.com/tamp-build/tamp-observer/collector/rawfileexporter/",
+                "src/collector/rawfileexporter/",
+                StringComparison.Ordinal);
+            System.IO.File.WriteAllText(cov, text);
         });
 
     Target CollectorBuildLinux => _ => _
