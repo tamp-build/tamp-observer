@@ -53,5 +53,19 @@ public static class ObserverStoreConfiguration
         options.Schema.For<QuarantinedEvent>()
             .Index(x => x.ReceiptId)
             .Index(x => x.QuarantinedAt);
+
+        // Promoted telemetry (ADR 0004 admit path). Indexed for the common slice/correlation reads:
+        // by entity (Service, Version), by trace, and by time.
+        options.Schema.For<IngestedSpan>()
+            .Index(x => x.ServiceId)
+            .Index(x => x.VersionId)
+            .Index(x => x.TraceId)
+            .Index(x => x.StartUnixNano);
+
+        options.Schema.For<IngestedLog>()
+            .Index(x => x.ServiceId)
+            .Index(x => x.VersionId)
+            .Index(x => x.TraceId)
+            .Index(x => x.TimeUnixNano);
     }
 }

@@ -16,45 +16,113 @@ public static class ResourceKeys
 }
 
 /// <summary>The resource attributes of one resource block within an OTLP payload.</summary>
-public sealed class ResourceAttributes
+public sealed class ResourceAttributes(IReadOnlyDictionary<string, string> attrs)
 {
-    private readonly IReadOnlyDictionary<string, string> _attrs;
-
-    public ResourceAttributes(IReadOnlyDictionary<string, string> attrs) => _attrs = attrs;
-
-    /// <summary>String attribute value, or null if absent or non-string.</summary>
-    public string? Get(string key) => _attrs.TryGetValue(key, out var v) ? v : null;
-
-    public IReadOnlyDictionary<string, string> All => _attrs;
+    public string? Get(string key) => attrs.TryGetValue(key, out var v) ? v : null;
+    public IReadOnlyDictionary<string, string> All => attrs;
 }
 
+/// <summary>A span extracted from a trace payload.</summary>
+public sealed record ParsedSpan(
+    string TraceId, string SpanId, string? ParentSpanId, string Name, int Kind,
+    long StartUnixNano, long EndUnixNano, int StatusCode, string? StatusMessage,
+    IReadOnlyDictionary<string, string> Attributes);
+
+/// <summary>A log record extracted from a logs payload.</summary>
+public sealed record ParsedLog(
+    long TimeUnixNano, int SeverityNumber, string? SeverityText, string? Body,
+    string? TraceId, string? SpanId, IReadOnlyDictionary<string, string> Attributes);
+
+/// <summary>One resource block with its resolved attributes and the signal bodies under it.</summary>
+public sealed record ParsedResource(
+    ResourceAttributes Attributes,
+    IReadOnlyList<ParsedSpan> Spans,
+    IReadOnlyList<ParsedLog> Logs);
+
 /// <summary>
-/// Parses OTLP payload bytes just far enough to pull resource attributes (ADR 0004 entity
-/// resolution). Uses the minimal wire-compatible schema, so one path reads traces, logs, and
-/// metrics. Returns one <see cref="ResourceAttributes"/> per resource block in the payload.
+/// Parses OTLP payload bytes into resources plus the span/log bodies the admit path stores (ADR 0004).
+/// Uses the trimmed wire-compatible schema; metrics resolve to resources only (data points deferred).
 /// </summary>
-public static class OtlpResources
+public static class OtlpParser
 {
-    public static IReadOnlyList<ResourceAttributes> Extract(byte[] payload)
+    public static IReadOnlyList<ParsedResource> Parse(string signal, byte[] payload) => signal switch
     {
-        var data = SignalData.Parser.ParseFrom(payload);
-        var result = new List<ResourceAttributes>(data.ResourceEntries.Count);
+        "traces" => ParseTraces(payload),
+        "logs" => ParseLogs(payload),
+        "metrics" => ParseMetrics(payload),
+        _ => [],
+    };
 
-        foreach (var entry in data.ResourceEntries)
+    private static List<ParsedResource> ParseTraces(byte[] payload)
+    {
+        var data = TracesData.Parser.ParseFrom(payload);
+        var result = new List<ParsedResource>(data.ResourceSpans.Count);
+        foreach (var rs in data.ResourceSpans)
         {
-            var dict = new Dictionary<string, string>(StringComparer.Ordinal);
-            if (entry.Resource is not null)
-            {
-                foreach (var kv in entry.Resource.Attributes)
-                {
-                    // Only string-valued attributes matter for entity resolution.
-                    if (kv.Value is { ValueCase: AnyValue.ValueOneofCase.StringValue })
-                        dict[kv.Key] = kv.Value.StringValue;
-                }
-            }
-            result.Add(new ResourceAttributes(dict));
+            var spans = new List<ParsedSpan>();
+            foreach (var ss in rs.ScopeSpans)
+                foreach (var s in ss.Spans)
+                    spans.Add(new ParsedSpan(
+                        Hex(s.TraceId), Hex(s.SpanId), NullableHex(s.ParentSpanId), s.Name, s.Kind,
+                        (long)s.StartTimeUnixNano, (long)s.EndTimeUnixNano,
+                        s.Status?.Code ?? 0, s.Status?.Message, StringAttrs(s.Attributes)));
+            result.Add(new ParsedResource(Attrs(rs.Resource), spans, []));
         }
-
         return result;
     }
+
+    private static List<ParsedResource> ParseLogs(byte[] payload)
+    {
+        var data = LogsData.Parser.ParseFrom(payload);
+        var result = new List<ParsedResource>(data.ResourceLogs.Count);
+        foreach (var rl in data.ResourceLogs)
+        {
+            var logs = new List<ParsedLog>();
+            foreach (var sl in rl.ScopeLogs)
+                foreach (var lr in sl.LogRecords)
+                    logs.Add(new ParsedLog(
+                        (long)lr.TimeUnixNano, lr.SeverityNumber, EmptyToNull(lr.SeverityText),
+                        BodyString(lr.Body), NullableHex(lr.TraceId), NullableHex(lr.SpanId),
+                        StringAttrs(lr.Attributes)));
+            result.Add(new ParsedResource(Attrs(rl.Resource), [], logs));
+        }
+        return result;
+    }
+
+    private static List<ParsedResource> ParseMetrics(byte[] payload)
+    {
+        var data = MetricsData.Parser.ParseFrom(payload);
+        var result = new List<ParsedResource>(data.ResourceMetrics.Count);
+        foreach (var rm in data.ResourceMetrics)
+            result.Add(new ParsedResource(Attrs(rm.Resource), [], []));
+        return result;
+    }
+
+    private static ResourceAttributes Attrs(Resource? resource)
+    {
+        var dict = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (resource is not null)
+            foreach (var kv in resource.Attributes)
+                if (kv.Value is { ValueCase: AnyValue.ValueOneofCase.StringValue })
+                    dict[kv.Key] = kv.Value.StringValue;
+        return new ResourceAttributes(dict);
+    }
+
+    private static Dictionary<string, string> StringAttrs(IEnumerable<KeyValue> attrs)
+    {
+        var dict = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var kv in attrs)
+            if (kv.Value is { ValueCase: AnyValue.ValueOneofCase.StringValue })
+                dict[kv.Key] = kv.Value.StringValue;
+        return dict;
+    }
+
+    private static string? BodyString(AnyValue? body) =>
+        body is { ValueCase: AnyValue.ValueOneofCase.StringValue } ? body.StringValue : null;
+
+    private static string Hex(ByteString b) => Convert.ToHexStringLower(b.Span);
+
+    private static string? NullableHex(ByteString b) => b.Length == 0 ? null : Convert.ToHexStringLower(b.Span);
+
+    private static string? EmptyToNull(string s) => string.IsNullOrEmpty(s) ? null : s;
 }

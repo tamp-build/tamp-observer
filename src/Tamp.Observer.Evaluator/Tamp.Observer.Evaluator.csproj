@@ -14,8 +14,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Minimal OTLP resource schema; generates C# message types at build time. -->
-    <Protobuf Include="Protos\otlp_resource_min.proto" GrpcServices="None" />
+    <!-- Trimmed OTLP schema (resource + span/log bodies); generates C# types at build time. -->
+    <Protobuf Include="Protos\otlp_min.proto" GrpcServices="None" />
   </ItemGroup>
 
   <ItemGroup>

@@ -119,6 +119,37 @@ public sealed class SpoolEvaluationTests : IAsyncLifetime
         Assert.Equal(new[] { "v1", "v2" }, versions.Select(v => v.VersionString).ToArray());
     }
 
+    [Fact]
+    public async Task Admit_stores_spans_and_logs_stamped_with_entity_ids()
+    {
+        await SeedProjectAsync("acme");
+        LandTraces("acme", "api", "v1", "prod");
+        LandLogs("acme", "api", "v1", "prod", body: "hello from the admit path");
+
+        var evaluator = new IngestEvaluator(_store, new SpoolReader(_spoolDir));
+        var stats = await evaluator.DrainAsync();
+        Assert.Equal(2, stats.Admitted);
+
+        await using var q = _store.QuerySession();
+        var project = await q.Query<Project>().SingleAsync(p => p.Key == "acme");
+        var service = await q.Query<Service>().SingleAsync(s => s.ProjectId == project.Id);
+        var version = await q.Query<ServiceVersion>().SingleAsync(v => v.ServiceId == service.Id);
+
+        var span = await q.Query<IngestedSpan>().SingleAsync();
+        Assert.Equal(service.Id, span.ServiceId);
+        Assert.Equal(version.Id, span.VersionId);
+        Assert.NotNull(span.EnvironmentId);
+        Assert.Equal("GET /checkout", span.Name);
+        Assert.Equal(250, span.DurationNano);
+        Assert.Equal(1, span.StatusCode);
+
+        var log = await q.Query<IngestedLog>().SingleAsync();
+        Assert.Equal(service.Id, log.ServiceId);
+        Assert.Equal(version.Id, log.VersionId);
+        Assert.Equal("hello from the admit path", log.Body);
+        Assert.Equal("INFO", log.SeverityText);
+    }
+
     private async Task SeedProjectAsync(string key)
     {
         await using var s = _store.LightweightSession();
@@ -128,15 +159,50 @@ public sealed class SpoolEvaluationTests : IAsyncLifetime
 
     private void LandTraces(string? projectKey, string service, string version, string environment)
     {
+        var resource = BuildResource(projectKey, service, version, environment);
+        var span = new Span
+        {
+            TraceId = ByteString.CopyFrom(new byte[16]),
+            SpanId = ByteString.CopyFrom(new byte[8]),
+            Name = "GET /checkout",
+            Kind = 2,
+            StartTimeUnixNano = 1000,
+            EndTimeUnixNano = 1250,
+            Status = new Status { Code = 1 },
+        };
+        var data = new TracesData
+        {
+            ResourceSpans = { new ResourceSpans { Resource = resource, ScopeSpans = { new ScopeSpans { Spans = { span } } } } },
+        };
+        Land("traces", data.ToByteArray());
+    }
+
+    private void LandLogs(string projectKey, string service, string version, string environment, string body)
+    {
+        var resource = BuildResource(projectKey, service, version, environment);
+        var record = new LogRecord
+        {
+            TimeUnixNano = 2000,
+            SeverityNumber = 9,
+            SeverityText = "INFO",
+            Body = new AnyValue { StringValue = body },
+        };
+        var data = new LogsData
+        {
+            ResourceLogs = { new ResourceLogs { Resource = resource, ScopeLogs = { new ScopeLogs { LogRecords = { record } } } } },
+        };
+        Land("logs", data.ToByteArray());
+    }
+
+    private static Resource BuildResource(string? projectKey, string service, string version, string environment)
+    {
         var resource = new Resource();
         if (projectKey is not null)
             resource.Attributes.Add(Attr(ResourceKeys.ProjectKey, projectKey));
         resource.Attributes.Add(Attr(ResourceKeys.ServiceName, service));
         resource.Attributes.Add(Attr(ResourceKeys.ServiceVersion, version));
         resource.Attributes.Add(Attr(ResourceKeys.DeploymentEnvironment, environment));
-
-        var data = new SignalData { ResourceEntries = { new ResourceEntry { Resource = resource } } };
-        Land("traces", data.ToByteArray());
+        return resource;
     }
 
     private static KeyValue Attr(string key, string value) =>

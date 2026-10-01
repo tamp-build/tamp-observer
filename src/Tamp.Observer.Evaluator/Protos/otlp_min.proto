@@ -1,0 +1,99 @@
+syntax = "proto3";
+
+// A trimmed schema that is WIRE-COMPATIBLE with the OTLP protos for the fields the evaluator reads
+// and stores (ADR 0004 admit path; resource attributes for entity resolution, plus span and log
+// bodies). Field numbers and wire types match the real OTLP definitions, and protobuf ignores unknown
+// fields, so this parses real collector output. Enums are declared as int32 (wire-compatible with the
+// real enums). This is a deliberate spike schema; full OTLP types (events, links, metric points,
+// histograms) come with deep reconstruction (ADR 0009).
+package tamp.observer.otlpmin;
+
+option csharp_namespace = "Tamp.Observer.Evaluator.Otlp";
+
+// ---- common ----
+
+message AnyValue {
+  oneof value {
+    string string_value = 1;
+    bool bool_value = 2;
+    int64 int_value = 3;
+    double double_value = 4;
+    bytes bytes_value = 7;
+  }
+}
+
+message KeyValue {
+  string key = 1;
+  AnyValue value = 2;
+}
+
+message Resource {
+  repeated KeyValue attributes = 1;
+}
+
+// ---- traces ----
+
+message TracesData {
+  repeated ResourceSpans resource_spans = 1;
+}
+
+message ResourceSpans {
+  Resource resource = 1;
+  repeated ScopeSpans scope_spans = 2;
+}
+
+message ScopeSpans {
+  repeated Span spans = 2;
+}
+
+message Span {
+  bytes trace_id = 1;
+  bytes span_id = 2;
+  bytes parent_span_id = 4;
+  string name = 5;
+  int32 kind = 6;                 // SpanKind enum, read as int
+  fixed64 start_time_unix_nano = 7;
+  fixed64 end_time_unix_nano = 8;
+  repeated KeyValue attributes = 9;
+  Status status = 15;
+}
+
+message Status {
+  string message = 2;
+  int32 code = 3;                 // StatusCode enum: UNSET=0, OK=1, ERROR=2
+}
+
+// ---- logs ----
+
+message LogsData {
+  repeated ResourceLogs resource_logs = 1;
+}
+
+message ResourceLogs {
+  Resource resource = 1;
+  repeated ScopeLogs scope_logs = 2;
+}
+
+message ScopeLogs {
+  repeated LogRecord log_records = 2;
+}
+
+message LogRecord {
+  fixed64 time_unix_nano = 1;
+  int32 severity_number = 2;      // SeverityNumber enum, read as int
+  string severity_text = 3;
+  AnyValue body = 5;
+  repeated KeyValue attributes = 6;
+  bytes trace_id = 9;
+  bytes span_id = 10;
+}
+
+// ---- metrics (resource only; data points deferred to a later spike) ----
+
+message MetricsData {
+  repeated ResourceMetrics resource_metrics = 1;
+}
+
+message ResourceMetrics {
+  Resource resource = 1;
+}
