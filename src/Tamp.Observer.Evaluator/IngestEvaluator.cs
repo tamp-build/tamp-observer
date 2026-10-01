@@ -1,6 +1,7 @@
 using Marten;
 using Microsoft.Extensions.Logging;
 using Tamp.Observer.Domain;
+using Tamp.Observer.Storage.Abstractions;
 
 namespace Tamp.Observer.Evaluator;
 
@@ -12,14 +13,19 @@ public readonly record struct DrainStats(int Admitted, int Quarantined)
 
 /// <summary>
 /// The .NET evaluator (ADR 0004): consumes raw events from the spool, treats them as
-/// well-formed-but-untrusted, adjudicates, and either admits (resolve + provision entities, promote
-/// to the store) or rejects (quarantine with a reason). Every event leaves the spool for exactly one
-/// of {store, quarantine}.
+/// well-formed-but-untrusted, adjudicates, and either admits (resolve + provision entities, then write
+/// the batch through <see cref="IEventSink"/>) or rejects (quarantine with a reason). Every event leaves
+/// the spool for exactly one of {store, quarantine}.
 /// </summary>
-public sealed class IngestEvaluator(IDocumentStore store, SpoolReader spool, ILogger<IngestEvaluator>? logger = null)
+public sealed class IngestEvaluator(
+    IDocumentStore store,
+    SpoolReader spool,
+    IEventSink sink,
+    ILogger<IngestEvaluator>? logger = null)
 {
     private readonly IDocumentStore _store = store;
     private readonly SpoolReader _spool = spool;
+    private readonly IEventSink _sink = sink;
     private readonly ILogger<IngestEvaluator>? _log = logger;
 
     /// <summary>Process every ready event currently in the spool.</summary>
@@ -61,11 +67,11 @@ public sealed class IngestEvaluator(IDocumentStore store, SpoolReader spool, ILo
             return false;
         }
 
-        await using var session = _store.LightweightSession();
+        await using var read = _store.QuerySession();
+        var resolver = new BatchResolver(read);
 
-        // An event is admitted or quarantined atomically. Resolve the trust-root Project and service
-        // grain for every resource first; if any resource fails, the whole event is quarantined and
-        // nothing is stored (ADR 0004: exactly one of {store, quarantine}).
+        // Validate the trust-root Project and service grain for every resource first; if any resource
+        // fails, the whole event is quarantined and nothing is written (atomic, ADR 0004).
         var pending = new List<(ParsedResource Res, Project Project, string ServiceName)>(resources.Count);
         foreach (var res in resources)
         {
@@ -76,7 +82,7 @@ public sealed class IngestEvaluator(IDocumentStore store, SpoolReader spool, ILo
                 return false;
             }
 
-            var project = await EntityResolver.FindProjectByKeyAsync(session, key, ct);
+            var project = await resolver.FindProjectByKeyAsync(key, ct);
             if (project is null)
             {
                 await QuarantineAsync(item, $"unknown project '{key}'", claimedProjectKey: key, ct);
@@ -93,30 +99,33 @@ public sealed class IngestEvaluator(IDocumentStore store, SpoolReader spool, ILo
             pending.Add((res, project, serviceName));
         }
 
-        // Admit: provision discovered entities, then promote the signal bodies into the store.
+        // Resolve discovered entities and stamp the telemetry, accumulating a batch for the sink.
+        var spans = new List<IngestedSpan>();
+        var logs = new List<IngestedLog>();
+
         foreach (var (res, project, serviceName) in pending)
         {
             var attrs = res.Attributes;
 
-            var service = await EntityResolver.ResolveServiceAsync(
-                session, project.Id, serviceName, attrs.Get(ResourceKeys.ServiceNamespace), item.Envelope.ReceivedAt, ct);
+            var service = await resolver.ResolveServiceAsync(
+                project.Id, serviceName, attrs.Get(ResourceKeys.ServiceNamespace), item.Envelope.ReceivedAt, ct);
 
             Guid? environmentId = null;
             var envName = attrs.Get(ResourceKeys.DeploymentEnvironment);
             if (!string.IsNullOrEmpty(envName))
             {
-                var env = await EntityResolver.ResolveEnvironmentAsync(session, project.Id, envName, item.Envelope.ReceivedAt, ct);
+                var env = await resolver.ResolveEnvironmentAsync(project.Id, envName, item.Envelope.ReceivedAt, ct);
                 environmentId = env.Id;
             }
 
-            var version = await EntityResolver.ResolveVersionAsync(
-                session, project.Id, service.Id, attrs.Get(ResourceKeys.ServiceVersion), item.Envelope.ReceivedAt, ct);
+            var version = await resolver.ResolveVersionAsync(
+                project.Id, service.Id, attrs.Get(ResourceKeys.ServiceVersion), item.Envelope.ReceivedAt, ct);
 
             var instanceId = attrs.Get(ResourceKeys.ServiceInstanceId) ?? Synthetic.UnknownInstance;
 
             foreach (var s in res.Spans)
             {
-                session.Store(new IngestedSpan
+                spans.Add(new IngestedSpan
                 {
                     ProjectId = project.Id,
                     ServiceId = service.Id,
@@ -141,7 +150,7 @@ public sealed class IngestEvaluator(IDocumentStore store, SpoolReader spool, ILo
 
             foreach (var l in res.Logs)
             {
-                session.Store(new IngestedLog
+                logs.Add(new IngestedLog
                 {
                     ProjectId = project.Id,
                     ServiceId = service.Id,
@@ -161,7 +170,10 @@ public sealed class IngestEvaluator(IDocumentStore store, SpoolReader spool, ILo
             }
         }
 
-        await session.SaveChangesAsync(ct);
+        var batch = new AdmittedBatch(
+            resolver.NewServices, resolver.NewEnvironments, resolver.NewVersions, spans, logs);
+        await _sink.WriteAsync(batch, ct);
+
         _log?.LogDebug("admitted receipt {ReceiptId} ({Signal})", item.Envelope.ReceiptId, item.Envelope.Signal);
         return true;
     }

@@ -4,94 +4,124 @@ using Tamp.Observer.Domain;
 namespace Tamp.Observer.Evaluator;
 
 /// <summary>
-/// Resolves OTLP resource attributes to domain entities, provisioning discovered ones on first sight
-/// (ADR 0004 provision-then-admit; ADR 0007 discovery under a trusted Project). Project is the trust
-/// root and is never provisioned here: an unknown project key resolves to null and the caller
-/// quarantines.
+/// Per-event entity resolution (ADR 0004 provision-then-admit; ADR 0007 discovery under a trusted
+/// Project). Reads existing entities through a query session and assigns ids to newly discovered ones,
+/// collecting them so the evaluator can hand a resolved batch to the write sink (ADR 0006). An in-event
+/// cache dedupes repeated resolution across resources in the same event.
 ///
-/// Note (spike): single-threaded consumer, no resolution cache and no concurrency control yet
-/// (ADR 0004/0008 flag those as evaluator work). The natural-key unique indexes are the backstop.
+/// Project is the trust root and is never provisioned here: an unknown key resolves to null and the
+/// caller quarantines. Single-threaded, no cross-event cache yet; the natural-key unique indexes are the
+/// backstop against races (ADR 0004/0008 flag resolution caching/concurrency as later work).
 /// </summary>
-public sealed class EntityResolver
+public sealed class BatchResolver(IQuerySession read)
 {
-    /// <summary>Find the trust-root Project by its key. Null means unknown (never auto-created).</summary>
-    public static Task<Project?> FindProjectByKeyAsync(IQuerySession session, string projectKey, CancellationToken ct) =>
-        session.Query<Project>().SingleOrDefaultAsync(p => p.Key == projectKey, ct);
+    private readonly List<Service> _newServices = [];
+    private readonly List<DeploymentEnvironment> _newEnvironments = [];
+    private readonly List<ServiceVersion> _newVersions = [];
 
-    /// <summary>Resolve a Service by (project, name), provisioning on first sight.</summary>
-    public static async Task<Service> ResolveServiceAsync(
-        IDocumentSession session, Guid projectId, string serviceName, string? ns,
-        DateTimeOffset firstSeen, CancellationToken ct)
+    private readonly Dictionary<(Guid Project, string Name), Service> _serviceCache = [];
+    private readonly Dictionary<(Guid Project, string Name), DeploymentEnvironment> _environmentCache = [];
+    private readonly Dictionary<(Guid Service, string Version), ServiceVersion> _versionCache = [];
+
+    public IReadOnlyList<Service> NewServices => _newServices;
+    public IReadOnlyList<DeploymentEnvironment> NewEnvironments => _newEnvironments;
+    public IReadOnlyList<ServiceVersion> NewVersions => _newVersions;
+
+    /// <summary>Find the trust-root Project by key. Null means unknown (never auto-created).</summary>
+    public Task<Project?> FindProjectByKeyAsync(string projectKey, CancellationToken ct) =>
+        read.Query<Project>().SingleOrDefaultAsync(p => p.Key == projectKey, ct);
+
+    public async Task<Service> ResolveServiceAsync(Guid projectId, string serviceName, string? ns, DateTimeOffset firstSeen, CancellationToken ct)
     {
-        var existing = await session.Query<Service>()
+        var key = (projectId, serviceName);
+        if (_serviceCache.TryGetValue(key, out var cached))
+            return cached;
+
+        var existing = await read.Query<Service>()
             .SingleOrDefaultAsync(s => s.ProjectId == projectId && s.ServiceName == serviceName, ct);
         if (existing is not null)
+        {
+            _serviceCache[key] = existing;
             return existing;
+        }
 
         var created = new Service
         {
+            Id = Guid.NewGuid(),
             ProjectId = projectId,
             ServiceName = serviceName,
             Namespace = ns,
             FirstSeenAtUtc = firstSeen,
         };
-        session.Store(created);
+        _serviceCache[key] = created;
+        _newServices.Add(created);
         return created;
     }
 
-    /// <summary>Resolve a DeploymentEnvironment by (project, name), provisioning on first sight.</summary>
-    public static async Task<DeploymentEnvironment> ResolveEnvironmentAsync(
-        IDocumentSession session, Guid projectId, string name,
-        DateTimeOffset firstSeen, CancellationToken ct)
+    public async Task<DeploymentEnvironment> ResolveEnvironmentAsync(Guid projectId, string name, DateTimeOffset firstSeen, CancellationToken ct)
     {
-        var existing = await session.Query<DeploymentEnvironment>()
+        var key = (projectId, name);
+        if (_environmentCache.TryGetValue(key, out var cached))
+            return cached;
+
+        var existing = await read.Query<DeploymentEnvironment>()
             .SingleOrDefaultAsync(e => e.ProjectId == projectId && e.Name == name, ct);
         if (existing is not null)
+        {
+            _environmentCache[key] = existing;
             return existing;
+        }
 
         var created = new DeploymentEnvironment
         {
+            Id = Guid.NewGuid(),
             ProjectId = projectId,
             Name = name,
             FirstSeenAtUtc = firstSeen,
         };
-        session.Store(created);
+        _environmentCache[key] = created;
+        _newEnvironments.Add(created);
         return created;
     }
 
-    /// <summary>
-    /// Resolve a ServiceVersion by (service, version string), provisioning on first sight with a
-    /// server-assigned monotonic sequence (ADR 0008). Sequence is per-Service, from first-seen order.
-    /// </summary>
-    public static async Task<ServiceVersion> ResolveVersionAsync(
-        IDocumentSession session, Guid projectId, Guid serviceId, string? versionString,
-        DateTimeOffset firstSeen, CancellationToken ct)
+    public async Task<ServiceVersion> ResolveVersionAsync(Guid projectId, Guid serviceId, string? versionString, DateTimeOffset firstSeen, CancellationToken ct)
     {
         var isSynthetic = string.IsNullOrEmpty(versionString);
         var effective = isSynthetic ? Synthetic.UnversionedBuild : versionString!;
 
-        var existing = await session.Query<ServiceVersion>()
+        var key = (serviceId, effective);
+        if (_versionCache.TryGetValue(key, out var cached))
+            return cached;
+
+        var existing = await read.Query<ServiceVersion>()
             .SingleOrDefaultAsync(v => v.ServiceId == serviceId && v.VersionString == effective, ct);
         if (existing is not null)
+        {
+            _versionCache[key] = existing;
             return existing;
+        }
 
-        // Next per-service sequence from committed state (first-seen arrival order, ADR 0008).
-        var maxSeq = await session.Query<ServiceVersion>()
+        // Next per-service sequence (ADR 0008): the max of committed state and versions already created
+        // for this service within the current event.
+        var dbMax = await read.Query<ServiceVersion>()
             .Where(v => v.ServiceId == serviceId)
             .OrderByDescending(v => v.Sequence)
             .Select(v => v.Sequence)
             .FirstOrDefaultAsync(ct);
+        var batchMax = _newVersions.Where(v => v.ServiceId == serviceId).Select(v => v.Sequence).DefaultIfEmpty(0).Max();
 
         var created = new ServiceVersion
         {
+            Id = Guid.NewGuid(),
             ProjectId = projectId,
             ServiceId = serviceId,
             VersionString = effective,
-            Sequence = maxSeq + 1,
+            Sequence = Math.Max(dbMax, batchMax) + 1,
             IsSynthetic = isSynthetic,
             FirstSeenAtUtc = firstSeen,
         };
-        session.Store(created);
+        _versionCache[key] = created;
+        _newVersions.Add(created);
         return created;
     }
 }
