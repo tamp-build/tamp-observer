@@ -1,0 +1,48 @@
+# ---- .NET ----
+bin/
+obj/
+*.user
+*.suo
+.vs/
+artifacts/
+[Dd]ebug/
+[Rr]elease/
+*.nupkg
+*.snupkg
+TestResults/
+coverage/
+*.trx
+
+# ---- Go (collector distribution) ----
+# built binaries
+/cmd/**/dist/
+*.exe
+*.test
+*.out
+vendor/
+
+# ---- Node / Svelte (frontend) ----
+node_modules/
+.svelte-kit/
+build/
+.vite/
+dist/
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+
+# ---- Containers / local infra ----
+docker-compose.override.yml
+
+# ---- Editors / OS ----
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# ---- Secrets (never commit) ----
+*.pem
+*.key
+secrets.*
+appsettings.*.Local.json
