@@ -18,15 +18,20 @@ public sealed class SpoolReader(string spoolDirectory)
 {
     private readonly string _dir = spoolDirectory;
 
-    /// <summary>Enumerate the ready events currently in the spool (envelope present).</summary>
+    /// <summary>
+    /// The ready events currently in the spool (envelope present), ordered by received-at so the
+    /// evaluator processes them in first-seen arrival order. That order is what the monotonic version
+    /// sequence is defined against (ADR 0008); filesystem enumeration order is OS-dependent and must
+    /// not leak into sequence assignment.
+    /// </summary>
     public IEnumerable<SpoolItem> ReadReady()
     {
         if (!Directory.Exists(_dir))
-            yield break;
+            return [];
 
+        var items = new List<SpoolItem>();
         foreach (var envPath in Directory.EnumerateFiles(_dir, "*.json"))
         {
-            SpoolItem? item = null;
             try
             {
                 var env = JsonSerializer.Deserialize<RawEnvelope>(File.ReadAllBytes(envPath));
@@ -37,17 +42,18 @@ public sealed class SpoolReader(string spoolDirectory)
                 if (!File.Exists(payloadPath))
                     continue; // payload missing; skip (do not delete the envelope)
 
-                item = new SpoolItem(env, File.ReadAllBytes(payloadPath), envPath, payloadPath);
+                items.Add(new SpoolItem(env, File.ReadAllBytes(payloadPath), envPath, payloadPath));
             }
             catch (JsonException)
             {
                 // A malformed envelope is itself a reject; leave it for the caller's policy.
-                continue;
             }
-
-            if (item is not null)
-                yield return item;
         }
+
+        // Ties (same received-at) fall back to receipt id for a stable, deterministic order.
+        return items
+            .OrderBy(i => i.Envelope.ReceivedAt)
+            .ThenBy(i => i.Envelope.ReceiptId, StringComparer.Ordinal);
     }
 
     /// <summary>Remove an event's files from the spool once it has been consumed (admit or quarantine).</summary>
