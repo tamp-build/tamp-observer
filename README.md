@@ -38,4 +38,4 @@ OpenAPI client. Session replay uses rrweb through a dedicated front door.
 
 ## License
 
-MIT (to be added).
+[MIT](LICENSE), matching the rest of the tamp ecosystem.
