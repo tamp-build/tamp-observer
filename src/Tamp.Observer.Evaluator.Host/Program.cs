@@ -34,4 +34,4 @@ builder.Services.AddSingleton(new SpoolReader(spoolDirectory));
 builder.Services.AddSingleton<IngestEvaluator>();
 builder.Services.AddHostedService<SpoolIngestWorker>();
 
-builder.Build().Run();
+await builder.Build().RunAsync();

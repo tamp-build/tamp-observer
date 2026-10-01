@@ -105,6 +105,8 @@ class Build : TampBuild
             .SetOrganization(SonarOrganization)
             .SetHostUrl(SonarHostUrl)
             .SetToken(SonarToken)
+            // The build script is build tooling (NUKE-style DSL), not shipped product code.
+            .SetProperty("sonar.exclusions", "build/**")
             .SetProperty("sonar.cs.opencover.reportsPaths", $"{CoverageDir.Value}/**/coverage.opencover.xml")));
 
     Target SonarEnd => _ => _
