@@ -102,9 +102,9 @@ class Build : TampBuild
         .Requires(() => SonarToken != null)
         .Executes(() => SonarScanner.Begin(SonarTool, s => s
             .SetProjectKey(SonarProjectKey)
+            .SetOrganization(SonarOrganization)
             .SetHostUrl(SonarHostUrl)
             .SetToken(SonarToken)
-            .SetProperty("sonar.organization", SonarOrganization)
             .SetProperty("sonar.cs.opencover.reportsPaths", $"{CoverageDir.Value}/**/coverage.opencover.xml")));
 
     Target SonarEnd => _ => _
