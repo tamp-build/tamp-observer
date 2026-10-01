@@ -1,0 +1,25 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path="README.md" />
+    <File Path="LICENSE" />
+    <File Path="Directory.Build.props" />
+    <File Path="Directory.Packages.props" />
+    <File Path="global.json" />
+    <File Path="docker-compose.yml" />
+    <File Path=".gitignore" />
+  </Folder>
+  <Folder Name="/docs/">
+    <File Path="docs/holdfast-architecture.md" />
+    <File Path="docs/adr/README.md" />
+  </Folder>
+  <Folder Name="/build/">
+    <Project Path="build/Build.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/Tamp.Observer.Domain/Tamp.Observer.Domain.csproj" />
+    <Project Path="src/Tamp.Observer.Storage.Postgres/Tamp.Observer.Storage.Postgres.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Tamp.Observer.Storage.Postgres.Tests/Tamp.Observer.Storage.Postgres.Tests.csproj" />
+  </Folder>
+</Solution>

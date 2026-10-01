@@ -1,0 +1,22 @@
+# Floor deployment (ADR 0001): the default is one `docker compose up`, Postgres only.
+# No Valkey, no ClickHouse. This is the baseline storage tier (ADR 0005).
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: tamp-observer-postgres
+    environment:
+      POSTGRES_USER: observer
+      POSTGRES_PASSWORD: observer
+      POSTGRES_DB: observer
+    ports:
+      - "5432:5432"
+    volumes:
+      - observer-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U observer -d observer"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  observer-pgdata:

@@ -36,6 +36,31 @@ OpenAPI client. Session replay uses rrweb through a dedicated front door.
 * [Architecture Decision Records](docs/adr/README.md): the pinned decisions, one per file, in MADR
   format, matching the tamp house style.
 
+## Building and testing
+
+The build dogfoods the tamp ecosystem: tamp drives its own restore / build / test flow through
+`build/Build.cs`. You need the .NET 10 SDK (pinned in `global.json`) and Docker (the integration
+tests spin up an ephemeral Postgres via Testcontainers).
+
+```
+dotnet run --project build -- Compile   # restore + build the solution
+dotnet run --project build -- Test      # build + run tests (starts Postgres in a container)
+dotnet run --project build -- Ci        # info + clean + test
+```
+
+For a local Postgres to run against directly, `docker compose up` brings up the floor tier (Postgres
+only) on `localhost:5432` (`observer` / `observer`).
+
+### Layout
+
+```
+src/   Tamp.Observer.Domain            entity model (ADR 0007/0008)
+       Tamp.Observer.Storage.Postgres  Marten baseline store (ADR 0005/0006)
+tests/ Tamp.Observer.Storage.Postgres.Tests
+build/ Build.cs                        tamp self-hosted build
+docs/  architecture + ADRs
+```
+
 ## License
 
 [MIT](LICENSE), matching the rest of the tamp ecosystem.
