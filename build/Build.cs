@@ -1,6 +1,7 @@
 using Tamp;
 using Tamp.Go;
 using Tamp.NetCli.V10;
+using Tamp.SonarScanner.V10;
 
 /// <summary>
 /// tamp-observer's self-hosted build script. tamp drives the project's own pipeline (rule #3).
@@ -15,6 +16,25 @@ class Build : TampBuild
     readonly Configuration Configuration = IsLocalBuild ? Configuration.Debug : Configuration.Release;
 
     [Solution] readonly Solution Solution = null!;
+
+    // ----- SonarCloud (SonarQube Cloud) -----
+
+    [NuGetPackage("dotnet-sonarscanner", Version = "10.4.1")]
+    readonly Tool SonarTool = null!;
+
+    [Secret("SonarCloud token", EnvironmentVariable = "SONAR_TOKEN")]
+    readonly Secret SonarToken = null!;
+
+    [Parameter("Sonar host URL", EnvironmentVariable = "SONAR_HOST_URL")]
+    readonly string SonarHostUrl = "https://sonarcloud.io";
+
+    [Parameter("SonarCloud organization")]
+    readonly string SonarOrganization = "tamp-build";
+
+    [Parameter("SonarCloud project key")]
+    readonly string SonarProjectKey = "tamp-build_tamp-observer";
+
+    AbsolutePath CoverageDir => RootDirectory / "artifacts" / "coverage";
 
     // ----- Go collector (ADR 0003) -----
 
@@ -58,15 +78,42 @@ class Build : TampBuild
 
     Target Test => _ => _
         .DependsOn(nameof(Compile))
-        .Description("Run the test suite. Integration tests spin ephemeral Postgres via Testcontainers (Docker required).")
+        .Description("Run the test suite with OpenCover coverage. Integration tests spin ephemeral Postgres/ClickHouse via Testcontainers (Docker required).")
         .Executes(() => DotNet.Test(s => s
             .SetProject(Solution.Path)
             .SetConfiguration(Configuration)
-            .SetNoBuild(true)));
+            .SetNoBuild(true)
+            .AddDataCollector("XPlat Code Coverage")
+            .SetSettings((RootDirectory / "build" / "coverlet.runsettings").Value)
+            .SetResultsDirectory(CoverageDir)));
 
     Target Ci => _ => _
         .DependsOn(nameof(Info), nameof(Clean), nameof(Test))
         .Description("Full pipeline: info, clean, restore, build, test.");
+
+    // SonarCloud analysis is a two-phase scan: Begin before the build, End after tests, with the
+    // build and tests running between so the scanner collects MSBuild inputs and coverage.
+
+    Target SonarBegin => _ => _
+        .Description("Initialize the SonarCloud pre-build phase.")
+        .Before(nameof(Compile))
+        .Requires(() => SonarToken != null)
+        .Executes(() => SonarScanner.Begin(SonarTool, s => s
+            .SetProjectKey(SonarProjectKey)
+            .SetHostUrl(SonarHostUrl)
+            .SetToken(SonarToken)
+            .SetProperty("sonar.organization", SonarOrganization)
+            .SetProperty("sonar.cs.opencover.reportsPaths", $"{CoverageDir.Value}/**/coverage.opencover.xml")));
+
+    Target SonarEnd => _ => _
+        .After(nameof(Test))
+        .DependsOn(nameof(SonarBegin))
+        .Description("Finalize SonarCloud and submit results.")
+        .Executes(() => SonarScanner.End(SonarTool, s => s.SetToken(SonarToken)));
+
+    Target Sonar => _ => _
+        .DependsOn(nameof(SonarBegin), nameof(Test), nameof(SonarEnd))
+        .Description("Full SonarCloud analysis: begin, build, test with coverage, end.");
 
     // ----- Go collector targets (dogfood Tamp.Go, rule #3) -----
 
