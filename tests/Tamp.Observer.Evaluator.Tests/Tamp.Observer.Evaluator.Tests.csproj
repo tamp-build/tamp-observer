@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Tamp.Observer.Evaluator.Tests</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="Testcontainers.PostgreSql" />
+    <PackageReference Include="Google.Protobuf" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Tamp.Observer.Domain\Tamp.Observer.Domain.csproj" />
+    <ProjectReference Include="..\..\src\Tamp.Observer.Storage.Postgres\Tamp.Observer.Storage.Postgres.csproj" />
+    <ProjectReference Include="..\..\src\Tamp.Observer.Evaluator\Tamp.Observer.Evaluator.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Tamp.Observer.Evaluator</RootNamespace>
+    <AssemblyName>Tamp.Observer.Evaluator</AssemblyName>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Google.Protobuf" />
+    <PackageReference Include="Grpc.Tools" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Minimal OTLP resource schema; generates C# message types at build time. -->
+    <Protobuf Include="Protos\otlp_resource_min.proto" GrpcServices="None" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Tamp.Observer.Domain\Tamp.Observer.Domain.csproj" />
+    <ProjectReference Include="..\Tamp.Observer.Storage.Postgres\Tamp.Observer.Storage.Postgres.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -48,5 +48,10 @@ public static class ObserverStoreConfiguration
         // Area is a per-project managed vocabulary; names are unique within a Project (ADR 0007).
         options.Schema.For<Area>()
             .UniqueIndex(x => x.ProjectId, x => x.Name);
+
+        // Quarantine custody store (ADR 0004 section 5): queryable by receipt and arrival time.
+        options.Schema.For<QuarantinedEvent>()
+            .Index(x => x.ReceiptId)
+            .Index(x => x.QuarantinedAt);
     }
 }
