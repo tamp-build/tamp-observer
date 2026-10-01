@@ -1,6 +1,7 @@
 using Marten;
 using Microsoft.Extensions.Logging;
 using Tamp.Observer.Domain;
+using Tamp.Observer.RawBucket.Abstractions;
 using Tamp.Observer.Storage.Abstractions;
 
 namespace Tamp.Observer.Evaluator;
@@ -19,12 +20,14 @@ public readonly record struct DrainStats(int Admitted, int Quarantined)
 /// </summary>
 public sealed partial class IngestEvaluator(
     IDocumentStore store,
-    SpoolReader spool,
+    IRawBucketReader bucket,
     IEventSink sink,
     ILogger<IngestEvaluator> logger)
 {
+    private const int BatchSize = 500;
+
     private readonly IDocumentStore _store = store;
-    private readonly SpoolReader _spool = spool;
+    private readonly IRawBucketReader _bucket = bucket;
     private readonly IEventSink _sink = sink;
     private readonly ILogger<IngestEvaluator> _log = logger;
 
@@ -34,27 +37,37 @@ public sealed partial class IngestEvaluator(
     [LoggerMessage(Level = LogLevel.Information, Message = "quarantined receipt {ReceiptId}: {Reason}")]
     private partial void LogQuarantined(string receiptId, string reason);
 
-    /// <summary>Process every ready event currently in the spool.</summary>
+    /// <summary>Process every ready event currently in the raw bucket, in arrival order.</summary>
     public async Task<DrainStats> DrainAsync(CancellationToken ct = default)
     {
         int admitted = 0, quarantined = 0;
 
-        foreach (var item in _spool.ReadReady())
+        while (true)
         {
-            ct.ThrowIfCancellationRequested();
-            if (await ProcessAsync(item, ct))
-                admitted++;
-            else
-                quarantined++;
+            var items = await _bucket.ReadReadyAsync(BatchSize, ct);
+            if (items.Count == 0)
+                break;
 
-            SpoolReader.Remove(item);
+            foreach (var item in items)
+            {
+                ct.ThrowIfCancellationRequested();
+                if (await ProcessAsync(item, ct))
+                    admitted++;
+                else
+                    quarantined++;
+
+                await _bucket.AcknowledgeAsync(item, ct);
+            }
+
+            if (items.Count < BatchSize)
+                break;
         }
 
         return new DrainStats(admitted, quarantined);
     }
 
     /// <summary>Returns true if the event was admitted, false if quarantined.</summary>
-    private async Task<bool> ProcessAsync(SpoolItem item, CancellationToken ct)
+    private async Task<bool> ProcessAsync(RawBucketItem item, CancellationToken ct)
     {
         IReadOnlyList<ParsedResource> resources;
         try
@@ -184,7 +197,7 @@ public sealed partial class IngestEvaluator(
         return true;
     }
 
-    private async Task QuarantineAsync(SpoolItem item, string reason, string? claimedProjectKey, CancellationToken ct)
+    private async Task QuarantineAsync(RawBucketItem item, string reason, string? claimedProjectKey, CancellationToken ct)
     {
         await using var session = _store.LightweightSession();
         session.Store(new QuarantinedEvent

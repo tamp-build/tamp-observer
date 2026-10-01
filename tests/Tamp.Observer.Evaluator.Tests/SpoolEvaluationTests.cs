@@ -2,6 +2,8 @@ using System.Text.Json;
 using Google.Protobuf;
 using Marten;
 using Microsoft.Extensions.Logging.Abstractions;
+using Tamp.Observer.RawBucket.Abstractions;
+using Tamp.Observer.RawBucket.FileSpool;
 using Tamp.Observer.Domain;
 using Tamp.Observer.Evaluator;
 using Tamp.Observer.Evaluator.Otlp;
@@ -45,7 +47,7 @@ public sealed class SpoolEvaluationTests : IAsyncLifetime
 
         LandTraces("acme", service: "checkout-api", version: "2026.10.1+abc123", environment: "prod");
 
-        var evaluator = new IngestEvaluator(_store, new SpoolReader(_spoolDir), new MartenEventSink(_store), NullLogger<IngestEvaluator>.Instance);
+        var evaluator = new IngestEvaluator(_store, new FileSpoolRawBucketReader(_spoolDir), new MartenEventSink(_store), NullLogger<IngestEvaluator>.Instance);
         var stats = await evaluator.DrainAsync();
 
         Assert.Equal(new DrainStats(Admitted: 1, Quarantined: 0), stats);
@@ -73,7 +75,7 @@ public sealed class SpoolEvaluationTests : IAsyncLifetime
         // No project seeded named "ghost".
         LandTraces("ghost", service: "whatever", version: "1.0", environment: "prod");
 
-        var evaluator = new IngestEvaluator(_store, new SpoolReader(_spoolDir), new MartenEventSink(_store), NullLogger<IngestEvaluator>.Instance);
+        var evaluator = new IngestEvaluator(_store, new FileSpoolRawBucketReader(_spoolDir), new MartenEventSink(_store), NullLogger<IngestEvaluator>.Instance);
         var stats = await evaluator.DrainAsync();
 
         Assert.Equal(new DrainStats(Admitted: 0, Quarantined: 1), stats);
@@ -92,7 +94,7 @@ public sealed class SpoolEvaluationTests : IAsyncLifetime
     {
         LandTraces(projectKey: null, service: "svc", version: "1.0", environment: "prod");
 
-        var evaluator = new IngestEvaluator(_store, new SpoolReader(_spoolDir), new MartenEventSink(_store), NullLogger<IngestEvaluator>.Instance);
+        var evaluator = new IngestEvaluator(_store, new FileSpoolRawBucketReader(_spoolDir), new MartenEventSink(_store), NullLogger<IngestEvaluator>.Instance);
         var stats = await evaluator.DrainAsync();
 
         Assert.Equal(1, stats.Quarantined);
@@ -109,7 +111,7 @@ public sealed class SpoolEvaluationTests : IAsyncLifetime
         LandTraces("acme", "api", "v2", "prod");
         LandTraces("acme", "api", "v1", "prod"); // repeat: should not create a third version
 
-        var evaluator = new IngestEvaluator(_store, new SpoolReader(_spoolDir), new MartenEventSink(_store), NullLogger<IngestEvaluator>.Instance);
+        var evaluator = new IngestEvaluator(_store, new FileSpoolRawBucketReader(_spoolDir), new MartenEventSink(_store), NullLogger<IngestEvaluator>.Instance);
         var stats = await evaluator.DrainAsync();
 
         Assert.Equal(3, stats.Admitted);
@@ -129,7 +131,7 @@ public sealed class SpoolEvaluationTests : IAsyncLifetime
         LandTraces("acme", "api", "v1", "prod");
         LandLogs("acme", "api", "v1", "prod", body: "hello from the admit path");
 
-        var evaluator = new IngestEvaluator(_store, new SpoolReader(_spoolDir), new MartenEventSink(_store), NullLogger<IngestEvaluator>.Instance);
+        var evaluator = new IngestEvaluator(_store, new FileSpoolRawBucketReader(_spoolDir), new MartenEventSink(_store), NullLogger<IngestEvaluator>.Instance);
         var stats = await evaluator.DrainAsync();
         Assert.Equal(2, stats.Admitted);
 

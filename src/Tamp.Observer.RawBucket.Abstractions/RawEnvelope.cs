@@ -1,10 +1,10 @@
 using System.Text.Json.Serialization;
 
-namespace Tamp.Observer.Evaluator;
+namespace Tamp.Observer.RawBucket.Abstractions;
 
 /// <summary>
-/// The .NET view of the envelope the Go rawfile exporter writes alongside each payload (ADR 0003).
-/// Property names match the exporter's JSON.
+/// The envelope the Go landing exporter writes alongside each raw payload (ADR 0003). Property names
+/// match the exporter's JSON. Shared by every raw-bucket provider (file spool, Valkey).
 /// </summary>
 public sealed class RawEnvelope
 {

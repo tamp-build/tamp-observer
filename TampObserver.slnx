@@ -17,6 +17,9 @@
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/Tamp.Observer.Domain/Tamp.Observer.Domain.csproj" />
+    <Project Path="src/Tamp.Observer.RawBucket.Abstractions/Tamp.Observer.RawBucket.Abstractions.csproj" />
+    <Project Path="src/Tamp.Observer.RawBucket.FileSpool/Tamp.Observer.RawBucket.FileSpool.csproj" />
+    <Project Path="src/Tamp.Observer.RawBucket.Valkey/Tamp.Observer.RawBucket.Valkey.csproj" />
     <Project Path="src/Tamp.Observer.Storage.Abstractions/Tamp.Observer.Storage.Abstractions.csproj" />
     <Project Path="src/Tamp.Observer.Storage.Postgres/Tamp.Observer.Storage.Postgres.csproj" />
     <Project Path="src/Tamp.Observer.Storage.ClickHouse/Tamp.Observer.Storage.ClickHouse.csproj" />
@@ -26,6 +29,7 @@
   <Folder Name="/tests/">
     <Project Path="tests/Tamp.Observer.Storage.Postgres.Tests/Tamp.Observer.Storage.Postgres.Tests.csproj" />
     <Project Path="tests/Tamp.Observer.Storage.ClickHouse.Tests/Tamp.Observer.Storage.ClickHouse.Tests.csproj" />
+    <Project Path="tests/Tamp.Observer.RawBucket.Valkey.Tests/Tamp.Observer.RawBucket.Valkey.Tests.csproj" />
     <Project Path="tests/Tamp.Observer.Evaluator.Tests/Tamp.Observer.Evaluator.Tests.csproj" />
   </Folder>
 </Solution>

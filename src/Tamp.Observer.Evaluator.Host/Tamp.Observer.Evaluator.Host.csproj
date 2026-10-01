@@ -14,6 +14,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Tamp.Observer.Evaluator\Tamp.Observer.Evaluator.csproj" />
+    <ProjectReference Include="..\Tamp.Observer.RawBucket.FileSpool\Tamp.Observer.RawBucket.FileSpool.csproj" />
+    <ProjectReference Include="..\Tamp.Observer.RawBucket.Valkey\Tamp.Observer.RawBucket.Valkey.csproj" />
     <ProjectReference Include="..\Tamp.Observer.Storage.Postgres\Tamp.Observer.Storage.Postgres.csproj" />
   </ItemGroup>
 

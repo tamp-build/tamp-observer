@@ -3,15 +3,21 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Tamp.Observer.Domain;
 using Tamp.Observer.Evaluator;
+using Tamp.Observer.RawBucket.Abstractions;
+using Tamp.Observer.RawBucket.FileSpool;
+using Tamp.Observer.RawBucket.Valkey;
 using Tamp.Observer.Storage.Postgres;
 
-// Runnable evaluator (ADR 0004): polls the spool the Go collector lands into and promotes entities
-// into the Postgres/Marten store. Floor config via env vars; no cloud anything.
+// Runnable evaluator (ADR 0004): drains the raw bucket the Go collector lands into and promotes
+// entities into the Postgres/Marten store. Floor config via env vars; no cloud anything.
 
 var connectionString = Environment.GetEnvironmentVariable("OBSERVER_DB")
     ?? "Host=localhost;Port=5432;Database=observer;Username=observer;Password=observer";
 var spoolDirectory = Environment.GetEnvironmentVariable("OBSERVER_SPOOL")
     ?? "./_spool";
+// Raw-bucket tier dial (ADR 0004 section 2): "file" (floor) or "valkey" (high).
+var rawBucketTier = Environment.GetEnvironmentVariable("OBSERVER_RAWBUCKET") ?? "file";
+var valkeyConnection = Environment.GetEnvironmentVariable("OBSERVER_VALKEY") ?? "localhost:6379";
 
 // Admin one-shot: create the trust-root Project (ADR 0007: a human creates projects; they are never
 // auto-created from telemetry). Usage: create-project <key> [name]
@@ -30,7 +36,11 @@ if (args.Length >= 2 && args[0] == "create-project")
 var builder = Host.CreateApplicationBuilder(args);
 
 builder.Services.AddTampObserverStore(connectionString);
-builder.Services.AddSingleton(new SpoolReader(spoolDirectory));
+builder.Services.AddSingleton<IRawBucketReader>(_ => rawBucketTier switch
+{
+    "valkey" => new ValkeyRawBucketReader(valkeyConnection),
+    _ => new FileSpoolRawBucketReader(spoolDirectory),
+});
 builder.Services.AddSingleton<IngestEvaluator>();
 builder.Services.AddHostedService<SpoolIngestWorker>();
 

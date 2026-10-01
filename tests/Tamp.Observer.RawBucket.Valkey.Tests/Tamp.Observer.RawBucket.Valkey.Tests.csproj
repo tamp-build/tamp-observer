@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
-    <RootNamespace>Tamp.Observer.Evaluator.Tests</RootNamespace>
+    <RootNamespace>Tamp.Observer.RawBucket.Valkey.Tests</RootNamespace>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
   </PropertyGroup>
@@ -12,16 +12,12 @@
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" />
     <PackageReference Include="coverlet.collector" />
-    <PackageReference Include="Testcontainers.PostgreSql" />
-    <PackageReference Include="Google.Protobuf" />
+    <PackageReference Include="Testcontainers.Redis" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Tamp.Observer.Domain\Tamp.Observer.Domain.csproj" />
     <ProjectReference Include="..\..\src\Tamp.Observer.RawBucket.Abstractions\Tamp.Observer.RawBucket.Abstractions.csproj" />
-    <ProjectReference Include="..\..\src\Tamp.Observer.RawBucket.FileSpool\Tamp.Observer.RawBucket.FileSpool.csproj" />
-    <ProjectReference Include="..\..\src\Tamp.Observer.Storage.Postgres\Tamp.Observer.Storage.Postgres.csproj" />
-    <ProjectReference Include="..\..\src\Tamp.Observer.Evaluator\Tamp.Observer.Evaluator.csproj" />
+    <ProjectReference Include="..\..\src\Tamp.Observer.RawBucket.Valkey\Tamp.Observer.RawBucket.Valkey.csproj" />
   </ItemGroup>
 
 </Project>

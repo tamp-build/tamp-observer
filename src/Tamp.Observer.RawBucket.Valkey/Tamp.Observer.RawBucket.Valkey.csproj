@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Tamp.Observer.RawBucket.Valkey</RootNamespace>
+    <AssemblyName>Tamp.Observer.RawBucket.Valkey</AssemblyName>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="StackExchange.Redis" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Tamp.Observer.RawBucket.Abstractions\Tamp.Observer.RawBucket.Abstractions.csproj" />
+  </ItemGroup>
+
+</Project>

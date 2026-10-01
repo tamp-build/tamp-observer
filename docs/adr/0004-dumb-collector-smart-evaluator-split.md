@@ -63,18 +63,27 @@ rejected events go to quarantine. Nothing else sits on the hot path.
 
 The raw bucket is the shock absorber between the bursty collector and the stateful evaluator. It is
 chosen for flow, not custody (custody is quarantine's job, below). It is tiered on the same
-upward-only principle as the store (ADR 0005):
+upward-only principle as the store (ADR 0005), and like the store it is a **config dial behind a
+concrete interface**, not a fork: the Go collector lands through a landing exporter, and the .NET
+evaluator drains through an `IRawBucketReader` abstraction whose providers are selectable.
 
-* **Low / default tier (no new infra):** an in-process bounded queue (`System.Threading.Channels`) or a
-  consumed-and-deleted Postgres "pending" table (rows deleted on consume, so minimal vacuum churn). This
-  is what the floor install runs; it drags in nothing beyond Postgres.
-* **High tier:** Valkey Streams as a durable fast landing buffer, drained with consumer-group ack.
-  Valkey, not Redis, for the licensing reasons that run through this whole project (a drop-in BSD fork
-  with no license gate to audit).
+* **Floor / default tier (no new infra): a durable file spool.** The Go collector's thin exporter
+  writes each event as opaque payload bytes plus a JSON envelope into a spool directory (atomic:
+  temp -> fsync -> rename, envelope written last as the completeness marker); the evaluator drains the
+  spool in arrival order and deletes on consume. This is what the floor install runs: nothing beyond
+  the filesystem, forensic (original bytes on disk), and air-gap friendly. (The originally-sketched
+  in-process `System.Threading.Channels` option does not apply once ingestion is a separate Go process,
+  and a consumed-and-deleted Postgres "pending" table remains an alternative floor provider.)
+* **High tier:** Valkey Streams as a durable fast landing buffer, drained with consumer-group ack
+  (`XREADGROUP` / `XACK`). Valkey, not Redis, for the licensing reasons that run through this whole
+  project (a drop-in BSD fork with no license gate to audit). Stream IDs are time-ordered, so arrival
+  order (which the version sequence depends on, ADR 0008) is preserved by construction.
 
 This subsumes what the handoff doc first described as a separate "buffering tier": there is no separate
-buffer stage; the raw bucket **is** the buffer. Keeping it a config tier (not a fork in the code) is
-what ADR 0006's write abstraction has to preserve.
+buffer stage; the raw bucket **is** the buffer. Keeping it a config tier (not a fork in the code) is why
+both the landing exporter (Go) and `IRawBucketReader` (.NET) are provider-selectable, mirroring ADR
+0006's storage seams. The floor assembly must not drag in the Valkey client (ADR 0001 invariant); the
+Valkey provider lives in its own assembly, loaded only when that tier is dialed on.
 
 ### 3. The .NET evaluator owns all domain intelligence
 
