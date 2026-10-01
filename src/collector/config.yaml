@@ -1,0 +1,32 @@
+# Minimal runtime config for the spike: OTLP in (gRPC 4317 / HTTP 4318), batch, debug out.
+# This exercises the single OTLP front door (ADR 0009); the raw-landing exporter replaces
+# `debug` once it exists (ADR 0004).
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch: {}
+
+exporters:
+  debug:
+    verbosity: detailed
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [debug]
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [debug]
+    logs:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [debug]

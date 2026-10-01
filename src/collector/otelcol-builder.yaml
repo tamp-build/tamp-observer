@@ -1,0 +1,27 @@
+# OpenTelemetry Collector Builder (ocb) manifest for the tamp-observer collector
+# distribution (ADR 0003). We compose the real Collector, not a from-scratch receiver:
+# OTLP in, a minimal processor, and (for now) placeholder exporters standing in for the
+# thin "land raw bytes and ack" exporter that is ours to write next.
+#
+# ocb generates the distribution; Tamp.Go compiles it (rule #3 dogfood). All core modules
+# move in lockstep at the collector release version.
+dist:
+  name: tamp-observer-collector
+  description: tamp-observer custom OpenTelemetry Collector distribution (ADR 0003 spike)
+  output_path: ./_dist
+  version: 0.1.0-spike
+  otelcol_version: 0.162.0
+
+receivers:
+  # The one front door that matters for the OTLP-pure boundary (ADR 0009).
+  - gomod: go.opentelemetry.io/collector/receiver/otlpreceiver v0.162.0
+
+processors:
+  # Minimal processor only; the collector stays a dumb fast pipe (ADR 0003/0004).
+  - gomod: go.opentelemetry.io/collector/processor/batchprocessor v0.162.0
+
+exporters:
+  # Placeholders for the thin raw-landing exporter (ADR 0004) that is ours to build.
+  # debugexporter proves the pipeline is live; nopexporter is the quiet drain.
+  - gomod: go.opentelemetry.io/collector/exporter/debugexporter v0.162.0
+  - gomod: go.opentelemetry.io/collector/exporter/nopexporter v0.162.0

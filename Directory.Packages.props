@@ -12,6 +12,7 @@
   <ItemGroup Label="Build (dogfood the tamp ecosystem, rule #3)">
     <PackageVersion Include="Tamp.Core" Version="1.17.3" />
     <PackageVersion Include="Tamp.NetCli.V10" Version="1.17.3" />
+    <PackageVersion Include="Tamp.Go" Version="0.1.0" />
   </ItemGroup>
 
   <ItemGroup Label="Test">

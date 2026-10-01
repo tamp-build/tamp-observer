@@ -14,8 +14,9 @@ coverage/
 *.trx
 
 # ---- Go (collector distribution) ----
+# ocb-generated distribution (regenerated from otelcol-builder.yaml)
+src/collector/_dist/
 # built binaries
-/cmd/**/dist/
 *.exe
 *.test
 *.out
