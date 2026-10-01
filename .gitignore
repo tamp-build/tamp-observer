@@ -16,6 +16,9 @@ coverage/
 # ---- Go (collector distribution) ----
 # ocb-generated distribution (regenerated from otelcol-builder.yaml)
 src/collector/_dist/
+# raw-landing spool output (runtime)
+src/collector/_spool/
+_spool/
 # built binaries
 *.exe
 *.test
@@ -23,7 +26,7 @@ src/collector/_dist/
 vendor/
 
 # ---- Node / Svelte (frontend) ----
-# NOTE: do NOT blanket-ignore `build/` here — that is the tamp build-script project
+# NOTE: do NOT blanket-ignore `build/` here. That is the tamp build-script project
 # at the repo root (build/Build.cs). Scope SvelteKit's adapter-static output to the
 # frontend path instead when the frontend lands (e.g. src/frontend/build/).
 node_modules/

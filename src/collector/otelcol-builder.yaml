@@ -21,7 +21,11 @@ processors:
   - gomod: go.opentelemetry.io/collector/processor/batchprocessor v0.162.0
 
 exporters:
-  # Placeholders for the thin raw-landing exporter (ADR 0004) that is ours to build.
-  # debugexporter proves the pipeline is live; nopexporter is the quiet drain.
+  # Our thin raw-landing exporter (ADR 0004): lands opaque OTLP bytes + envelope, acks.
+  - gomod: github.com/tamp-build/tamp-observer/collector/rawfileexporter v0.0.0
+  # Kept for dev visibility alongside the raw landing.
   - gomod: go.opentelemetry.io/collector/exporter/debugexporter v0.162.0
-  - gomod: go.opentelemetry.io/collector/exporter/nopexporter v0.162.0
+
+# The raw-landing exporter is a local module in this repo (relative to output_path ./_dist).
+replaces:
+  - github.com/tamp-build/tamp-observer/collector/rawfileexporter => ../rawfileexporter

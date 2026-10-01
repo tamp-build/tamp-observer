@@ -13,20 +13,23 @@ processors:
   batch: {}
 
 exporters:
+  rawfile:
+    directory: ./_spool
+    source: otlp
   debug:
-    verbosity: detailed
+    verbosity: normal
 
 service:
   pipelines:
     traces:
       receivers: [otlp]
       processors: [batch]
-      exporters: [debug]
+      exporters: [rawfile, debug]
     metrics:
       receivers: [otlp]
       processors: [batch]
-      exporters: [debug]
+      exporters: [rawfile, debug]
     logs:
       receivers: [otlp]
       processors: [batch]
-      exporters: [debug]
+      exporters: [rawfile, debug]
