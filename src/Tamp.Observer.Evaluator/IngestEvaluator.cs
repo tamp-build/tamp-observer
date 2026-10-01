@@ -129,6 +129,7 @@ public sealed class IngestEvaluator(IDocumentStore store, SpoolReader spool, ILo
                     Kind = s.Kind,
                     StartUnixNano = s.StartUnixNano,
                     EndUnixNano = s.EndUnixNano,
+                    DurationNano = s.EndUnixNano - s.StartUnixNano,
                     StatusCode = s.StatusCode,
                     StatusMessage = s.StatusMessage,
                     InstanceId = instanceId,

@@ -24,7 +24,9 @@ public class IngestedSpan
     public int Kind { get; set; }
     public long StartUnixNano { get; set; }
     public long EndUnixNano { get; set; }
-    public long DurationNano => EndUnixNano - StartUnixNano;
+
+    /// <summary>End minus start, stored so it is queryable/aggregatable by the read tier (ADR 0006).</summary>
+    public long DurationNano { get; set; }
     public int StatusCode { get; set; }
     public string? StatusMessage { get; set; }
 

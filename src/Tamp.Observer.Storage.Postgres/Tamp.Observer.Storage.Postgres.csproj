@@ -14,6 +14,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Tamp.Observer.Domain\Tamp.Observer.Domain.csproj" />
+    <ProjectReference Include="..\Tamp.Observer.Storage.Abstractions\Tamp.Observer.Storage.Abstractions.csproj" />
   </ItemGroup>
 
 </Project>

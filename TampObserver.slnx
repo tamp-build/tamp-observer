@@ -17,6 +17,7 @@
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/Tamp.Observer.Domain/Tamp.Observer.Domain.csproj" />
+    <Project Path="src/Tamp.Observer.Storage.Abstractions/Tamp.Observer.Storage.Abstractions.csproj" />
     <Project Path="src/Tamp.Observer.Storage.Postgres/Tamp.Observer.Storage.Postgres.csproj" />
     <Project Path="src/Tamp.Observer.Evaluator/Tamp.Observer.Evaluator.csproj" />
     <Project Path="src/Tamp.Observer.Evaluator.Host/Tamp.Observer.Evaluator.Host.csproj" />

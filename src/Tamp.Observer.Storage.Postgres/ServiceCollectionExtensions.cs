@@ -1,5 +1,6 @@
 using Marten;
 using Microsoft.Extensions.DependencyInjection;
+using Tamp.Observer.Storage.Abstractions;
 
 namespace Tamp.Observer.Storage.Postgres;
 
@@ -17,6 +18,9 @@ public static class ServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(services);
 
         services.AddMarten(options => ObserverStoreConfiguration.Configure(options, connectionString));
+
+        // The Postgres translator for the capability-based read interface (ADR 0006).
+        services.AddSingleton<IObservabilityStore, MartenObservabilityStore>();
         return services;
     }
 }
