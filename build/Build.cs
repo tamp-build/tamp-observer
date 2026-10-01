@@ -47,6 +47,7 @@ class Build : TampBuild
     AbsolutePath Collector => RootDirectory / "src" / "collector";
     AbsolutePath CollectorDist => Collector / "_dist";
     AbsolutePath Artifacts => RootDirectory / "artifacts";
+    AbsolutePath GoCoverage => CoverageDir / "go" / "rawfileexporter.coverage.out";
     string HostCollector => OperatingSystem.IsWindows() ? "tamp-observer-collector.exe" : "tamp-observer-collector";
 
     Target Info => _ => _
@@ -107,17 +108,18 @@ class Build : TampBuild
             .SetToken(SonarToken)
             // The build script is build tooling (NUKE-style DSL), not shipped product code.
             .SetProperty("sonar.exclusions", "build/**")
-            .SetProperty("sonar.cs.opencover.reportsPaths", $"{CoverageDir.Value}/**/coverage.opencover.xml")));
+            .SetProperty("sonar.cs.opencover.reportsPaths", $"{CoverageDir.Value}/**/coverage.opencover.xml")
+            .SetProperty("sonar.go.coverage.reportPaths", GoCoverage.Value)));
 
     Target SonarEnd => _ => _
-        .After(nameof(Test))
+        .After(nameof(Test), nameof(CollectorTest))
         .DependsOn(nameof(SonarBegin))
         .Description("Finalize SonarCloud and submit results.")
         .Executes(() => SonarScanner.End(SonarTool, s => s.SetToken(SonarToken)));
 
     Target Sonar => _ => _
-        .DependsOn(nameof(SonarBegin), nameof(Test), nameof(SonarEnd))
-        .Description("Full SonarCloud analysis: begin, build, test with coverage, end.");
+        .DependsOn(nameof(SonarBegin), nameof(Test), nameof(CollectorTest), nameof(SonarEnd))
+        .Description("Full SonarCloud analysis: begin, .NET build + test coverage, Go test coverage, end.");
 
     // ----- Go collector targets (dogfood Tamp.Go, rule #3) -----
 
@@ -137,6 +139,19 @@ class Build : TampBuild
             .SetTrimpath()
             .SetOutput((Artifacts / HostCollector).Value)
             .AddPackage(".")));
+
+    Target CollectorTest => _ => _
+        .Description("Run the Go collector unit tests with coverage (feeds SonarCloud Go coverage).")
+        .Executes(() =>
+        {
+            System.IO.Directory.CreateDirectory((CoverageDir / "go").Value);
+            return Go.Test(GoBin, s => s
+                .SetWorkingDirectory(Collector / "rawfileexporter")
+                .SetCover()
+                .SetCoverMode("atomic")
+                .SetCoverProfile(GoCoverage.Value)
+                .AllPackages());
+        });
 
     Target CollectorBuildLinux => _ => _
         .DependsOn(nameof(CollectorGenerate))
