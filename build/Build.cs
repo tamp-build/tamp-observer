@@ -21,7 +21,8 @@ class Build : TampBuild
 
     // dotnet-sonarscanner is a DLL-based .NET tool; install it globally in CI
     // (`dotnet tool install --global dotnet-sonarscanner`) and resolve the apphost from PATH.
-    [FromPath("dotnet-sonarscanner")]
+    // Optional so the fast unit lane (which never runs Sonar) does not require it to be installed.
+    [FromPath("dotnet-sonarscanner", Optional = true)]
     readonly Tool SonarTool = null!;
 
     [Secret("SonarCloud token", EnvironmentVariable = "SONAR_TOKEN")]
@@ -40,7 +41,8 @@ class Build : TampBuild
 
     // ----- Go collector (ADR 0003) -----
 
-    [FromPath("go")] readonly Tool GoBin = null!;
+    // Optional so non-Go lanes (unit tests) do not require the Go toolchain on PATH.
+    [FromPath("go", Optional = true)] readonly Tool GoBin = null!;
 
     const string OcbVersion = "v0.162.0";
 
