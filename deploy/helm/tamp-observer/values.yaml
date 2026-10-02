@@ -86,6 +86,7 @@ api:
   oidc:
     authority: "https://auth.brewingcoder.com/dex"
     audience: "tamp-observer"
+    clientId: "tamp-observer"   # the SPA's public PKCE client (the Dex staticClient id), served to the browser
     allowHttp: false
   selfTelemetry:
     enabled: false

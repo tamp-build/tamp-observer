@@ -73,6 +73,8 @@ spec:
               value: {{ .Values.api.oidc.authority | quote }}
             - name: OBSERVER_OIDC_AUDIENCE
               value: {{ .Values.api.oidc.audience | quote }}
+            - name: OBSERVER_OIDC_CLIENT_ID
+              value: {{ .Values.api.oidc.clientId | quote }}
             - name: OBSERVER_OIDC_ALLOW_HTTP
               value: {{ ternary "1" "0" .Values.api.oidc.allowHttp | quote }}
             - name: OBSERVER_REPLAY_BLOB

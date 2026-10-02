@@ -5,8 +5,8 @@ description: |
   tiered storage (Postgres floor, in-process DuckDB accelerator, optional ClickHouse), Valkey
   raw-bucket, errors/Issues, session replay, external OIDC + email allowlist, Svelte SPA.
 type: application
-version: 0.1.0
-appVersion: "0.1.0-alpha"
+version: 0.1.1
+appVersion: "0.1.1"
 home: https://github.com/tamp-build/tamp-observer
 sources:
   - https://github.com/tamp-build/tamp-observer

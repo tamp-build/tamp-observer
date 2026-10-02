@@ -53,6 +53,8 @@ switch (storeTier)
 // starting up insecure.
 var authority = Environment.GetEnvironmentVariable("OBSERVER_OIDC_AUTHORITY");
 var audience = Environment.GetEnvironmentVariable("OBSERVER_OIDC_AUDIENCE");
+// The SPA's OIDC client id (the IdP's public PKCE client). Distinct from the audience; served to the browser.
+var oidcClientId = Environment.GetEnvironmentVariable("OBSERVER_OIDC_CLIENT_ID") ?? "tamp-observer";
 var requireHttps = Environment.GetEnvironmentVariable("OBSERVER_OIDC_ALLOW_HTTP") != "1";
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -128,6 +130,14 @@ app.UseAuthorization();
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }))
     .AllowAnonymous()
     .WithName("Health");
+
+// Runtime SPA config (ADR 0013/0014): the frontend fetches its OIDC settings here instead of baking them at
+// build time, so one image works across deployments (dev Dex, GitHub-via-Dex, any in-enclave IdP). Anonymous;
+// none of these values are secret (they ride in redirects and tokens anyway).
+app.MapGet("/config.json", () =>
+        Results.Ok(new SpaConfig(authority ?? string.Empty, audience ?? string.Empty, oidcClientId)))
+    .AllowAnonymous()
+    .WithName("SpaConfig");
 
 // The OpenAPI spec the frontend's typed client generates from.
 app.MapOpenApi();
@@ -326,6 +336,9 @@ await app.RunAsync();
 
 /// <summary>The authenticated subject, as asserted by the external IdP (ADR 0013).</summary>
 public sealed record MeResponse(string SubjectId, bool Authenticated);
+
+/// <summary>Runtime OIDC settings the SPA fetches at startup (ADR 0014), so the image is deployment-portable.</summary>
+public sealed record SpaConfig(string OidcAuthority, string OidcAudience, string OidcClientId);
 
 /// <summary>One delivered replay chunk from the browser SDK (ADR 0010): a batch of rrweb events plus the
 /// session identity and first-chunk context. <see cref="Events"/> is the raw rrweb events JSON array.</summary>

@@ -18,6 +18,19 @@
         }
       }
     },
+    "/config.json": {
+      "get": {
+        "tags": [
+          "Tamp.Observer.Api"
+        ],
+        "operationId": "SpaConfig",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
     "/ingest/replay": {
       "post": {
         "tags": [

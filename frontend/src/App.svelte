@@ -2,7 +2,7 @@
   import { onMount } from "svelte";
   import type { User } from "oidc-client-ts";
   import { api, setToken } from "./lib/api/client";
-  import { resolveUser, login, logout, isBundledDevAuth } from "./lib/auth";
+  import { initAuth, resolveUser, login, logout, isBundledDevAuth } from "./lib/auth";
   import { startRecording, type Recording } from "./lib/replay/recorder";
   import ReplayPlayer from "./lib/replay/ReplayPlayer.svelte";
   import type { components } from "./lib/api/schema";
@@ -12,6 +12,7 @@
 
   let user = $state<User | null>(null);
   let loading = $state(true);
+  let devMode = $state(false);
   let recording = $state<Recording | null>(null);
 
   let projectId = $state("");
@@ -25,11 +26,22 @@
   let activeSession = $state<string | null>(null);
 
   onMount(async () => {
+    await initAuth();
+    devMode = isBundledDevAuth();
     user = await resolveUser();
-    if (user) setToken(user.id_token ?? null);
+    if (user) {
+      setToken(user.id_token ?? null);
+      sessionStorage.removeItem("tobs_login_bounced");
+    } else if (!sessionStorage.getItem("tobs_login_bounced")) {
+      // Land straight on the IdP sign-in (GitHub via Dex): auto-redirect once per session. The guard keeps a
+      // cancelled login from looping; after a bounce the signed-out UI with a manual Sign in button is shown.
+      sessionStorage.setItem("tobs_login_bounced", "1");
+      await login();
+      return;
+    }
     loading = false;
-    // Record this very page as a replay session, dogfooding the capture path (ADR 0010).
-    recording = startRecording();
+    // Record this page as a replay session only once signed in (dogfoods the capture path, ADR 0010).
+    if (user) recording = startRecording();
   });
 
   async function signIn() {
@@ -93,7 +105,7 @@
   <h1>tamp-observer</h1>
   <p class="sub">Svelte SPA over the .NET OpenAPI API (ADR 0014). This page is recording itself for replay.</p>
 
-  {#if isBundledDevAuth}
+  {#if devMode}
     <div class="banner">
       <strong>Development / demo mode.</strong> Sign-in uses the bundled Dex dev identity provider
       (<code>dev@tamp.local</code> / <code>password</code>). Not for production. See <code>docs/deployment.md</code>.
