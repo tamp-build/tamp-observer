@@ -73,5 +73,8 @@ public static class ObserverStoreConfiguration
             .UniqueIndex(x => x.ProjectId, x => x.ServiceId, x => x.Fingerprint)
             .Index(x => x.Status)
             .Index(x => x.LastSeenAtUtc);
+
+        // Installation-wide settings singleton, incl. enforcement posture (ADR 0002).
+        options.Schema.For<InstanceSettings>();
     }
 }

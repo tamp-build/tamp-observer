@@ -28,6 +28,7 @@
     <Project Path="src/Tamp.Observer.Evaluator.Host/Tamp.Observer.Evaluator.Host.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Tamp.Observer.Domain.Tests/Tamp.Observer.Domain.Tests.csproj" />
     <Project Path="tests/Tamp.Observer.Storage.Postgres.Tests/Tamp.Observer.Storage.Postgres.Tests.csproj" />
     <Project Path="tests/Tamp.Observer.Storage.ClickHouse.Tests/Tamp.Observer.Storage.ClickHouse.Tests.csproj" />
     <Project Path="tests/Tamp.Observer.Storage.DuckDb.Tests/Tamp.Observer.Storage.DuckDb.Tests.csproj" />
