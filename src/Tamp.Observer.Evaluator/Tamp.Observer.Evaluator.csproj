@@ -19,6 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Tamp.Observer.Alerting\Tamp.Observer.Alerting.csproj" />
     <ProjectReference Include="..\Tamp.Observer.Domain\Tamp.Observer.Domain.csproj" />
     <ProjectReference Include="..\Tamp.Observer.RawBucket.Abstractions\Tamp.Observer.RawBucket.Abstractions.csproj" />
     <ProjectReference Include="..\Tamp.Observer.Storage.Abstractions\Tamp.Observer.Storage.Abstractions.csproj" />

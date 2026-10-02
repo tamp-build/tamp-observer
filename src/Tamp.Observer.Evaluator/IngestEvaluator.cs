@@ -1,5 +1,6 @@
 using Marten;
 using Microsoft.Extensions.Logging;
+using Tamp.Observer.Alerting;
 using Tamp.Observer.Domain;
 using Tamp.Observer.RawBucket.Abstractions;
 using Tamp.Observer.Storage.Abstractions;
@@ -22,7 +23,8 @@ public sealed partial class IngestEvaluator(
     IDocumentStore store,
     IRawBucketReader bucket,
     IEventSink sink,
-    ILogger<IngestEvaluator> logger)
+    ILogger<IngestEvaluator> logger,
+    IAlertDispatcher? alerts = null)
 {
     private const int BatchSize = 500;
 
@@ -30,6 +32,7 @@ public sealed partial class IngestEvaluator(
     private readonly IRawBucketReader _bucket = bucket;
     private readonly IEventSink _sink = sink;
     private readonly ILogger<IngestEvaluator> _log = logger;
+    private readonly IAlertDispatcher? _alerts = alerts;
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "admitted receipt {ReceiptId} ({Signal})")]
     private partial void LogAdmitted(string receiptId, string signal);
@@ -214,6 +217,13 @@ public sealed partial class IngestEvaluator(
             resolver.NewServices, resolver.NewEnvironments, resolver.NewVersions, spans, logs,
             issueProjector.Touched.ToList());
         await _sink.WriteAsync(batch, ct);
+
+        // Fan out alerts (new / regressed Issues) after the write succeeds, off the critical path.
+        if (_alerts is not null && issueProjector.Alerts.Count > 0)
+        {
+            var instance = await read.LoadAsync<InstanceSettings>(InstanceSettings.SingletonId, ct) ?? new InstanceSettings();
+            await _alerts.DispatchAsync(issueProjector.Alerts, EnforcementGate.Resolve(instance, null), ct);
+        }
 
         LogAdmitted(item.Envelope.ReceiptId, item.Envelope.Signal);
         return true;

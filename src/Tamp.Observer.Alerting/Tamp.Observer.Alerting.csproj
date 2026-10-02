@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Tamp.Observer.Alerting</RootNamespace>
+    <AssemblyName>Tamp.Observer.Alerting</AssemblyName>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Tamp.Observer.Domain\Tamp.Observer.Domain.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -156,6 +156,43 @@ public sealed class SpoolEvaluationTests : IAsyncLifetime
         Assert.Equal("INFO", log.SeverityText);
     }
 
+    private sealed class CollectingDispatcher : Tamp.Observer.Alerting.IAlertDispatcher
+    {
+        public List<Tamp.Observer.Alerting.AlertEvent> Alerts { get; } = [];
+        public Task DispatchAsync(IReadOnlyList<Tamp.Observer.Alerting.AlertEvent> alerts, IEnforcementGate gate, CancellationToken ct = default)
+        {
+            Alerts.AddRange(alerts);
+            return Task.CompletedTask;
+        }
+    }
+
+    [Fact]
+    public async Task Alerts_on_new_then_regressed_issue()
+    {
+        await SeedProjectAsync("acme");
+        var dispatcher = new CollectingDispatcher();
+        var evaluator = new IngestEvaluator(_store, new FileSpoolRawBucketReader(_spoolDir), new MartenEventSink(_store), NullLogger<IngestEvaluator>.Instance, dispatcher);
+
+        LandErrorTrace("acme", "api", "v1", "Boom");
+        await evaluator.DrainAsync();
+        Assert.Single(dispatcher.Alerts);
+        Assert.Equal(Tamp.Observer.Alerting.AlertKind.NewIssue, dispatcher.Alerts[0].Kind);
+
+        await using (var s = _store.LightweightSession())
+        {
+            var issue = await s.Query<Issue>().SingleAsync();
+            issue.Status = IssueStatus.Resolved;
+            issue.ResolvedInVersionSequence = issue.FirstSeenVersionSequence;
+            s.Store(issue);
+            await s.SaveChangesAsync();
+        }
+
+        LandErrorTrace("acme", "api", "v2", "Boom");
+        await evaluator.DrainAsync();
+        Assert.Equal(2, dispatcher.Alerts.Count);
+        Assert.Equal(Tamp.Observer.Alerting.AlertKind.RegressedIssue, dispatcher.Alerts[1].Kind);
+    }
+
     [Fact]
     public async Task Error_spans_create_and_increment_an_issue()
     {

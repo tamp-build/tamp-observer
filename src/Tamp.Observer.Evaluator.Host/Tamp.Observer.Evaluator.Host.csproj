@@ -13,6 +13,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Tamp.Observer.Alerting\Tamp.Observer.Alerting.csproj" />
     <ProjectReference Include="..\Tamp.Observer.Evaluator\Tamp.Observer.Evaluator.csproj" />
     <ProjectReference Include="..\Tamp.Observer.RawBucket.FileSpool\Tamp.Observer.RawBucket.FileSpool.csproj" />
     <ProjectReference Include="..\Tamp.Observer.RawBucket.Valkey\Tamp.Observer.RawBucket.Valkey.csproj" />

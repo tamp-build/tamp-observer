@@ -1,6 +1,7 @@
 using Marten;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Tamp.Observer.Alerting;
 using Tamp.Observer.Domain;
 using Tamp.Observer.Evaluator;
 using Tamp.Observer.RawBucket.Abstractions;
@@ -41,6 +42,22 @@ builder.Services.AddSingleton<IRawBucketReader>(_ => rawBucketTier switch
     "valkey" => new ValkeyRawBucketReader(valkeyConnection),
     _ => new FileSpoolRawBucketReader(spoolDirectory),
 });
+// Alerting channels (ADR 0016): the operator enables one or more by configuration. Cloud channels are
+// reachback and get gated off under locked/enforcing by the dispatcher's enforcement check.
+var alertHttp = new HttpClient();
+var channels = new List<INotificationChannel>();
+if (Environment.GetEnvironmentVariable("OBSERVER_ALERT_SLACK_WEBHOOK") is { Length: > 0 } slackUrl)
+    channels.Add(new SlackChannel(alertHttp, slackUrl));
+if (Environment.GetEnvironmentVariable("OBSERVER_ALERT_TELEGRAM_TOKEN") is { Length: > 0 } tgToken
+    && Environment.GetEnvironmentVariable("OBSERVER_ALERT_TELEGRAM_CHAT") is { Length: > 0 } tgChat)
+    channels.Add(new TelegramChannel(alertHttp, tgToken, tgChat));
+if (Environment.GetEnvironmentVariable("OBSERVER_ALERT_SMTP_HOST") is { Length: > 0 } smtpHost
+    && Environment.GetEnvironmentVariable("OBSERVER_ALERT_SMTP_FROM") is { Length: > 0 } smtpFrom
+    && Environment.GetEnvironmentVariable("OBSERVER_ALERT_SMTP_TO") is { Length: > 0 } smtpTo)
+    channels.Add(new SmtpChannel(new SmtpChannelOptions { Host = smtpHost, From = smtpFrom, To = smtpTo.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) }));
+
+builder.Services.AddSingleton(alertHttp);
+builder.Services.AddSingleton<IAlertDispatcher>(_ => new AlertDispatcher(channels));
 builder.Services.AddSingleton<IngestEvaluator>();
 builder.Services.AddHostedService<SpoolIngestWorker>();
 
