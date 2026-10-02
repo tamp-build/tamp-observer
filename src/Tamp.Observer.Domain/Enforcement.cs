@@ -3,7 +3,7 @@ namespace Tamp.Observer.Domain;
 /// <summary>
 /// The enforcement-surface loosenings governed by enforcement mode (ADR 0002). Under enforcing (and
 /// non-weakenably under a locked instance) each of these is refused. The mode never touches the
-/// scale/performance surface (storage tier, buffer tier) — that is an orthogonal axis.
+/// scale/performance surface (storage tier, buffer tier); that is an orthogonal axis.
 /// </summary>
 public enum Loosening
 {
@@ -74,7 +74,7 @@ public sealed class EnforcementGate(EnforcementMode mode) : IEnforcementGate
     public bool Allows(Loosening loosening, bool advisoryOverride)
     {
         // Enforcing: the loosening path is absent. We do not branch on advisoryOverride here, by design
-        // (ADR 0002 invariant 3) — an assessor can trust the loosening cannot happen.
+        // (ADR 0002 invariant 3): an assessor can trust the loosening cannot happen.
         if (mode == EnforcementMode.Enforcing)
             return false;
 
