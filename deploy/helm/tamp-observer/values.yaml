@@ -107,6 +107,9 @@ dex:
   redirectUris:
     - "https://observer.brewingcoder.com/"
     - "https://observer.brewingcoder.com/callback"
+  # CORS origins the SPA calls Dex from (discovery + PKCE token exchange). Match the app's host(s).
+  allowedOrigins:
+    - "https://observer.brewingcoder.com"
   resources:
     requests: { cpu: 50m, memory: 64Mi }
     limits: { cpu: 200m, memory: 128Mi }

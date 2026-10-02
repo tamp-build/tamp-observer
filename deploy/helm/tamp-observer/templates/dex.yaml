@@ -15,6 +15,12 @@ data:
       type: memory
     web:
       http: 0.0.0.0:5556
+      # CORS: the SPA fetches the discovery doc and does the PKCE token exchange cross-origin from its own host,
+      # so Dex must allow that origin or oidc-client-ts fails before it can even start the redirect.
+      allowedOrigins:
+        {{- range .Values.dex.allowedOrigins }}
+        - {{ . | quote }}
+        {{- end }}
     oauth2:
       skipApprovalScreen: true
     connectors:
@@ -62,7 +68,8 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/config: {{ .Values.dex.issuer | printf "%s%s" .Values.dex.github.clientId | sha256sum }}
+        # Roll Dex whenever any of its config changes (issuer, client, allowedOrigins, redirectUris, ...).
+        checksum/config: {{ toYaml .Values.dex | sha256sum }}
       labels:
         {{- include "tamp-observer.selectorLabels" (dict "root" . "component" "dex") | nindent 8 }}
     spec:
