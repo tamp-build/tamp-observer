@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.Extensions.DependencyInjection;
 using Tamp.Observer.Api;
 using Tamp.Observer.Domain;
 using Tamp.Observer.Storage.Abstractions;
@@ -65,6 +66,20 @@ builder.Services.AddAuthorization();
 builder.Services.AddOpenApi();
 
 var app = builder.Build();
+
+// Diagnostic one-shot: run a single read through whichever store the dial selected (OBSERVER_STORE), so an
+// operator can confirm a storage-tier variant actually works in this environment (e.g. DuckDB installing its
+// postgres extension, or ClickHouse reachability) without needing an IdP token to call the HTTP API. Usage:
+//   dotnet Tamp.Observer.Api.dll selftest-store [projectId]
+if (args.Length >= 1 && args[0] == "selftest-store")
+{
+    var store = app.Services.GetRequiredService<IObservabilityStore>();
+    var projectId = args.Length >= 2 && Guid.TryParse(args[1], out var p) ? p : Guid.Empty;
+    var result = await store.GetLatencyPercentilesAsync(
+        new SpanQuery(projectId, new TimeWindow(0, long.MaxValue)));
+    Console.WriteLine($"store selftest ok: engine={storeTier} project={projectId} span_count={result.Count}");
+    return;
+}
 
 // Serve the built Svelte SPA (ADR 0014) from wwwroot so one host serves UI and API (the single-host floor,
 // ADR 0001). In dev there is no wwwroot and these are no-ops; the Vite dev server proxies to the API instead.

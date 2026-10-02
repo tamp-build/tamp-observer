@@ -1,0 +1,15 @@
+# DuckDB analytical middle-tier overlay (ADR 0005 middle tier, TOBS-19). Layer it on the floor:
+#   docker compose -f docker-compose.yml -f deploy/compose.duckdb.yml up --build
+#
+# DuckDB is an in-process read accelerator, NOT a service: there is no container here. The API spins an
+# embedded DuckDB per query, attaches the same Postgres (the system of record) via DuckDB's postgres
+# extension, runs the heavy columnar aggregation there, and goes idle. So this overlay is pure env: it only
+# flips the API's read store. Writes still go to Postgres via the floor evaluator (OBSERVER_SINK unset).
+#
+# Note (ADR 0005): DuckDB downloads its postgres extension on first use, which needs network; an air-gapped
+# install pre-bundles the extension. Verify a variant end to end with:
+#   docker compose -f docker-compose.yml -f deploy/compose.duckdb.yml run --rm api selftest-store
+services:
+  api:
+    environment:
+      OBSERVER_STORE: duckdb
