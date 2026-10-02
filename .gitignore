@@ -61,3 +61,6 @@ frontend/node_modules/
 frontend/dist/
 frontend/.svelte-kit/
 frontend/*.tsbuildinfo
+
+# Local inter-agent MCP config (contains shared token; not for the repo)
+.mcp.json
