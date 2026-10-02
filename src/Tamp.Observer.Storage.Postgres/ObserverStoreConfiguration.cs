@@ -80,5 +80,10 @@ public static class ObserverStoreConfiguration
         // Native RBAC grants (ADR 0013): looked up by subject.
         options.Schema.For<RoleAssignment>()
             .Index(x => x.SubjectId);
+
+        // Symbol artifacts (ADR 0017): one per (Project, Service, Version, generated file). Explicit index
+        // name because the auto-generated one exceeds Postgres's 63-char identifier limit.
+        options.Schema.For<SymbolArtifact>()
+            .UniqueIndex(Marten.Schema.UniqueIndexType.Computed, "uq_symbol_artifact", x => x.ProjectId, x => x.ServiceId, x => x.VersionId, x => x.GeneratedFile);
     }
 }

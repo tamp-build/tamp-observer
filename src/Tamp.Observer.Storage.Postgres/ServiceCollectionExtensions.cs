@@ -26,6 +26,9 @@ public static class ServiceCollectionExtensions
 
         // The authorization chokepoint (ADR 0013).
         services.AddSingleton<IAuthorizationService, MartenAuthorizationService>();
+
+        // Symbol artifact store (ADR 0017); the symbolicator itself lives in the Symbolication assembly.
+        services.AddSingleton<ISymbolArtifactStore, MartenSymbolArtifactStore>();
         return services;
     }
 }

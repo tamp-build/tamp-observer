@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
-    <RootNamespace>Tamp.Observer.Storage.Postgres.Tests</RootNamespace>
+    <RootNamespace>Tamp.Observer.Symbolication.Tests</RootNamespace>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
   </PropertyGroup>
@@ -12,13 +12,10 @@
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" />
     <PackageReference Include="coverlet.collector" />
-    <PackageReference Include="Testcontainers.PostgreSql" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Tamp.Observer.Domain\Tamp.Observer.Domain.csproj" />
-    <ProjectReference Include="..\..\src\Tamp.Observer.Storage.Abstractions\Tamp.Observer.Storage.Abstractions.csproj" />
-    <ProjectReference Include="..\..\src\Tamp.Observer.Storage.Postgres\Tamp.Observer.Storage.Postgres.csproj" />
     <ProjectReference Include="..\..\src\Tamp.Observer.Symbolication\Tamp.Observer.Symbolication.csproj" />
   </ItemGroup>
 
