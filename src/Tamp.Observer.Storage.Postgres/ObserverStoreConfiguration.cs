@@ -76,5 +76,9 @@ public static class ObserverStoreConfiguration
 
         // Installation-wide settings singleton, incl. enforcement posture (ADR 0002).
         options.Schema.For<InstanceSettings>();
+
+        // Native RBAC grants (ADR 0013): looked up by subject.
+        options.Schema.For<RoleAssignment>()
+            .Index(x => x.SubjectId);
     }
 }

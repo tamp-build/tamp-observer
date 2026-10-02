@@ -1,5 +1,6 @@
 using Marten;
 using Microsoft.Extensions.DependencyInjection;
+using Tamp.Observer.Domain;
 using Tamp.Observer.Storage.Abstractions;
 
 namespace Tamp.Observer.Storage.Postgres;
@@ -22,6 +23,9 @@ public static class ServiceCollectionExtensions
         // The Postgres translators for the two ADR 0006 seams: the write sink and the read interface.
         services.AddSingleton<IEventSink, MartenEventSink>();
         services.AddSingleton<IObservabilityStore, MartenObservabilityStore>();
+
+        // The authorization chokepoint (ADR 0013).
+        services.AddSingleton<IAuthorizationService, MartenAuthorizationService>();
         return services;
     }
 }
