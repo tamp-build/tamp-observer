@@ -21,11 +21,14 @@ processors:
   - gomod: go.opentelemetry.io/collector/processor/batchprocessor v0.162.0
 
 exporters:
-  # Our thin raw-landing exporter (ADR 0004): lands opaque OTLP bytes + envelope, acks.
+  # Raw-bucket landing exporters (ADR 0004 section 2): the write-side tier dial. The pipeline config
+  # picks which one to use. rawfile = floor, valkeystream = high tier.
   - gomod: github.com/tamp-build/tamp-observer/collector/rawfileexporter v0.0.0
+  - gomod: github.com/tamp-build/tamp-observer/collector/valkeystreamexporter v0.0.0
   # Kept for dev visibility alongside the raw landing.
   - gomod: go.opentelemetry.io/collector/exporter/debugexporter v0.162.0
 
-# The raw-landing exporter is a local module in this repo (relative to output_path ./_dist).
+# The raw-landing exporters are local modules in this repo (relative to output_path ./_dist).
 replaces:
   - github.com/tamp-build/tamp-observer/collector/rawfileexporter => ../rawfileexporter
+  - github.com/tamp-build/tamp-observer/collector/valkeystreamexporter => ../valkeystreamexporter

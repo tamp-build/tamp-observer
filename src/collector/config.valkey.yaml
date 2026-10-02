@@ -1,0 +1,36 @@
+# High-tier write path (ADR 0004 section 2): OTLP in, batch, land into a Valkey Stream.
+# This is the write-side counterpart of the evaluator running with OBSERVER_RAWBUCKET=valkey.
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch: {}
+
+exporters:
+  valkeystream:
+    # Literal here; in a locked deployment pull from the environment: addr: ${env:OBSERVER_VALKEY_ADDR}
+    addr: localhost:6379
+    stream_key: tamp.observer.raw
+    source: otlp
+  debug:
+    verbosity: normal
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [valkeystream, debug]
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [valkeystream, debug]
+    logs:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [valkeystream, debug]
