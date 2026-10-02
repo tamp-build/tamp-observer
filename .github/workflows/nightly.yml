@@ -1,18 +1,19 @@
-name: SonarCloud
+name: Nightly
 
+# Nightly lane: integration tests (Testcontainers: Postgres / ClickHouse / Valkey) plus the full
+# SonarCloud scan with C# and Go coverage. Fast unit tests + PR checks live in ci.yml.
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+  schedule:
+    # 07:00 UTC daily.
+    - cron: '0 7 * * *'
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  sonar:
-    name: SonarCloud analysis
+  nightly:
+    name: integration tests + SonarCloud
     runs-on: ubuntu-latest
     env:
       DOTNET_NOLOGO: '1'
@@ -58,8 +59,9 @@ jobs:
           dotnet tool install --global dotnet-sonarscanner --version 10.4.1
           echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
 
-      # Dogfood: tamp drives the scan. The Sonar target runs SonarBegin -> Compile -> Test (with
-      # OpenCover coverage, Testcontainers-backed) -> SonarEnd. Docker is available on the runner.
+      # Dogfood: tamp drives the scan. The Sonar target runs SonarBegin -> Compile -> full test suite
+      # (unit + integration, OpenCover coverage, Testcontainers-backed) -> Go coverage -> SonarEnd.
+      # Docker is available on the runner.
       - name: SonarCloud scan
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

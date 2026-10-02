@@ -12,6 +12,7 @@ namespace Tamp.Observer.Storage.Postgres.Tests;
 /// trace correlation walk, translated by the Postgres/Marten provider. Each test scopes to a unique
 /// ProjectId for isolation.
 /// </summary>
+[Trait("Category", "Integration")]
 public sealed class ReadInterfaceTests : IAsyncLifetime
 {
     private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:16-alpine").Build();

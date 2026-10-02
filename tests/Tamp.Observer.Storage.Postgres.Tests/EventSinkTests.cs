@@ -8,6 +8,7 @@ using Xunit;
 namespace Tamp.Observer.Storage.Postgres.Tests;
 
 /// <summary>Proves the write contract (ADR 0006): a batch persists atomically, and an empty batch is a no-op.</summary>
+[Trait("Category", "Integration")]
 public sealed class EventSinkTests : IAsyncLifetime
 {
     private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:16-alpine").Build();

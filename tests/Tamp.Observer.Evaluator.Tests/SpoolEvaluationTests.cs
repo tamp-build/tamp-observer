@@ -19,6 +19,7 @@ namespace Tamp.Observer.Evaluator.Tests;
 /// discovered and provisioned, and unknown projects are quarantined. Uses OTLP bytes built with the
 /// same wire-compatible schema the evaluator reads (field numbers match real collector output).
 /// </summary>
+[Trait("Category", "Integration")]
 public sealed class SpoolEvaluationTests : IAsyncLifetime
 {
     private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:16-alpine").Build();

@@ -81,18 +81,30 @@ class Build : TampBuild
 
     Target Test => _ => _
         .DependsOn(nameof(Compile))
-        .Description("Run the test suite with OpenCover coverage. Integration tests spin ephemeral Postgres/ClickHouse via Testcontainers (Docker required).")
-        .Executes(() => DotNet.Test(s => s
-            .SetProject(Solution.Path)
-            .SetConfiguration(Configuration)
-            .SetNoBuild(true)
-            .AddDataCollector("XPlat Code Coverage")
-            .SetSettings((RootDirectory / "build" / "coverlet.runsettings").Value)
-            .SetResultsDirectory(CoverageDir)));
+        .Description("Run the full test suite (unit + integration) with coverage. Integration tests need Docker.")
+        .Executes(() => DotNet.Test(s => TestSettings(s)));
+
+    Target UnitTest => _ => _
+        .DependsOn(nameof(Compile))
+        .Description("Run unit tests only (no Testcontainers; fast, for local builds and PR checks).")
+        .Executes(() => DotNet.Test(s => TestSettings(s).SetFilter("Category!=Integration")));
+
+    Target IntegrationTest => _ => _
+        .DependsOn(nameof(Compile))
+        .Description("Run integration tests only (Testcontainers: Postgres/ClickHouse/Valkey). Nightly.")
+        .Executes(() => DotNet.Test(s => TestSettings(s).SetFilter("Category=Integration")));
+
+    DotNetTestSettings TestSettings(DotNetTestSettings s) => s
+        .SetProject(Solution.Path)
+        .SetConfiguration(Configuration)
+        .SetNoBuild(true)
+        .AddDataCollector("XPlat Code Coverage")
+        .SetSettings((RootDirectory / "build" / "coverlet.runsettings").Value)
+        .SetResultsDirectory(CoverageDir);
 
     Target Ci => _ => _
-        .DependsOn(nameof(Info), nameof(Clean), nameof(Test))
-        .Description("Full pipeline: info, clean, restore, build, test.");
+        .DependsOn(nameof(Info), nameof(Clean), nameof(UnitTest))
+        .Description("Fast lane (PR / push): info, clean, build, unit tests only.");
 
     // SonarCloud analysis is a two-phase scan: Begin before the build, End after tests, with the
     // build and tests running between so the scanner collects MSBuild inputs and coverage.

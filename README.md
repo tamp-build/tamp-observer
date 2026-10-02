@@ -39,14 +39,20 @@ OpenAPI client. Session replay uses rrweb through a dedicated front door.
 ## Building and testing
 
 The build dogfoods the tamp ecosystem: tamp drives its own restore / build / test flow through
-`build/Build.cs`. You need the .NET 10 SDK (pinned in `global.json`) and Docker (the integration
-tests spin up an ephemeral Postgres via Testcontainers).
+`build/Build.cs`. You need the .NET 10 SDK (pinned in `global.json`); integration tests additionally
+need Docker (they spin ephemeral Postgres / ClickHouse / Valkey via Testcontainers).
 
 ```
-dotnet run --project build -- Compile   # restore + build the solution
-dotnet run --project build -- Test      # build + run tests (starts Postgres in a container)
-dotnet run --project build -- Ci        # info + clean + test
+dotnet run --project build -- Compile          # restore + build the solution
+dotnet run --project build -- UnitTest         # fast: unit tests only, no containers
+dotnet run --project build -- IntegrationTest  # Testcontainers suites (Docker required)
+dotnet run --project build -- Test             # everything (unit + integration)
+dotnet run --project build -- Ci               # info + clean + unit tests (the PR lane)
 ```
+
+CI mirrors this split: **`ci.yml`** runs build + unit tests on every push and PR (no Docker);
+**`nightly.yml`** runs the integration suites plus the SonarCloud scan with C#/Go coverage on a
+nightly schedule. Integration tests are tagged `[Trait("Category", "Integration")]`.
 
 For a local Postgres to run against directly, `docker compose up` brings up the floor tier (Postgres
 only) on `localhost:5432` (`observer` / `observer`).

@@ -12,6 +12,7 @@ namespace Tamp.Observer.Storage.ClickHouse.Tests;
 /// analytical reductions pushed down natively (quantileExact, GROUP BY). Runs against a real ClickHouse
 /// via Testcontainers.
 /// </summary>
+[Trait("Category", "Integration")]
 public sealed class ClickHouseTierTests : IAsyncLifetime
 {
     private readonly ClickHouseContainer _clickhouse = new ClickHouseBuilder("clickhouse/clickhouse-server:24.8-alpine").Build();

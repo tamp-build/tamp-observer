@@ -11,6 +11,7 @@ namespace Tamp.Observer.RawBucket.Valkey.Tests;
 /// in arrival order via a consumer group, and acknowledging removes them. Runs against a real Valkey
 /// via Testcontainers.
 /// </summary>
+[Trait("Category", "Integration")]
 public sealed class ValkeyRawBucketTests : IAsyncLifetime
 {
     private readonly RedisContainer _valkey = new RedisBuilder("valkey/valkey:8-alpine").Build();

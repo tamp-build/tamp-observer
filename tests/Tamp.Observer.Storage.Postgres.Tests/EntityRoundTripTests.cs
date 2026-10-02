@@ -11,6 +11,7 @@ namespace Tamp.Observer.Storage.Postgres.Tests;
 /// natural-key queries resolve, and the natural-key unique indexes (ADR 0008) are enforced.
 /// This is the spike's "prove we can do it" evidence.
 /// </summary>
+[Trait("Category", "Integration")]
 public sealed class EntityRoundTripTests : IAsyncLifetime
 {
     private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:16-alpine")
