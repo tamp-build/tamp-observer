@@ -1,6 +1,7 @@
 using Tamp;
 using Tamp.Go;
 using Tamp.NetCli.V10;
+using Tamp.Npm.V10;
 using Tamp.SonarScanner.V10;
 
 /// <summary>
@@ -43,6 +44,11 @@ class Build : TampBuild
 
     // Optional so non-Go lanes (unit tests) do not require the Go toolchain on PATH.
     [FromPath("go", Optional = true)] readonly Tool GoBin = null!;
+
+    // Optional so .NET-only lanes do not require Node/npm on PATH (ADR 0014: Svelte frontend, rule #3 dogfood).
+    [FromPath("npm", Optional = true)] readonly Tool NpmBin = null!;
+
+    AbsolutePath Frontend => RootDirectory / "frontend";
 
     const string OcbVersion = "v0.162.0";
 
@@ -193,4 +199,37 @@ class Build : TampBuild
             .StripDebugInfo()
             .SetOutput((Artifacts / "tamp-observer-collector-linux-amd64").Value)
             .AddPackage(".")));
+
+    // ----- Svelte frontend targets (dogfood Tamp.Npm, rule #3; ADR 0014) -----
+
+    Target FrontendRestore => _ => _
+        .Description("Install frontend dependencies from the lockfile (npm ci).")
+        .Executes(() => Npm.Ci(NpmBin, s => s.SetWorkingDirectory(Frontend)));
+
+    Target FrontendApiClient => _ => _
+        .DependsOn(nameof(Compile), nameof(FrontendRestore))
+        .Description("Regenerate the typed TS client from the API's build-time OpenAPI document (ADR 0014).")
+        .Executes(() => Npm.Run(NpmBin, s =>
+        {
+            s.SetWorkingDirectory(Frontend);
+            s.Script = "gen:api";
+        }));
+
+    Target FrontendCheck => _ => _
+        .DependsOn(nameof(FrontendApiClient))
+        .Description("Type-check the Svelte SPA against the generated client (svelte-check).")
+        .Executes(() => Npm.Run(NpmBin, s =>
+        {
+            s.SetWorkingDirectory(Frontend);
+            s.Script = "check";
+        }));
+
+    Target FrontendBuild => _ => _
+        .DependsOn(nameof(FrontendCheck))
+        .Description("Build the Svelte SPA to static assets in frontend/dist (ADR 0014).")
+        .Executes(() => Npm.Run(NpmBin, s =>
+        {
+            s.SetWorkingDirectory(Frontend);
+            s.Script = "build";
+        }));
 }

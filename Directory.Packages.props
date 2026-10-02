@@ -34,6 +34,7 @@
     <PackageVersion Include="Tamp.Core" Version="1.17.3" />
     <PackageVersion Include="Tamp.NetCli.V10" Version="1.17.3" />
     <PackageVersion Include="Tamp.Go" Version="0.1.0" />
+    <PackageVersion Include="Tamp.Npm.V10" Version="0.2.0" />
     <PackageVersion Include="Tamp.SonarScanner.V10" Version="0.3.2" />
   </ItemGroup>
 
@@ -41,6 +42,7 @@
     <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.12" />
     <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.12" />
     <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.Extensions.ApiDescription.Server" Version="10.0.0" />
   </ItemGroup>
 
   <ItemGroup Label="Test">

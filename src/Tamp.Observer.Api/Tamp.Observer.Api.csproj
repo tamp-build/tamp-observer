@@ -5,9 +5,17 @@
     <RootNamespace>Tamp.Observer.Api</RootNamespace>
   </PropertyGroup>
 
+  <PropertyGroup Label="OpenAPI doc emitted at build time (ADR 0014: the contract the typed TS client is generated from)">
+    <OpenApiGenerateDocumentsOnBuild>true</OpenApiGenerateDocumentsOnBuild>
+    <OpenApiDocumentsDirectory>$(MSBuildProjectDirectory)/../../frontend</OpenApiDocumentsDirectory>
+    <!-- The generator boots the app with its own host; skip our env-driven OIDC/store wiring side effects. -->
+    <OpenApiGenerateDocumentsOptions>--file-name openapi</OpenApiGenerateDocumentsOptions>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <PackageReference Include="Microsoft.Extensions.ApiDescription.Server" PrivateAssets="all" />
   </ItemGroup>
 
   <ItemGroup>

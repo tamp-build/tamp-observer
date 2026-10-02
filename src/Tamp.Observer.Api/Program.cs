@@ -60,7 +60,8 @@ var api = app.MapGroup("/api").RequireAuthorization();
 // authenticated; it reports the subject the IdP asserted.
 api.MapGet("/me", (HttpContext http) =>
         Results.Ok(new MeResponse(http.User.SubjectId() ?? string.Empty, true)))
-    .WithName("Me");
+    .WithName("Me")
+    .Produces<MeResponse>();
 
 // Latency percentiles for a project window (read interface, ADR 0006). Guarded by ViewTraces at the project
 // scope through the chokepoint (ADR 0013).
@@ -83,7 +84,10 @@ api.MapGet("/projects/{projectId:guid}/latency", async (
             new SpanQuery(projectId, new TimeWindow(start, end), service), ct);
         return Results.Ok(result);
     })
-    .WithName("ProjectLatency");
+    .WithName("ProjectLatency")
+    .Produces<LatencyPercentiles>()
+    .Produces(StatusCodes.Status401Unauthorized)
+    .Produces(StatusCodes.Status403Forbidden);
 
 // Top operations by frequency with error counts over the window (read interface, ADR 0006).
 api.MapGet("/projects/{projectId:guid}/operations", async (
@@ -106,7 +110,10 @@ api.MapGet("/projects/{projectId:guid}/operations", async (
             new SpanQuery(projectId, new TimeWindow(start, end), service), limit <= 0 ? 10 : limit, ct);
         return Results.Ok(result);
     })
-    .WithName("ProjectOperations");
+    .WithName("ProjectOperations")
+    .Produces<IReadOnlyList<OperationStat>>()
+    .Produces(StatusCodes.Status401Unauthorized)
+    .Produces(StatusCodes.Status403Forbidden);
 
 // The correlation walk: all spans and logs sharing a trace id within a project (read interface, ADR 0006).
 api.MapGet("/projects/{projectId:guid}/traces/{traceId}", async (
@@ -125,7 +132,10 @@ api.MapGet("/projects/{projectId:guid}/traces/{traceId}", async (
         var result = await store.GetTraceAsync(projectId, traceId, ct);
         return Results.Ok(result);
     })
-    .WithName("ProjectTrace");
+    .WithName("ProjectTrace")
+    .Produces<TraceView>()
+    .Produces(StatusCodes.Status401Unauthorized)
+    .Produces(StatusCodes.Status403Forbidden);
 
 await app.RunAsync();
 

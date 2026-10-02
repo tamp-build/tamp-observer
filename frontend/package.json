@@ -1,0 +1,27 @@
+{
+  "name": "tamp-observer-frontend",
+  "private": true,
+  "version": "0.1.0-alpha",
+  "type": "module",
+  "description": "tamp-observer web frontend: Svelte SPA over the .NET OpenAPI API (ADR 0014).",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check": "svelte-check --tsconfig ./tsconfig.json",
+    "gen:api": "openapi-typescript ./openapi.json -o ./src/lib/api/schema.d.ts"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^4.0.4",
+    "@tsconfig/svelte": "^5.0.4",
+    "openapi-typescript": "^7.9.1",
+    "svelte": "^5.19.0",
+    "svelte-check": "^4.1.4",
+    "tslib": "^2.8.1",
+    "typescript": "^5.7.3",
+    "vite": "^5.4.11"
+  },
+  "dependencies": {
+    "openapi-fetch": "^0.13.4"
+  }
+}

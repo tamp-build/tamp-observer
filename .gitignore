@@ -55,3 +55,9 @@ Thumbs.db
 *.key
 secrets.*
 appsettings.*.Local.json
+
+# Frontend (ADR 0014)
+frontend/node_modules/
+frontend/dist/
+frontend/.svelte-kit/
+frontend/*.tsbuildinfo
