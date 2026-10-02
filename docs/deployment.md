@@ -15,6 +15,20 @@ Then point your app's OTLP exporter at `localhost:4317` (gRPC) or `:4318` (HTTP)
 Telemetry must carry a `tamp.project.key` resource attribute matching the Project key, or it is quarantined,
 not admitted (ADR 0004/0007).
 
+### Session replay (rrweb)
+
+The SPA records its own session with rrweb and ships it to the replay front door, keyed to the project
+`spa-demo` by default (`VITE_REPLAY_PROJECT_KEY`). Create that project so the demo has somewhere to land, then
+open the app, sign in, and use the **Session replay** panel to list and play sessions:
+
+```
+docker compose run --rm evaluator create-project spa-demo "SPA Demo"
+```
+
+Replay metadata lives in Postgres; the DOM-event firehose is stored as a blob under `OBSERVER_REPLAY_BLOB`
+(a filesystem path by default). Masking is client-side (inputs masked by default, ADR 0010); consent and
+smart-capture (ADR 0011) are not wired yet.
+
 The floor is Postgres-only: no Valkey, no ClickHouse. The collector lands OTLP to a file spool, the evaluator
 drains it to Postgres, and the API serves both the read interface and the built Svelte SPA (ADR 0014) from one
 container.

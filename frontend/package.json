@@ -23,6 +23,8 @@
   },
   "dependencies": {
     "oidc-client-ts": "^3.1.0",
-    "openapi-fetch": "^0.13.4"
+    "openapi-fetch": "^0.13.4",
+    "rrweb": "^2.0.0-alpha.4",
+    "rrweb-player": "^1.0.0-alpha.4"
   }
 }

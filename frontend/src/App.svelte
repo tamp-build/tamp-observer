@@ -3,23 +3,33 @@
   import type { User } from "oidc-client-ts";
   import { api, setToken } from "./lib/api/client";
   import { resolveUser, login, logout, isBundledDevAuth } from "./lib/auth";
+  import { startRecording, type Recording } from "./lib/replay/recorder";
+  import ReplayPlayer from "./lib/replay/ReplayPlayer.svelte";
   import type { components } from "./lib/api/schema";
 
   type Latency = components["schemas"]["LatencyPercentiles"];
+  type SessionSummary = components["schemas"]["ReplaySessionSummary"];
 
   let user = $state<User | null>(null);
   let loading = $state(true);
+  let recording = $state<Recording | null>(null);
 
   let projectId = $state("");
-  let startNano = $state("0");
-  let endNano = $state("9000000000000000000");
+
   let latency = $state<Latency | null>(null);
   let latencyStatus = $state("");
+
+  let sessions = $state<SessionSummary[]>([]);
+  let sessionsStatus = $state("");
+  let activeEvents = $state<unknown[] | null>(null);
+  let activeSession = $state<string | null>(null);
 
   onMount(async () => {
     user = await resolveUser();
     if (user) setToken(user.id_token ?? null);
     loading = false;
+    // Record this very page as a replay session, dogfooding the capture path (ADR 0010).
+    recording = startRecording();
   });
 
   async function signIn() {
@@ -31,16 +41,15 @@
     setToken(null);
     user = null;
     latency = null;
+    sessions = [];
+    activeEvents = null;
   }
 
   async function queryLatency() {
     latency = null;
     latencyStatus = "querying...";
     const { data, response } = await api.GET("/api/projects/{projectId}/latency", {
-      params: {
-        path: { projectId },
-        query: { start: Number(startNano), end: Number(endNano) },
-      },
+      params: { path: { projectId }, query: { start: 0, end: 9000000000000000000 } },
     });
     if (data) {
       latency = data;
@@ -49,17 +58,45 @@
       latencyStatus = `${response.status} ${response.statusText}`;
     }
   }
+
+  async function loadSessions() {
+    sessions = [];
+    activeEvents = null;
+    sessionsStatus = "loading...";
+    const { data, response } = await api.GET("/api/projects/{projectId}/sessions", {
+      params: { path: { projectId } },
+    });
+    if (data) {
+      sessions = data;
+      sessionsStatus = `${data.length} session(s)`;
+    } else {
+      sessionsStatus = `${response.status} ${response.statusText}`;
+    }
+  }
+
+  async function playSession(sessionId: string) {
+    activeEvents = null;
+    activeSession = sessionId;
+    const { data, response } = await api.GET("/api/projects/{projectId}/sessions/{sessionId}/events", {
+      params: { path: { projectId, sessionId } },
+      parseAs: "json",
+    });
+    if (response.ok) {
+      activeEvents = (data as unknown as unknown[]) ?? [];
+    } else {
+      sessionsStatus = `events: ${response.status} ${response.statusText}`;
+    }
+  }
 </script>
 
 <main>
   <h1>tamp-observer</h1>
-  <p class="sub">Svelte SPA over the .NET OpenAPI API (ADR 0014).</p>
+  <p class="sub">Svelte SPA over the .NET OpenAPI API (ADR 0014). This page is recording itself for replay.</p>
 
   {#if isBundledDevAuth}
     <div class="banner">
-      <strong>Development / demo mode.</strong> Signing in uses the bundled Dex dev identity provider.
-      Use <code>dev@tamp.local</code> / <code>password</code>. Not for production. See
-      <code>docs/deployment.md</code> to point at your own IdP.
+      <strong>Development / demo mode.</strong> Sign-in uses the bundled Dex dev identity provider
+      (<code>dev@tamp.local</code> / <code>password</code>). Not for production. See <code>docs/deployment.md</code>.
     </div>
   {/if}
 
@@ -71,7 +108,7 @@
       <p>Signed in as <strong>{user.profile.email ?? user.profile.sub}</strong></p>
       <div class="row">
         <button onclick={signOut}>Sign out</button>
-        <span class="status">token attached to API calls</span>
+        {#if recording}<span class="status">recording session {recording.sessionId.slice(0, 8)}...</span>{/if}
       </div>
     {:else}
       <p class="status">Not signed in. Protected <code>/api</code> routes require a token.</p>
@@ -80,10 +117,39 @@
   </section>
 
   <section>
-    <h2>Latency percentiles</h2>
+    <h2>Project</h2>
     <label>Project id <input bind:value={projectId} placeholder="GUID" /></label>
-    <label>Start (unix ns) <input bind:value={startNano} /></label>
-    <label>End (unix ns) <input bind:value={endNano} /></label>
+  </section>
+
+  <section>
+    <h2>Session replay</h2>
+    <div class="row">
+      <button onclick={loadSessions} disabled={!projectId || !user}>Load sessions</button>
+      <span class="status">{sessionsStatus}</span>
+    </div>
+    {#if sessions.length}
+      <table>
+        <thead><tr><th>session</th><th>events</th><th>started</th><th></th></tr></thead>
+        <tbody>
+          {#each sessions as s (s.sessionId)}
+            <tr>
+              <td>{s.sessionId.slice(0, 8)}...</td>
+              <td>{s.eventCount}</td>
+              <td>{new Date(s.startedAtUtc).toLocaleTimeString()}</td>
+              <td><button onclick={() => playSession(s.sessionId)}>Replay</button></td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+    {/if}
+    {#if activeEvents}
+      <h3>Replay {activeSession?.slice(0, 8)}...</h3>
+      <ReplayPlayer events={activeEvents} />
+    {/if}
+  </section>
+
+  <section>
+    <h2>Latency percentiles</h2>
     <div class="row">
       <button onclick={queryLatency} disabled={!projectId || !user}>Query</button>
       <span class="status">{latencyStatus}</span>
@@ -109,7 +175,7 @@
     color: #e6e6e6;
   }
   main {
-    max-width: 48rem;
+    max-width: 52rem;
     margin: 0 auto;
     padding: 1.5rem 1rem 4rem;
   }
@@ -186,13 +252,19 @@
   }
   table {
     margin-top: 0.75rem;
+    width: 100%;
+    border-collapse: collapse;
     background: #11151c;
     border-radius: 6px;
-    padding: 0.5rem 0.75rem;
+  }
+  th,
+  td {
+    text-align: left;
+    padding: 0.35rem 0.6rem;
+    color: #c6cedb;
+    font-size: 0.9rem;
   }
   th {
-    text-align: left;
-    padding-right: 1rem;
     color: #9aa4b2;
     font-weight: 500;
   }
