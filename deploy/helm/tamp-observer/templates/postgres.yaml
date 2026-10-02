@@ -50,6 +50,16 @@ spec:
           ports:
             - name: postgres
               containerPort: 5432
+          # Gate liveness until initdb finishes. On slow storage (NFS) first-time initdb can exceed the
+          # liveness window; without this the liveness probe kills the container mid-init, the restart then
+          # skips initialization on the now-non-empty PGDATA, and you are left with a half-built cluster that
+          # reports Ready but has no observer db and no pg_hba host line. failureThreshold*period = up to 10 min.
+          startupProbe:
+            exec:
+              command: ["pg_isready", "-U", {{ .Values.postgres.auth.username | quote }}, "-d", {{ .Values.postgres.auth.database | quote }}]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 60
           readinessProbe:
             exec:
               command: ["pg_isready", "-U", {{ .Values.postgres.auth.username | quote }}, "-d", {{ .Values.postgres.auth.database | quote }}]
