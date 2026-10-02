@@ -93,8 +93,12 @@ The overlays set these; you can also set them directly.
 | `OBSERVER_RAWBUCKET`| evaluator | `file` \| `valkey`              | `file`     | Raw-bucket tier the evaluator drains (ADR 0004).     |
 | `OBSERVER_SINK`     | evaluator | `postgres` \| `clickhouse`      | `postgres` | Where admitted telemetry is written (ADR 0006).      |
 | `OBSERVER_STORE`    | api       | `postgres` \| `duckdb` \| `clickhouse` | `postgres` | Which engine answers read queries (ADR 0006).  |
-| `OBSERVER_CLICKHOUSE`| both     | connection string              | (unset)    | Required when sink/store is `clickhouse`.            |
-| `OBSERVER_DB`       | both      | connection string              | local dev  | The Postgres system of record.                       |
+| `OBSERVER_CLICKHOUSE`| both     | ClickHouse.Client conn string  | (unset)    | Required when sink/store is `clickhouse`.            |
+| `OBSERVER_DB`       | both      | Npgsql conn string             | local dev  | The Postgres system of record.                       |
+
+> `OBSERVER_DB` is an **Npgsql** connection string, not a URL:
+> `Host=postgres;Port=5432;Database=observer;Username=observer;Password=...`. A `postgres://` URL fails at
+> startup with an opaque parse error.
 
 Absent env selects the Postgres floor. Unknown values, or `clickhouse` without `OBSERVER_CLICKHOUSE`, fail
 loud at startup rather than silently falling back.
