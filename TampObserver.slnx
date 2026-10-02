@@ -31,6 +31,7 @@
     <Project Path="src/Tamp.Observer.Api/Tamp.Observer.Api.csproj" />
     <Project Path="src/Tamp.Observer.Replay.FileBlob/Tamp.Observer.Replay.FileBlob.csproj" />
     <Project Path="src/Tamp.Observer.Connector.AspNetCore/Tamp.Observer.Connector.AspNetCore.csproj" />
+    <Project Path="src/Tamp.Observer.TestIngestor/Tamp.Observer.TestIngestor.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Tamp.Observer.Alerting.Tests/Tamp.Observer.Alerting.Tests.csproj" />

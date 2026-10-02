@@ -46,6 +46,7 @@
   </ItemGroup>
 
   <ItemGroup Label="Connectors (ADR 0018: thin OTel wiring; aligns to tamp ADR 0018)">
+    <PackageVersion Include="OpenTelemetry" Version="1.15.3" />
     <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.15.3" />
     <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.15.3" />
     <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.15.2" />
