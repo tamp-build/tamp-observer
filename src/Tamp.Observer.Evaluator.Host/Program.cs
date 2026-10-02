@@ -7,6 +7,8 @@ using Tamp.Observer.Evaluator;
 using Tamp.Observer.RawBucket.Abstractions;
 using Tamp.Observer.RawBucket.FileSpool;
 using Tamp.Observer.RawBucket.Valkey;
+using Tamp.Observer.Storage.Abstractions;
+using Tamp.Observer.Storage.ClickHouse;
 using Tamp.Observer.Storage.Postgres;
 
 // Runnable evaluator (ADR 0004): drains the raw bucket the Go collector lands into and promotes
@@ -37,6 +39,21 @@ if (args.Length >= 2 && args[0] == "create-project")
 var builder = Host.CreateApplicationBuilder(args);
 
 builder.Services.AddTampObserverStore(connectionString);
+
+// Storage-tier write dial (ADR 0005/0006, TOBS-19): the floor writes everything to Postgres. Dialing the
+// telemetry tier up to ClickHouse keeps entities/issues in Postgres (the system of record) and fans the
+// high-volume spans/logs to ClickHouse via a composite sink. Absent OBSERVER_SINK = postgres floor; the
+// loosening to a second tier is explicit, never defaulted on.
+var sinkTier = Environment.GetEnvironmentVariable("OBSERVER_SINK") ?? "postgres";
+if (sinkTier == "clickhouse")
+{
+    var clickHouse = Environment.GetEnvironmentVariable("OBSERVER_CLICKHOUSE")
+        ?? throw new InvalidOperationException("OBSERVER_SINK=clickhouse requires OBSERVER_CLICKHOUSE (connection string).");
+    builder.Services.AddSingleton<IEventSink>(sp => new CompositeTieredEventSink(
+        new MartenEventSink(sp.GetRequiredService<IDocumentStore>()),
+        new ClickHouseEventSink(clickHouse)));
+}
+
 builder.Services.AddSingleton<IRawBucketReader>(_ => rawBucketTier switch
 {
     "valkey" => new ValkeyRawBucketReader(valkeyConnection),

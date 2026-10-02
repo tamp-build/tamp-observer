@@ -2,6 +2,8 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Tamp.Observer.Api;
 using Tamp.Observer.Domain;
 using Tamp.Observer.Storage.Abstractions;
+using Tamp.Observer.Storage.ClickHouse;
+using Tamp.Observer.Storage.DuckDb;
 using Tamp.Observer.Storage.Postgres;
 using IAuthorizationService = Tamp.Observer.Domain.IAuthorizationService;
 
@@ -16,6 +18,27 @@ var connectionString = Environment.GetEnvironmentVariable("OBSERVER_DB")
 
 // Read interface + authorization chokepoint come from the Postgres baseline tier (ADR 0005/0006/0013).
 builder.Services.AddTampObserverStore(connectionString);
+
+// Storage-tier read dial (ADR 0005/0006, TOBS-19): the floor reads from Postgres. DuckDB is an in-process
+// accelerator that reads the same Postgres (no extra service); ClickHouse reads its own columnar tier (and
+// requires the evaluator to be writing there via OBSERVER_SINK=clickhouse). Absent OBSERVER_STORE = postgres
+// floor; only the Postgres read path is on by default, the analytical tiers are opt-in.
+var storeTier = Environment.GetEnvironmentVariable("OBSERVER_STORE") ?? "postgres";
+switch (storeTier)
+{
+    case "postgres":
+        break;
+    case "duckdb":
+        builder.Services.AddSingleton<IObservabilityStore>(new DuckDbObservabilityStore(connectionString));
+        break;
+    case "clickhouse":
+        var clickHouse = Environment.GetEnvironmentVariable("OBSERVER_CLICKHOUSE")
+            ?? throw new InvalidOperationException("OBSERVER_STORE=clickhouse requires OBSERVER_CLICKHOUSE (connection string).");
+        builder.Services.AddSingleton<IObservabilityStore>(new ClickHouseObservabilityStore(clickHouse));
+        break;
+    default:
+        throw new InvalidOperationException($"OBSERVER_STORE '{storeTier}' is not one of: postgres, duckdb, clickhouse.");
+}
 
 // AuthN: always external OIDC (ADR 0013). A configurable authority serves both the GitHub-OIDC MVP
 // (connected/dev) and the definable in-enclave IdP (Keycloak/AD) that air-gapped installs require. When no
