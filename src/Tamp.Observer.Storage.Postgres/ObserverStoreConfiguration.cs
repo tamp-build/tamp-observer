@@ -81,6 +81,12 @@ public static class ObserverStoreConfiguration
         options.Schema.For<RoleAssignment>()
             .Index(x => x.SubjectId);
 
+        // Replay session metadata (ADR 0010): one per (Project, client SessionId); listed by recency. The
+        // payload firehose is NOT here; it lives in the blob store.
+        options.Schema.For<ReplaySession>()
+            .UniqueIndex(x => x.ProjectId, x => x.SessionId)
+            .Index(x => x.LastEventAtUtc);
+
         // Symbol artifacts (ADR 0017): one per (Project, Service, Version, generated file). Explicit index
         // name because the auto-generated one exceeds Postgres's 63-char identifier limit.
         options.Schema.For<SymbolArtifact>()

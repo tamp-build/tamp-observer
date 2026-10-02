@@ -29,6 +29,7 @@
     <Project Path="src/Tamp.Observer.Evaluator/Tamp.Observer.Evaluator.csproj" />
     <Project Path="src/Tamp.Observer.Evaluator.Host/Tamp.Observer.Evaluator.Host.csproj" />
     <Project Path="src/Tamp.Observer.Api/Tamp.Observer.Api.csproj" />
+    <Project Path="src/Tamp.Observer.Replay.FileBlob/Tamp.Observer.Replay.FileBlob.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Tamp.Observer.Alerting.Tests/Tamp.Observer.Alerting.Tests.csproj" />
@@ -40,5 +41,6 @@
     <Project Path="tests/Tamp.Observer.RawBucket.Valkey.Tests/Tamp.Observer.RawBucket.Valkey.Tests.csproj" />
     <Project Path="tests/Tamp.Observer.Evaluator.Tests/Tamp.Observer.Evaluator.Tests.csproj" />
     <Project Path="tests/Tamp.Observer.Api.Tests/Tamp.Observer.Api.Tests.csproj" />
+    <Project Path="tests/Tamp.Observer.Replay.FileBlob.Tests/Tamp.Observer.Replay.FileBlob.Tests.csproj" />
   </Folder>
 </Solution>

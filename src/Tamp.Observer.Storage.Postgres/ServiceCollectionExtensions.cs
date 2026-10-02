@@ -29,6 +29,10 @@ public static class ServiceCollectionExtensions
 
         // Symbol artifact store (ADR 0017); the symbolicator itself lives in the Symbolication assembly.
         services.AddSingleton<ISymbolArtifactStore, MartenSymbolArtifactStore>();
+
+        // Replay session metadata store (ADR 0010); the blob store is a filesystem/object-storage concern wired
+        // by the host, like the raw bucket.
+        services.AddSingleton<IReplaySessionStore, MartenReplaySessionStore>();
         return services;
     }
 }

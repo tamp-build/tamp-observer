@@ -1,7 +1,11 @@
+using System.Text;
+using System.Text.Json;
+using Marten;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.DependencyInjection;
 using Tamp.Observer.Api;
 using Tamp.Observer.Domain;
+using Tamp.Observer.Replay.FileBlob;
 using Tamp.Observer.Storage.Abstractions;
 using Tamp.Observer.Storage.ClickHouse;
 using Tamp.Observer.Storage.DuckDb;
@@ -62,6 +66,10 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 builder.Services.AddAuthorization();
 
+// Replay payload blob store (ADR 0010): the filesystem floor; object storage slots in behind the interface.
+var replayBlobDir = Environment.GetEnvironmentVariable("OBSERVER_REPLAY_BLOB") ?? "./_replay";
+builder.Services.AddSingleton<IReplayBlobStore>(new FileReplayBlobStore(replayBlobDir));
+
 // OpenAPI document (ADR 0014): this is the contract the typed TS client is generated from.
 builder.Services.AddOpenApi();
 
@@ -96,6 +104,55 @@ app.MapGet("/health", () => Results.Ok(new { status = "ok" }))
 
 // The OpenAPI spec the frontend's typed client generates from.
 app.MapOpenApi();
+
+// The session/replay front door (ADR 0009/0010): a separate ingestion path from OTLP, authed by the project
+// key the browser SDK holds (not an OIDC user token), accepting bursty rrweb event chunks over the session's
+// life. Metadata advances in the analytical store; the event firehose goes to the blob store.
+app.MapPost("/ingest/replay", async (
+        ReplayChunkRequest body,
+        HttpContext http,
+        IDocumentStore docs,
+        IReplayBlobStore blobs,
+        IReplaySessionStore sessions,
+        CancellationToken ct) =>
+    {
+        var key = http.Request.Headers["X-Tamp-Project-Key"].ToString();
+        if (string.IsNullOrEmpty(key))
+            return Results.Unauthorized();
+        if (!Guid.TryParse(body.SessionId, out _))
+            return Results.BadRequest("sessionId must be a UUID");
+        if (body.Events.ValueKind != JsonValueKind.Array)
+            return Results.BadRequest("events must be a JSON array");
+
+        await using var qs = docs.QuerySession();
+        var project = await qs.Query<Project>().Where(p => p.Key == key).FirstOrDefaultAsync(ct);
+        if (project is null)
+            return Results.Unauthorized();
+
+        var raw = Encoding.UTF8.GetBytes(body.Events.GetRawText());
+        await blobs.AppendChunkAsync(project.Id, body.SessionId, raw, ct);
+
+        var now = DateTimeOffset.UtcNow;
+        var session = await sessions.FindAsync(project.Id, body.SessionId, ct)
+            ?? new ReplaySession
+            {
+                Id = Guid.NewGuid(),
+                SessionId = body.SessionId,
+                ProjectId = project.Id,
+                StartedAtUtc = now,
+                StartUrl = body.StartUrl,
+                UserAgent = body.UserAgent,
+            };
+        session.LastEventAtUtc = now;
+        session.ChunkCount += 1;
+        session.EventCount += body.Events.GetArrayLength();
+        session.PayloadBytes += raw.LongLength;
+        await sessions.UpsertAsync(session, ct);
+
+        return Results.Accepted();
+    })
+    .AllowAnonymous()
+    .WithName("IngestReplay");
 
 var api = app.MapGroup("/api").RequireAuthorization();
 
@@ -180,6 +237,60 @@ api.MapGet("/projects/{projectId:guid}/traces/{traceId}", async (
     .Produces(StatusCodes.Status401Unauthorized)
     .Produces(StatusCodes.Status403Forbidden);
 
+// Session list: the metadata index that answers "which session is worth replaying?" (ADR 0010). ViewReplay.
+api.MapGet("/projects/{projectId:guid}/sessions", async (
+        Guid projectId,
+        int? limit,
+        HttpContext http,
+        IAuthorizationService authz,
+        IReplaySessionStore sessions,
+        CancellationToken ct) =>
+    {
+        var denied = await HttpAuthorization.RequireAsync(
+            http, authz, Capability.ViewReplay, ResourceScope.ForProject(projectId), ct);
+        if (denied is not null)
+            return denied;
+
+        return Results.Ok(await sessions.ListAsync(projectId, limit ?? 50, ct));
+    })
+    .WithName("ListReplaySessions")
+    .Produces<IReadOnlyList<ReplaySessionSummary>>()
+    .Produces(StatusCodes.Status401Unauthorized)
+    .Produces(StatusCodes.Status403Forbidden);
+
+// Replay payload: merge the session's stored chunks into one rrweb-events array for the player (ADR 0010).
+api.MapGet("/projects/{projectId:guid}/sessions/{sessionId}/events", async (
+        Guid projectId,
+        string sessionId,
+        HttpContext http,
+        IAuthorizationService authz,
+        IReplayBlobStore blobs,
+        CancellationToken ct) =>
+    {
+        var denied = await HttpAuthorization.RequireAsync(
+            http, authz, Capability.ViewReplay, ResourceScope.ForProject(projectId), ct);
+        if (denied is not null)
+            return denied;
+
+        var chunks = await blobs.ReadChunksAsync(projectId, sessionId, ct);
+        using var ms = new MemoryStream();
+        await using (var writer = new Utf8JsonWriter(ms))
+        {
+            writer.WriteStartArray();
+            foreach (var chunk in chunks)
+            {
+                using var doc = JsonDocument.Parse(chunk);
+                foreach (var element in doc.RootElement.EnumerateArray())
+                    element.WriteTo(writer);
+            }
+            writer.WriteEndArray();
+        }
+        return Results.Bytes(ms.ToArray(), "application/json");
+    })
+    .WithName("ReplaySessionEvents")
+    .Produces(StatusCodes.Status401Unauthorized)
+    .Produces(StatusCodes.Status403Forbidden);
+
 // Client-side routes (deep links into the SPA) fall back to index.html. API/health/openapi routes are
 // already matched above, so this only catches unmatched GETs; it is a no-op when wwwroot is absent.
 app.MapFallbackToFile("index.html");
@@ -188,6 +299,10 @@ await app.RunAsync();
 
 /// <summary>The authenticated subject, as asserted by the external IdP (ADR 0013).</summary>
 public sealed record MeResponse(string SubjectId, bool Authenticated);
+
+/// <summary>One delivered replay chunk from the browser SDK (ADR 0010): a batch of rrweb events plus the
+/// session identity and first-chunk context. <see cref="Events"/> is the raw rrweb events JSON array.</summary>
+public sealed record ReplayChunkRequest(string SessionId, string? StartUrl, string? UserAgent, JsonElement Events);
 
 /// <summary>Exposed so the test host (WebApplicationFactory) can boot the real pipeline.</summary>
 public partial class Program;

@@ -24,6 +24,7 @@
     <ProjectReference Include="..\Tamp.Observer.Storage.Postgres\Tamp.Observer.Storage.Postgres.csproj" />
     <ProjectReference Include="..\Tamp.Observer.Storage.DuckDb\Tamp.Observer.Storage.DuckDb.csproj" />
     <ProjectReference Include="..\Tamp.Observer.Storage.ClickHouse\Tamp.Observer.Storage.ClickHouse.csproj" />
+    <ProjectReference Include="..\Tamp.Observer.Replay.FileBlob\Tamp.Observer.Replay.FileBlob.csproj" />
   </ItemGroup>
 
 </Project>
