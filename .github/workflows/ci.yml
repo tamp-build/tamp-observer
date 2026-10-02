@@ -20,6 +20,12 @@ jobs:
       DOTNET_NOLOGO: '1'
       DOTNET_CLI_TELEMETRY_OPTOUT: '1'
       DOTNET_SKIP_FIRST_TIME_EXPERIENCE: '1'
+      # Dogfood: the build exports its own ADR 0018 telemetry (Tamp.Build*) to the live tamp-observer over OTLP,
+      # authenticated to the Cloudflare Access gate on otlp.brewingcoder.com with the CI service token.
+      OTEL_EXPORTER_OTLP_ENDPOINT: 'https://otlp.brewingcoder.com'
+      OTEL_EXPORTER_OTLP_PROTOCOL: 'http/protobuf'
+      OTEL_EXPORTER_OTLP_HEADERS: 'CF-Access-Client-Id=${{ secrets.CF_ACCESS_CLIENT_ID }},CF-Access-Client-Secret=${{ secrets.CF_ACCESS_CLIENT_SECRET }}'
+      OBSERVER_BUILD_ENV: 'ci'
 
     steps:
       - name: Checkout

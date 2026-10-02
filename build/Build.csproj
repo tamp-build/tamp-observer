@@ -24,6 +24,8 @@
     <PackageReference Include="Tamp.Helm.V3" />
     <PackageReference Include="Tamp.Npm.V10" />
     <PackageReference Include="Tamp.SonarScanner.V10" />
+    <PackageReference Include="OpenTelemetry" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
   </ItemGroup>
 
 </Project>

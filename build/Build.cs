@@ -12,7 +12,12 @@ using Tamp.SonarScanner.V10;
 /// </summary>
 class Build : TampBuild
 {
-    public static int Main(string[] args) => Execute<Build>(args);
+    public static int Main(string[] args)
+    {
+        // Export the build's own ADR 0018 telemetry to tamp-observer when a collector is configured (CI dogfood).
+        using var telemetry = BuildTelemetry.Start();
+        return Execute<Build>(args);
+    }
 
     [Parameter("Build configuration")]
     readonly Configuration Configuration = IsLocalBuild ? Configuration.Debug : Configuration.Release;
