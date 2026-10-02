@@ -1,38 +1,36 @@
 <script lang="ts">
-  import { api, setToken, hasToken } from "./lib/api/client";
+  import { onMount } from "svelte";
+  import type { User } from "oidc-client-ts";
+  import { api, setToken } from "./lib/api/client";
+  import { resolveUser, login, logout, isBundledDevAuth } from "./lib/auth";
   import type { components } from "./lib/api/schema";
 
-  type Me = components["schemas"]["MeResponse"];
   type Latency = components["schemas"]["LatencyPercentiles"];
 
-  // External-IdP bearer token (ADR 0013). Pasted here for the scaffold; a real sign-in flow replaces this.
-  let token = $state("");
-
-  let me = $state<Me | null>(null);
-  let meStatus = $state<string>("not checked");
+  let user = $state<User | null>(null);
+  let loading = $state(true);
 
   let projectId = $state("");
   let startNano = $state("0");
-  let endNano = $state("1000000000000000000");
+  let endNano = $state("9000000000000000000");
   let latency = $state<Latency | null>(null);
-  let latencyStatus = $state<string>("");
+  let latencyStatus = $state("");
 
-  function applyToken() {
-    setToken(token);
-    me = null;
-    meStatus = "not checked";
+  onMount(async () => {
+    user = await resolveUser();
+    if (user) setToken(user.id_token ?? null);
+    loading = false;
+  });
+
+  async function signIn() {
+    await login();
   }
 
-  async function checkMe() {
-    meStatus = "checking...";
-    const { data, error, response } = await api.GET("/api/me");
-    if (data) {
-      me = data;
-      meStatus = `authenticated as ${data.subjectId}`;
-    } else {
-      me = null;
-      meStatus = `${response.status} ${response.statusText}${error ? "" : ""}`;
-    }
+  async function signOut() {
+    await logout();
+    setToken(null);
+    user = null;
+    latency = null;
   }
 
   async function queryLatency() {
@@ -55,21 +53,29 @@
 
 <main>
   <h1>tamp-observer</h1>
-  <p class="sub">Svelte SPA over the .NET OpenAPI API (ADR 0014). Typed client generated from the backend contract.</p>
+  <p class="sub">Svelte SPA over the .NET OpenAPI API (ADR 0014).</p>
+
+  {#if isBundledDevAuth}
+    <div class="banner">
+      <strong>Development / demo mode.</strong> Signing in uses the bundled Dex dev identity provider.
+      Use <code>dev@tamp.local</code> / <code>password</code>. Not for production. See
+      <code>docs/deployment.md</code> to point at your own IdP.
+    </div>
+  {/if}
 
   <section>
     <h2>Session</h2>
-    <label>
-      Bearer token (from your OIDC provider)
-      <input type="password" bind:value={token} placeholder="paste access token" />
-    </label>
-    <div class="row">
-      <button onclick={applyToken}>Apply token</button>
-      <button onclick={checkMe}>Check /api/me</button>
-      <span class="status">{hasToken() ? "token set" : "no token"} &middot; {meStatus}</span>
-    </div>
-    {#if me}
-      <pre>{JSON.stringify(me, null, 2)}</pre>
+    {#if loading}
+      <p class="status">checking session...</p>
+    {:else if user}
+      <p>Signed in as <strong>{user.profile.email ?? user.profile.sub}</strong></p>
+      <div class="row">
+        <button onclick={signOut}>Sign out</button>
+        <span class="status">token attached to API calls</span>
+      </div>
+    {:else}
+      <p class="status">Not signed in. Protected <code>/api</code> routes require a token.</p>
+      <button onclick={signIn}>Sign in</button>
     {/if}
   </section>
 
@@ -79,7 +85,7 @@
     <label>Start (unix ns) <input bind:value={startNano} /></label>
     <label>End (unix ns) <input bind:value={endNano} /></label>
     <div class="row">
-      <button onclick={queryLatency} disabled={!projectId}>Query</button>
+      <button onclick={queryLatency} disabled={!projectId || !user}>Query</button>
       <span class="status">{latencyStatus}</span>
     </div>
     {#if latency}
@@ -113,6 +119,20 @@
   .sub {
     color: #9aa4b2;
     margin-top: 0;
+  }
+  .banner {
+    background: #2a2410;
+    border: 1px solid #5c4d16;
+    color: #e7d8a6;
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    font-size: 0.9rem;
+    margin-top: 1rem;
+  }
+  .banner code {
+    background: #11151c;
+    padding: 0.05rem 0.3rem;
+    border-radius: 4px;
   }
   section {
     border: 1px solid #262b36;
@@ -164,18 +184,19 @@
     color: #9aa4b2;
     font-size: 0.85rem;
   }
-  pre,
   table {
     margin-top: 0.75rem;
     background: #11151c;
     border-radius: 6px;
     padding: 0.5rem 0.75rem;
-    overflow: auto;
   }
   th {
     text-align: left;
     padding-right: 1rem;
     color: #9aa4b2;
     font-weight: 500;
+  }
+  code {
+    font-size: 0.85em;
   }
 </style>

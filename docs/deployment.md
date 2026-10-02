@@ -78,29 +78,50 @@ It prints the selected engine and a span count (for DuckDB this exercises the po
 
 ## Authentication
 
-Authentication is always external (ADR 0013); there is no local credential store. The SPA, `/health`, and
-`/openapi` are anonymous; every `/api` route requires a valid OIDC token.
+Authentication is **always external** (ADR 0013): tamp-observer never stores passwords. It validates OIDC
+tokens issued by an identity provider. The SPA, `/health`, and `/openapi` are anonymous; every `/api` route
+requires a valid token, checked through the single RBAC chokepoint.
 
-The floor bundles a development OIDC provider (**Dex**) so `/api` works out of the box on a single box, while
-keeping authN genuinely external: the API validates real OIDC tokens, the same code path as production. A dev
-user is preconfigured: `dev@tamp.local` / `password`.
+### The bundled development / demo identity provider (what the floor ships)
 
-Get a token and call the API directly (handy for scripts and smoke tests):
+> **This is a development and demo convenience, and is labelled as such in the UI. Do not use it in
+> production.** The floor `docker compose` bundles a small OIDC provider, [Dex](https://dexidp.io/), purely so
+> you can click around on a single box without first standing up an IdP. The application itself does not depend
+> on Dex; it only speaks standard OIDC, the same code path it uses against a real provider.
 
-```
-TOKEN=$(curl -s -X POST http://localhost:5556/dex/token \
-  -d grant_type=password -d client_id=tamp-observer -d scope="openid profile email" \
-  -d username=dev@tamp.local -d password=password | jq -r .id_token)
-curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/me
-```
+What that means in practice, for a dev or an IT admin kicking the tires:
 
-The issuer host is `id.localhost` on purpose: browsers resolve `*.localhost` to loopback automatically, and
-the API container reaches the same name via `host-gateway`, so the token issuer string matches from both the
-browser and the API.
+* `docker compose up --build`, open `http://localhost:8080`, click **Sign in**. The UI shows a yellow
+  "Development / demo mode" banner so nobody mistakes it for real auth.
+* Log in at the Dex page with the preconfigured dev user: **`dev@tamp.local` / `password`**.
+* You are redirected back signed in; the SPA attaches your token to every `/api` call automatically (browser
+  authorization-code + PKCE flow, public client `tamp-observer`).
+* Prefer scripting? Grab a token directly with the password grant:
 
-For a hardened, connected, or air-gapped deploy, point `OBSERVER_OIDC_AUTHORITY` / `OBSERVER_OIDC_AUDIENCE` at
-your own IdP (GitHub OIDC for connected dev, a definable in-enclave OIDC such as Keycloak/AD for air-gapped)
-and drop the `dex` service. Nothing in the app depends on Dex specifically.
+  ```
+  TOKEN=$(curl -s -X POST http://localhost:5556/dex/token \
+    -d grant_type=password -d client_id=tamp-observer -d scope="openid profile email" \
+    -d username=dev@tamp.local -d password=password | jq -r .id_token)
+  curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/me
+  ```
 
-> Note: the browser login flow in the SPA is the remaining piece; today the UI reaches `/api` by pasting a
-> token obtained as above.
+The dev user, the client, and the fact that it is HTTP with in-memory state all live in `deploy/dex/config.yaml`.
+Edit it to add users or clients for local experimentation.
+
+One implementation detail worth knowing if you tinker: the issuer is `http://id.localhost:5556/dex`. The host
+`id.localhost` is deliberate so the token issuer string resolves to the *same* Dex from two places, the browser
+(browsers resolve `*.localhost` to loopback automatically) and the API container (reaches it via a
+`host-gateway` entry in `docker-compose.yml`). That sidesteps the usual OIDC-in-Docker issuer-mismatch trap.
+
+### Using your own identity provider (production, connected dev, or air-gapped)
+
+Point the API at your IdP and drop the bundled one:
+
+* Set `OBSERVER_OIDC_AUTHORITY` to your issuer URL and `OBSERVER_OIDC_AUDIENCE` to the client/audience your
+  tokens carry. Remove `OBSERVER_OIDC_ALLOW_HTTP` (leave HTTPS metadata required).
+* For the SPA, set `VITE_OIDC_AUTHORITY` and `VITE_OIDC_CLIENT_ID` at build time to match.
+* Remove the `dex` service from the compose (and its CORS `allowedOrigins` concern disappears with it).
+
+Examples: GitHub OIDC for connected dev; a definable in-enclave OIDC such as Keycloak or AD FS for air-gapped
+or accredited sites (ADR 0013 treats in-enclave OIDC as load-bearing for the air-gapped ceiling). The bundled
+Dex is also the working reference for how that wiring looks.
