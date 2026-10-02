@@ -44,6 +44,7 @@ that supersedes it. Typo fixes and link repairs are fine.
 | 0015 | [Issue model (error grouping, fingerprinting, resolved/regressed)](0015-issue-model-error-grouping.md) | Proposed | TOBS-16 |
 | 0016 | [Alerting on new/regressed Issues + pluggable channels](0016-alerting-and-notification-channels.md) | Proposed | TOBS-17 |
 | 0017 | [Symbolication (JS source maps first)](0017-symbolication.md)                            | Proposed | TOBS-18 |
+| 0018 | [Connectors: thin OTel wiring aligned to tamp's emission contract](0018-connectors-otel-emission.md) | Proposed | TOBS-21 |
 
 ADR numbers are stable and gap-allowed: they correspond 1:1 with the YouTrack tracking issues
 (`TOBS-N`), so a deferred ADR keeps its slot until written. `Planned` rows are reserved slots with

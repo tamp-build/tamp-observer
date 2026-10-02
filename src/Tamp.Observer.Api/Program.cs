@@ -4,6 +4,7 @@ using Marten;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.DependencyInjection;
 using Tamp.Observer.Api;
+using Tamp.Observer.Connector.AspNetCore;
 using Tamp.Observer.Domain;
 using Tamp.Observer.Replay.FileBlob;
 using Tamp.Observer.Storage.Abstractions;
@@ -69,6 +70,22 @@ builder.Services.AddAuthorization();
 // Replay payload blob store (ADR 0010): the filesystem floor; object storage slots in behind the interface.
 var replayBlobDir = Environment.GetEnvironmentVariable("OBSERVER_REPLAY_BLOB") ?? "./_replay";
 builder.Services.AddSingleton<IReplayBlobStore>(new FileReplayBlobStore(replayBlobDir));
+
+// Self-telemetry (ADR 0018, TOBS-21): dogfood the API's own runtime telemetry into tamp-observer via the .NET
+// connector. Off unless a collector endpoint is configured, so the floor is unaffected.
+var selfOtlp = Environment.GetEnvironmentVariable("OBSERVER_SELF_OTLP");
+if (!string.IsNullOrWhiteSpace(selfOtlp))
+{
+    builder.Services.AddTampObserver(o =>
+    {
+        o.ProjectKey = Environment.GetEnvironmentVariable("OBSERVER_SELF_PROJECT") ?? "tamp-observer";
+        o.ServiceName = "tamp-observer-api";
+        o.ServiceNamespace = "backend";
+        o.ServiceVersion = "0.1.0-alpha";
+        o.DeploymentEnvironment = Environment.GetEnvironmentVariable("OBSERVER_SELF_ENV") ?? "dev";
+        o.CollectorEndpoint = selfOtlp;
+    });
+}
 
 // OpenAPI document (ADR 0014): this is the contract the typed TS client is generated from.
 builder.Services.AddOpenApi();

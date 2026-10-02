@@ -17,6 +17,12 @@ services:
   api:
     ports: !override
       - "${TAMP_API_PORT:-8080}:8080"
+    # Self-telemetry (ADR 0018, TOBS-21): the API dogfoods its own runtime telemetry into this instance via the
+    # .NET connector, exporting OTLP to the in-network collector under the 'tamp-observer' project.
+    environment:
+      OBSERVER_SELF_OTLP: "http://collector:4317"
+      OBSERVER_SELF_PROJECT: "tamp-observer"
+      OBSERVER_SELF_ENV: "dev"
     restart: always
   postgres:
     restart: always
