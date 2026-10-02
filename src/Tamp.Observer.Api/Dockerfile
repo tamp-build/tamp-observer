@@ -24,5 +24,12 @@ WORKDIR /app
 COPY --from=dotnet /app/publish ./
 COPY --from=frontend /frontend/dist ./wwwroot
 ENV ASPNETCORE_URLS=http://+:8080
+# Pin HOME so DuckDB's extension cache is the same path at build time and run time.
+ENV HOME=/app
+# Pre-bundle the DuckDB postgres extension (ADR 0005) so the first analytical query needs no network egress:
+# selftest-store runs INSTALL postgres (downloads the version-matched extension into $HOME/.duckdb) then LOAD;
+# the ATTACH to a dummy database fails by design, hence `|| true`. At run time INSTALL finds it cached.
+RUN OBSERVER_STORE=duckdb OBSERVER_DB="Host=localhost;Port=5432;Database=x;Username=x;Password=x" \
+    dotnet Tamp.Observer.Api.dll selftest-store || true
 EXPOSE 8080
 ENTRYPOINT ["dotnet", "Tamp.Observer.Api.dll"]
