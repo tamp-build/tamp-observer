@@ -105,8 +105,8 @@ class Build : TampBuild
         .SetResultsDirectory(CoverageDir);
 
     Target Ci => _ => _
-        .DependsOn(nameof(Info), nameof(Clean), nameof(UnitTest))
-        .Description("Fast lane (PR / push): info, clean, build, unit tests only.");
+        .DependsOn(nameof(Info), nameof(UnitTest))
+        .Description("Fast lane (PR / push): info, build, unit tests only. (No Clean: it would delete the running build app's own bin.)");
 
     // SonarCloud analysis is a two-phase scan: Begin before the build, End after tests, with the
     // build and tests running between so the scanner collects MSBuild inputs and coverage.
