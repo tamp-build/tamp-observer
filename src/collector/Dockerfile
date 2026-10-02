@@ -11,7 +11,11 @@ RUN CGO_ENABLED=0 go build -trimpath -o /collector .
 
 FROM gcr.io/distroless/static-debian12 AS final
 COPY --from=build /collector /collector
+# Both raw-bucket configs are baked in; the active one is chosen by the container command (the floor file-spool
+# config by default, the Valkey config via the deploy/compose.valkey.yml overlay).
 COPY src/collector/config.docker.yaml /etc/observer/collector.yaml
+COPY src/collector/config.docker.valkey.yaml /etc/observer/collector.valkey.yaml
 # OTLP gRPC and HTTP front doors (ADR 0009).
 EXPOSE 4317 4318
-ENTRYPOINT ["/collector", "--config", "/etc/observer/collector.yaml"]
+ENTRYPOINT ["/collector"]
+CMD ["--config", "/etc/observer/collector.yaml"]

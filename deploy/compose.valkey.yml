@@ -1,0 +1,38 @@
+# Valkey raw-bucket high-tier overlay (ADR 0004 section 2, TOBS-19). Layer it on the floor:
+#   docker compose -f docker-compose.yml -f deploy/compose.valkey.yml up --build
+#
+# What it changes vs the floor: the collector lands OTLP into a Valkey Stream instead of the file spool, and
+# the evaluator drains that stream (OBSERVER_RAWBUCKET=valkey). Storage stays Postgres-only; this dials only
+# the raw-bucket tier. The shared spool volume from the floor is simply unused in this mode.
+services:
+  valkey:
+    image: valkey/valkey:8-alpine
+    container_name: tamp-observer-valkey
+    command: ["valkey-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  collector:
+    command: ["--config", "/etc/observer/collector.valkey.yaml"]
+    environment:
+      OBSERVER_VALKEY_ADDR: "valkey:6379"
+    depends_on:
+      valkey:
+        condition: service_healthy
+
+  evaluator:
+    environment:
+      OBSERVER_DB: "Host=postgres;Port=5432;Database=observer;Username=observer;Password=observer"
+      OBSERVER_RAWBUCKET: valkey
+      OBSERVER_VALKEY: "valkey:6379"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy

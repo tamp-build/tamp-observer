@@ -1,0 +1,34 @@
+# Collector config for the Valkey raw-bucket high tier (ADR 0004 section 2): OTLP in, land raw bytes into a
+# Valkey Stream, which the .NET evaluator drains with OBSERVER_RAWBUCKET=valkey. The stream key must match the
+# evaluator's reader (ValkeyStream.DefaultStreamKey). Selected by the deploy/compose.valkey.yml overlay.
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch: {}
+
+exporters:
+  valkeystream:
+    addr: ${env:OBSERVER_VALKEY_ADDR}
+    stream_key: tamp.observer.raw
+    source: otlp
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [valkeystream]
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [valkeystream]
+    logs:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [valkeystream]
