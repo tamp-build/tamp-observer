@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Tamp.Observer.Storage.DuckDb.Tests</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="Testcontainers.PostgreSql" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Tamp.Observer.Domain\Tamp.Observer.Domain.csproj" />
+    <ProjectReference Include="..\..\src\Tamp.Observer.Storage.Abstractions\Tamp.Observer.Storage.Abstractions.csproj" />
+    <ProjectReference Include="..\..\src\Tamp.Observer.Storage.DuckDb\Tamp.Observer.Storage.DuckDb.csproj" />
+    <ProjectReference Include="..\..\src\Tamp.Observer.Storage.Postgres\Tamp.Observer.Storage.Postgres.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -23,12 +23,14 @@
     <Project Path="src/Tamp.Observer.Storage.Abstractions/Tamp.Observer.Storage.Abstractions.csproj" />
     <Project Path="src/Tamp.Observer.Storage.Postgres/Tamp.Observer.Storage.Postgres.csproj" />
     <Project Path="src/Tamp.Observer.Storage.ClickHouse/Tamp.Observer.Storage.ClickHouse.csproj" />
+    <Project Path="src/Tamp.Observer.Storage.DuckDb/Tamp.Observer.Storage.DuckDb.csproj" />
     <Project Path="src/Tamp.Observer.Evaluator/Tamp.Observer.Evaluator.csproj" />
     <Project Path="src/Tamp.Observer.Evaluator.Host/Tamp.Observer.Evaluator.Host.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Tamp.Observer.Storage.Postgres.Tests/Tamp.Observer.Storage.Postgres.Tests.csproj" />
     <Project Path="tests/Tamp.Observer.Storage.ClickHouse.Tests/Tamp.Observer.Storage.ClickHouse.Tests.csproj" />
+    <Project Path="tests/Tamp.Observer.Storage.DuckDb.Tests/Tamp.Observer.Storage.DuckDb.Tests.csproj" />
     <Project Path="tests/Tamp.Observer.RawBucket.Valkey.Tests/Tamp.Observer.RawBucket.Valkey.Tests.csproj" />
     <Project Path="tests/Tamp.Observer.Evaluator.Tests/Tamp.Observer.Evaluator.Tests.csproj" />
   </Folder>
