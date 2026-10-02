@@ -52,6 +52,14 @@ if (sinkTier == "clickhouse")
     builder.Services.AddSingleton<IEventSink>(sp => new CompositeTieredEventSink(
         new MartenEventSink(sp.GetRequiredService<IDocumentStore>()),
         new ClickHouseEventSink(clickHouse)));
+
+    // The evaluator owns the telemetry-tier schema (it is the writer): create the tables before draining.
+    // Retry briefly so a just-started ClickHouse that is healthy but not yet query-ready does not crash boot.
+    for (var attempt = 1; ; attempt++)
+    {
+        try { await ClickHouseSchema.EnsureAsync(clickHouse); break; }
+        catch when (attempt < 15) { await Task.Delay(TimeSpan.FromSeconds(2)); }
+    }
 }
 
 builder.Services.AddSingleton<IRawBucketReader>(_ => rawBucketTier switch

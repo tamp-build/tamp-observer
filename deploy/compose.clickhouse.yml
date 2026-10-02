@@ -1,0 +1,55 @@
+# ClickHouse analytical-tier overlay (ADR 0005 top tier, TOBS-19). Layer it on the floor:
+#   docker compose -f docker-compose.yml -f deploy/compose.clickhouse.yml up --build
+#
+# What it changes vs the floor: telemetry (spans/logs) is written to and read from ClickHouse, while entities,
+# issues, auth, and symbols stay in Postgres (the system of record). This exercises both halves of the storage
+# dial: OBSERVER_SINK=clickhouse on the evaluator (composite sink) and OBSERVER_STORE=clickhouse on the API.
+# The raw-bucket tier is unchanged (still the file spool); this overlay is orthogonal to compose.valkey.yml.
+services:
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.8-alpine
+    container_name: tamp-observer-clickhouse
+    # A password is required for the default-named user to get network access; give ClickHouse its own creds.
+    environment:
+      CLICKHOUSE_USER: observer
+      CLICKHOUSE_PASSWORD: observer
+      CLICKHOUSE_DB: observer
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    ports:
+      - "8123:8123"
+    volumes:
+      - observer-chdata:/var/lib/clickhouse
+    # Use 127.0.0.1, not localhost: the alpine image cannot bind IPv6 here, so localhost (::1) is refused.
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:8123/ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 30s
+    restart: unless-stopped
+
+  evaluator:
+    environment:
+      OBSERVER_SINK: clickhouse
+      OBSERVER_CLICKHOUSE: "Host=clickhouse;Port=8123;Database=observer;Username=observer;Password=observer"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+
+  api:
+    environment:
+      OBSERVER_STORE: clickhouse
+      OBSERVER_CLICKHOUSE: "Host=clickhouse;Port=8123;Database=observer;Username=observer;Password=observer"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+
+volumes:
+  observer-chdata:
