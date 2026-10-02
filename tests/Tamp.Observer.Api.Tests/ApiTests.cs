@@ -74,6 +74,19 @@ public sealed class ApiTests
     }
 
     [Fact]
+    public async Task Authenticated_but_not_allowlisted_is_forbidden()
+    {
+        // A valid token from an identity that was never pre-registered: admitted authN, refused admission.
+        using var app = new ApiFactory(allowlisted: false);
+        using var client = app.CreateClient();
+        client.DefaultRequestHeaders.Add(TestAuthHandler.SubjectHeader, "stranger");
+
+        var response = await client.GetAsync("/api/me");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
     public async Task Protected_read_is_forbidden_when_the_chokepoint_denies()
     {
         using var app = new ApiFactory(authorize: false);

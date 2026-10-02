@@ -81,6 +81,10 @@ public static class ObserverStoreConfiguration
         options.Schema.For<RoleAssignment>()
             .Index(x => x.SubjectId);
 
+        // Admission list (ADR 0013): pre-registered identities, unique by normalized email.
+        options.Schema.For<AllowedIdentity>()
+            .UniqueIndex(x => x.Email);
+
         // Replay session metadata (ADR 0010): one per (Project, client SessionId); listed by recency. The
         // payload firehose is NOT here; it lives in the blob store.
         options.Schema.For<ReplaySession>()

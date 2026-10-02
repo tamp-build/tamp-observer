@@ -27,6 +27,9 @@ public static class ServiceCollectionExtensions
         // The authorization chokepoint (ADR 0013).
         services.AddSingleton<IAuthorizationService, MartenAuthorizationService>();
 
+        // The admission list (ADR 0013): who is pre-registered to use the instance at all.
+        services.AddSingleton<IAllowedIdentityStore, MartenAllowedIdentityStore>();
+
         // Symbol artifact store (ADR 0017); the symbolicator itself lives in the Symbolication assembly.
         services.AddSingleton<ISymbolArtifactStore, MartenSymbolArtifactStore>();
 

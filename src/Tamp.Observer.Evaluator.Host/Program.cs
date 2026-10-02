@@ -36,6 +36,18 @@ if (args.Length >= 2 && args[0] == "create-project")
     return;
 }
 
+// Admin one-shot: pre-register an identity on the admission list (ADR 0013). No self-service accounts; an admin
+// adds the email here. Usage: allow-user <email> [viewer|editor|admin]
+if (args.Length >= 2 && args[0] == "allow-user")
+{
+    var email = args[1];
+    var role = args.Length >= 3 && Enum.TryParse<Role>(args[2], ignoreCase: true, out var r) ? r : Role.Viewer;
+    using var store = ObserverStore.For(connectionString);
+    await new MartenAllowedIdentityStore(store).AddAsync(email, role);
+    Console.WriteLine($"allowed '{AllowedIdentity.Normalize(email)}' as {role}");
+    return;
+}
+
 var builder = Host.CreateApplicationBuilder(args);
 
 builder.Services.AddTampObserverStore(connectionString);

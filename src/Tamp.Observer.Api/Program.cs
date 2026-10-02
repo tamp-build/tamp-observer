@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using Marten;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.DependencyInjection;
 using Tamp.Observer.Api;
 using Tamp.Observer.Connector.AspNetCore;
@@ -65,7 +66,16 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         }
         options.RequireHttpsMetadata = requireHttps;
     });
-builder.Services.AddAuthorization();
+
+// AuthZ: every /api route requires an authenticated user whose email is on the admission list (ADR 0013).
+// Authentication proves identity; the allowlist decides admission (no self-service accounts).
+builder.Services.AddAuthorizationBuilder()
+    .AddPolicy(AllowlistedHandler.PolicyName, policy =>
+    {
+        policy.RequireAuthenticatedUser();
+        policy.AddRequirements(new AllowlistedRequirement());
+    });
+builder.Services.AddSingleton<IAuthorizationHandler, AllowlistedHandler>();
 
 // Replay payload blob store (ADR 0010): the filesystem floor; object storage slots in behind the interface.
 var replayBlobDir = Environment.GetEnvironmentVariable("OBSERVER_REPLAY_BLOB") ?? "./_replay";
@@ -171,7 +181,7 @@ app.MapPost("/ingest/replay", async (
     .AllowAnonymous()
     .WithName("IngestReplay");
 
-var api = app.MapGroup("/api").RequireAuthorization();
+var api = app.MapGroup("/api").RequireAuthorization(AllowlistedHandler.PolicyName);
 
 // Whoami: proves external authN end to end without touching the store. No capability needed beyond being
 // authenticated; it reports the subject the IdP asserted.

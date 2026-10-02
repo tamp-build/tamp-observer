@@ -25,13 +25,18 @@ public sealed class TestAuthHandler(
 {
     public const string SchemeName = "Test";
     public const string SubjectHeader = "X-Test-Sub";
+    public const string EmailHeader = "X-Test-Email";
 
     protected override Task<AuthenticateResult> HandleAuthenticateAsync()
     {
         if (!Request.Headers.TryGetValue(SubjectHeader, out var sub) || string.IsNullOrEmpty(sub))
             return Task.FromResult(AuthenticateResult.NoResult());
 
-        var identity = new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, sub!)], SchemeName);
+        var email = Request.Headers.TryGetValue(EmailHeader, out var e) && !string.IsNullOrEmpty(e)
+            ? e.ToString()
+            : $"{sub}@test.local";
+        var identity = new ClaimsIdentity(
+            [new Claim(ClaimTypes.NameIdentifier, sub!), new Claim("email", email)], SchemeName);
         var ticket = new AuthenticationTicket(new ClaimsPrincipal(identity), SchemeName);
         return Task.FromResult(AuthenticateResult.Success(ticket));
     }
@@ -59,8 +64,20 @@ public sealed class FakeAuthorizationService(bool allow) : IAuthorizationService
         Task.FromResult(allow);
 }
 
-/// <summary>Boots the real API pipeline with the external IdP and the store swapped for test doubles.</summary>
-public sealed class ApiFactory(bool authorize = true) : WebApplicationFactory<Program>
+/// <summary>A controllable admission list so allowlisted/not maps to HTTP status can be asserted directly.</summary>
+public sealed class FakeAllowedIdentityStore(bool allow) : IAllowedIdentityStore
+{
+    public Task<AllowedIdentity?> FindAsync(string email, CancellationToken ct = default) =>
+        Task.FromResult(allow ? new AllowedIdentity { Email = email, Role = Role.Admin } : null);
+
+    public Task AddAsync(string email, Role role, CancellationToken ct = default) => Task.CompletedTask;
+
+    public Task<IReadOnlyList<AllowedIdentity>> ListAsync(CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<AllowedIdentity>>([]);
+}
+
+/// <summary>Boots the real API pipeline with the external IdP and the stores swapped for test doubles.</summary>
+public sealed class ApiFactory(bool authorize = true, bool allowlisted = true) : WebApplicationFactory<Program>
 {
     protected override void ConfigureWebHost(Microsoft.AspNetCore.Hosting.IWebHostBuilder builder)
     {
@@ -73,6 +90,7 @@ public sealed class ApiFactory(bool authorize = true) : WebApplicationFactory<Pr
 
             services.AddSingleton<IObservabilityStore>(new FakeObservabilityStore());
             services.AddSingleton<IAuthorizationService>(new FakeAuthorizationService(authorize));
+            services.AddSingleton<IAllowedIdentityStore>(new FakeAllowedIdentityStore(allowlisted));
         });
     }
 }
