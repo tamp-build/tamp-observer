@@ -1,0 +1,53 @@
+{{- $collectorName := include "tamp-observer.collectorHost" . }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $collectorName }}
+  labels:
+    {{- include "tamp-observer.labels" . | nindent 4 }}
+spec:
+  selector:
+    {{- include "tamp-observer.selectorLabels" (dict "root" . "component" "collector") | nindent 4 }}
+  ports:
+    - name: otlp-grpc
+      port: {{ .Values.collector.service.grpcPort }}
+      targetPort: 4317
+    - name: otlp-http
+      port: {{ .Values.collector.service.httpPort }}
+      targetPort: 4318
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $collectorName }}
+  labels:
+    {{- include "tamp-observer.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "tamp-observer.selectorLabels" (dict "root" . "component" "collector") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "tamp-observer.selectorLabels" (dict "root" . "component" "collector") | nindent 8 }}
+    spec:
+      containers:
+        - name: collector
+          image: {{ include "tamp-observer.image" (dict "root" . "repository" .Values.collector.repository "tag" .Values.collector.tag) | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- if eq .Values.collector.rawBucket "valkey" }}
+          args: ["--config", "/etc/observer/collector.valkey.yaml"]
+          env:
+            - name: OBSERVER_VALKEY_ADDR
+              value: {{ printf "%s:6379" (include "tamp-observer.valkeyHost" .) | quote }}
+          {{- else }}
+          args: ["--config", "/etc/observer/collector.yaml"]
+          {{- end }}
+          ports:
+            - name: otlp-grpc
+              containerPort: 4317
+            - name: otlp-http
+              containerPort: 4318
+          resources:
+            {{- toYaml .Values.collector.resources | nindent 12 }}

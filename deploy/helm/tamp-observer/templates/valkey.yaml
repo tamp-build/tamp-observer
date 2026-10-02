@@ -1,0 +1,48 @@
+{{- if .Values.valkey.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "tamp-observer.valkeyHost" . }}
+  labels:
+    {{- include "tamp-observer.labels" . | nindent 4 }}
+spec:
+  selector:
+    {{- include "tamp-observer.selectorLabels" (dict "root" . "component" "valkey") | nindent 4 }}
+  ports:
+    - name: valkey
+      port: 6379
+      targetPort: 6379
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "tamp-observer.valkeyHost" . }}
+  labels:
+    {{- include "tamp-observer.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "tamp-observer.selectorLabels" (dict "root" . "component" "valkey") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "tamp-observer.selectorLabels" (dict "root" . "component" "valkey") | nindent 8 }}
+    spec:
+      containers:
+        - name: valkey
+          image: {{ .Values.valkey.image | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          # Transient raw-bucket buffer (ADR 0004): persistence off by design.
+          args: ["valkey-server", "--save", "", "--appendonly", "no"]
+          ports:
+            - name: valkey
+              containerPort: 6379
+          readinessProbe:
+            exec:
+              command: ["valkey-cli", "ping"]
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          resources:
+            {{- toYaml .Values.valkey.resources | nindent 12 }}
+{{- end }}

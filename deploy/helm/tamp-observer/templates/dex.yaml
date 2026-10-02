@@ -1,0 +1,92 @@
+{{- if .Values.dex.enabled }}
+{{- $dexName := printf "%s-dex" (include "tamp-observer.fullname" .) }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $dexName }}
+  labels:
+    {{- include "tamp-observer.labels" . | nindent 4 }}
+data:
+  config.yaml: |
+    # Dex as the OIDC broker to GitHub. The api validates the id_tokens Dex issues; GitHub itself is not an
+    # OIDC provider for user login, so Dex federates to it. The email allowlist (admission) lives in the app.
+    issuer: {{ .Values.dex.issuer | quote }}
+    storage:
+      type: memory
+    web:
+      http: 0.0.0.0:5556
+    oauth2:
+      skipApprovalScreen: true
+    connectors:
+      - type: github
+        id: github
+        name: GitHub
+        config:
+          clientID: {{ .Values.dex.github.clientId | quote }}
+          clientSecret: $DEX_GITHUB_CLIENT_SECRET
+          redirectURI: {{ printf "%s/callback" (trimSuffix "/" .Values.dex.issuer) | quote }}
+    staticClients:
+      - id: tamp-observer
+        name: tamp-observer
+        public: true
+        redirectURIs:
+          {{- range .Values.dex.redirectUris }}
+          - {{ . | quote }}
+          {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $dexName }}
+  labels:
+    {{- include "tamp-observer.labels" . | nindent 4 }}
+spec:
+  selector:
+    {{- include "tamp-observer.selectorLabels" (dict "root" . "component" "dex") | nindent 4 }}
+  ports:
+    - name: http
+      port: 5556
+      targetPort: 5556
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $dexName }}
+  labels:
+    {{- include "tamp-observer.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "tamp-observer.selectorLabels" (dict "root" . "component" "dex") | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ .Values.dex.issuer | printf "%s%s" .Values.dex.github.clientId | sha256sum }}
+      labels:
+        {{- include "tamp-observer.selectorLabels" (dict "root" . "component" "dex") | nindent 8 }}
+    spec:
+      containers:
+        - name: dex
+          image: {{ .Values.dex.image | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["dex", "serve", "/etc/dex/config.yaml"]
+          env:
+            - name: DEX_GITHUB_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "tamp-observer.secretName" . }}
+                  key: dex-github-client-secret
+          ports:
+            - name: http
+              containerPort: 5556
+          volumeMounts:
+            - name: config
+              mountPath: /etc/dex
+          resources:
+            {{- toYaml .Values.dex.resources | nindent 12 }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ $dexName }}
+{{- end }}

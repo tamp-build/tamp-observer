@@ -44,6 +44,13 @@ jobs:
       - name: Build + unit tests
         run: dotnet run --project build -- Ci
 
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+
+      # Lint the deploy chart via the dogfooded tamp build (Tamp.Helm).
+      - name: Lint Helm chart
+        run: dotnet run --project build -- HelmLint
+
   frontend:
     name: frontend build
     runs-on: ubuntu-latest

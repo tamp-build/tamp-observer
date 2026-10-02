@@ -1,0 +1,124 @@
+# Portable defaults for the tamp-observer chart. Override in a site file (e.g. values.lab.yaml) for hostnames,
+# storage classes, image registry, and real secrets. The default shape is the "all pods" tier:
+# Postgres + in-process DuckDB + Valkey raw-bucket; ClickHouse is an opt-in external dial (off by default).
+
+nameOverride: ""
+fullnameOverride: ""
+
+# Registry/pull defaults applied to the three first-party images (api, collector, evaluator).
+image:
+  registry: ""          # e.g. registry.home.local/ ; empty = docker default / local
+  pullPolicy: IfNotPresent
+  tag: ""               # defaults to .Chart.AppVersion when empty
+
+imagePullSecrets: []
+
+# Secrets. By default the chart generates a Secret from the values below (fine for dev). In production set
+# secrets.existingSecret to a pre-created Secret providing the same keys and the inline values are ignored.
+secrets:
+  existingSecret: ""          # name of a Secret with keys: observer-db, postgres-password, dex-github-client-secret, [observer-clickhouse]
+  # Keys the generated Secret will carry (used only when existingSecret is empty):
+  postgresPassword: "observer"
+  dexGithubClientSecret: ""   # the GitHub OAuth App client secret
+  clickhouseConnectionString: ""  # only when clickhouse.enabled
+
+# ---- Storage: system of record + in-process analytics ----
+postgres:
+  enabled: true
+  image: postgres:16-alpine
+  auth:
+    database: observer
+    username: observer
+  persistence:
+    size: 50Gi            # Postgres holds entities, issues, auth, replay metadata AND span/log telemetry
+    storageClass: ""      # set to a redundant class (RAID1) in your site overlay
+  resources:
+    requests: { cpu: 250m, memory: 512Mi }
+    limits: { cpu: "1", memory: 2Gi }
+
+# DuckDB is the in-process analytical accelerator; it is NOT a deployable. It runs inside the api pod, which is
+# why the api is given generous memory below. Nothing to configure here beyond OBSERVER_STORE=duckdb on the api.
+
+# ClickHouse: opt-in top tier, always EXTERNAL (reached by connection string). Off by default; needs AVX2
+# hardware. When enabled, set secrets.clickhouseConnectionString (or provide it via existingSecret).
+clickhouse:
+  enabled: false
+
+# ---- Raw-bucket tier ----
+valkey:
+  enabled: true
+  image: valkey/valkey:8-alpine
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { cpu: 500m, memory: 1Gi }
+
+# ---- Ingest: Go OTel collector ----
+collector:
+  repository: tamp-observer-collector
+  tag: ""                 # defaults to image.tag / AppVersion
+  # file | valkey. On k8s use valkey (no shared RWX volume between collector and evaluator).
+  rawBucket: valkey
+  resources:
+    requests: { cpu: 100m, memory: 128Mi }
+    limits: { cpu: 500m, memory: 256Mi }
+  service:
+    grpcPort: 4317
+    httpPort: 4318
+
+# ---- Evaluator: drains the raw bucket, admits, writes storage ----
+evaluator:
+  repository: tamp-observer-evaluator
+  tag: ""
+  sink: postgres          # postgres | clickhouse
+  resources:
+    requests: { cpu: 150m, memory: 256Mi }
+    limits: { cpu: "1", memory: 512Mi }    # CPU limit >=1 so Marten startup codegen is not throttled
+
+# ---- API: read surface + served SPA; hosts DuckDB in-process ----
+api:
+  repository: tamp-observer-api
+  tag: ""
+  store: duckdb           # postgres | duckdb | clickhouse
+  replayBlob:
+    persistence:
+      size: 20Gi
+      storageClass: ""
+  oidc:
+    authority: "https://auth.brewingcoder.com/dex"
+    audience: "tamp-observer"
+    allowHttp: false
+  selfTelemetry:
+    enabled: false
+    otlp: ""              # e.g. http://<release>-collector:4317
+  resources:
+    # DuckDB runs in-process and is vectorized; a tight memory limit OOMKills the whole pod mid-aggregation.
+    requests: { cpu: 250m, memory: 512Mi }
+    limits: { cpu: "2", memory: 4Gi }
+
+# ---- Dex: bundled OIDC broker to GitHub ----
+dex:
+  enabled: true
+  image: dexidp/dex:v2.41.1
+  issuer: "https://auth.brewingcoder.com/dex"
+  github:
+    clientId: ""          # GitHub OAuth App client id (secret goes in secrets.dexGithubClientSecret)
+  # Redirect URIs for the SPA public client (public PKCE client, no secret).
+  redirectUris:
+    - "https://observer.brewingcoder.com/"
+    - "https://observer.brewingcoder.com/callback"
+  resources:
+    requests: { cpu: 50m, memory: 64Mi }
+    limits: { cpu: 200m, memory: 128Mi }
+
+# ---- Ingress (optional) ----
+# The lab reaches Services directly via a Cloudflare tunnel, so public ingress is off by default. Self-hosters
+# on a normal cluster enable this. gRPC (4317) needs backend-protocol GRPC on the collector host.
+ingress:
+  enabled: false
+  className: nginx
+  annotations: {}
+  tls: []
+  hosts:
+    api: observer.brewingcoder.com
+    auth: auth.brewingcoder.com
+    otlpHttp: otlp.brewingcoder.com

@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "tamp-observer.fullname" . }}-evaluator
+  labels:
+    {{- include "tamp-observer.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "tamp-observer.selectorLabels" (dict "root" . "component" "evaluator") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "tamp-observer.selectorLabels" (dict "root" . "component" "evaluator") | nindent 8 }}
+    spec:
+      containers:
+        - name: evaluator
+          image: {{ include "tamp-observer.image" (dict "root" . "repository" .Values.evaluator.repository "tag" .Values.evaluator.tag) | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: OBSERVER_DB
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "tamp-observer.secretName" . }}
+                  key: observer-db
+            - name: OBSERVER_RAWBUCKET
+              value: {{ ternary "valkey" "file" .Values.valkey.enabled | quote }}
+            {{- if .Values.valkey.enabled }}
+            - name: OBSERVER_VALKEY
+              value: {{ printf "%s:6379" (include "tamp-observer.valkeyHost" .) | quote }}
+            {{- end }}
+            - name: OBSERVER_SINK
+              value: {{ .Values.evaluator.sink | quote }}
+            {{- if .Values.clickhouse.enabled }}
+            - name: OBSERVER_CLICKHOUSE
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "tamp-observer.secretName" . }}
+                  key: observer-clickhouse
+            {{- end }}
+          resources:
+            {{- toYaml .Values.evaluator.resources | nindent 12 }}

@@ -1,5 +1,6 @@
 using Tamp;
 using Tamp.Go;
+using Tamp.Helm.V3;
 using Tamp.NetCli.V10;
 using Tamp.Npm.V10;
 using Tamp.SonarScanner.V10;
@@ -49,6 +50,11 @@ class Build : TampBuild
     [FromPath("npm", Optional = true)] readonly Tool NpmBin = null!;
 
     AbsolutePath Frontend => RootDirectory / "frontend";
+
+    // Optional so .NET-only lanes do not require helm on PATH (k8s deploy chart, rule #3 dogfood).
+    [FromPath("helm", Optional = true)] readonly Tool HelmBin = null!;
+
+    AbsolutePath Chart => RootDirectory / "deploy" / "helm" / "tamp-observer";
 
     const string OcbVersion = "v0.162.0";
 
@@ -231,5 +237,15 @@ class Build : TampBuild
         {
             s.SetWorkingDirectory(Frontend);
             s.Script = "build";
+        }));
+
+    // ----- Helm chart (dogfood Tamp.Helm, rule #3; k8s deploy) -----
+
+    Target HelmLint => _ => _
+        .Description("Lint the tamp-observer Helm chart (strict).")
+        .Executes(() => Helm.Lint(HelmBin, s =>
+        {
+            s.Chart = Chart.Value;
+            s.Strict = true;
         }));
 }

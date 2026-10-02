@@ -1,0 +1,111 @@
+{{- $apiName := printf "%s-api" (include "tamp-observer.fullname" .) }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ $apiName }}-replay
+  labels:
+    {{- include "tamp-observer.labels" . | nindent 4 }}
+spec:
+  accessModes: ["ReadWriteOnce"]
+  {{- with .Values.api.replayBlob.persistence.storageClass }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.api.replayBlob.persistence.size | quote }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $apiName }}
+  labels:
+    {{- include "tamp-observer.labels" . | nindent 4 }}
+spec:
+  selector:
+    {{- include "tamp-observer.selectorLabels" (dict "root" . "component" "api") | nindent 4 }}
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $apiName }}
+  labels:
+    {{- include "tamp-observer.labels" . | nindent 4 }}
+spec:
+  # Single replica: replay blobs are on a ReadWriteOnce PVC and DuckDB runs in-process. Horizontal scale waits
+  # on an object-storage blob tier (ADR 0010 future work). Do not raise without that.
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "tamp-observer.selectorLabels" (dict "root" . "component" "api") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "tamp-observer.selectorLabels" (dict "root" . "component" "api") | nindent 8 }}
+    spec:
+      containers:
+        - name: api
+          image: {{ include "tamp-observer.image" (dict "root" . "repository" .Values.api.repository "tag" .Values.api.tag) | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: ASPNETCORE_URLS
+              value: "http://+:8080"
+            - name: OBSERVER_DB
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "tamp-observer.secretName" . }}
+                  key: observer-db
+            - name: OBSERVER_STORE
+              value: {{ .Values.api.store | quote }}
+            {{- if .Values.clickhouse.enabled }}
+            - name: OBSERVER_CLICKHOUSE
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "tamp-observer.secretName" . }}
+                  key: observer-clickhouse
+            {{- end }}
+            - name: OBSERVER_OIDC_AUTHORITY
+              value: {{ .Values.api.oidc.authority | quote }}
+            - name: OBSERVER_OIDC_AUDIENCE
+              value: {{ .Values.api.oidc.audience | quote }}
+            - name: OBSERVER_OIDC_ALLOW_HTTP
+              value: {{ ternary "1" "0" .Values.api.oidc.allowHttp | quote }}
+            - name: OBSERVER_REPLAY_BLOB
+              value: /data/replay
+            {{- if .Values.api.selfTelemetry.enabled }}
+            - name: OBSERVER_SELF_OTLP
+              value: {{ .Values.api.selfTelemetry.otlp | default (printf "http://%s:%v" (include "tamp-observer.collectorHost" .) .Values.collector.service.grpcPort) | quote }}
+            - name: OBSERVER_SELF_PROJECT
+              value: "tamp-observer"
+            - name: OBSERVER_SELF_ENV
+              value: {{ .Release.Namespace | quote }}
+            {{- end }}
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          resources:
+            {{- toYaml .Values.api.resources | nindent 12 }}
+          volumeMounts:
+            - name: replay
+              mountPath: /data/replay
+      volumes:
+        - name: replay
+          persistentVolumeClaim:
+            claimName: {{ $apiName }}-replay

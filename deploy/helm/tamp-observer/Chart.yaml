@@ -1,0 +1,18 @@
+apiVersion: v2
+name: tamp-observer
+description: |
+  Self-hosted .NET observability platform: OTLP ingest (Go collector), smart .NET evaluator,
+  tiered storage (Postgres floor, in-process DuckDB accelerator, optional ClickHouse), Valkey
+  raw-bucket, errors/Issues, session replay, external OIDC + email allowlist, Svelte SPA.
+type: application
+version: 0.1.0
+appVersion: "0.1.0-alpha"
+home: https://github.com/tamp-build/tamp-observer
+sources:
+  - https://github.com/tamp-build/tamp-observer
+keywords:
+  - observability
+  - opentelemetry
+  - tracing
+  - session-replay
+  - self-hosted
