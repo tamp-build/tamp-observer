@@ -43,6 +43,11 @@ builder.Services.AddOpenApi();
 
 var app = builder.Build();
 
+// Serve the built Svelte SPA (ADR 0014) from wwwroot so one host serves UI and API (the single-host floor,
+// ADR 0001). In dev there is no wwwroot and these are no-ops; the Vite dev server proxies to the API instead.
+app.UseDefaultFiles();
+app.UseStaticFiles();
+
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -136,6 +141,10 @@ api.MapGet("/projects/{projectId:guid}/traces/{traceId}", async (
     .Produces<TraceView>()
     .Produces(StatusCodes.Status401Unauthorized)
     .Produces(StatusCodes.Status403Forbidden);
+
+// Client-side routes (deep links into the SPA) fall back to index.html. API/health/openapi routes are
+// already matched above, so this only catches unmatched GETs; it is a no-op when wwwroot is absent.
+app.MapFallbackToFile("index.html");
 
 await app.RunAsync();
 

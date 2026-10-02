@@ -1,0 +1,33 @@
+# Collector runtime config for the single-host floor (ADR 0001/0003/0004): OTLP in, land raw bytes to the
+# shared file spool, which the .NET evaluator drains. File spool is the raw-bucket floor (ADR 0004); no Valkey
+# in the floor. The spool path is a volume shared with the evaluator container.
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch: {}
+
+exporters:
+  rawfile:
+    directory: /spool
+    source: otlp
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [rawfile]
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [rawfile]
+    logs:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [rawfile]

@@ -1,0 +1,16 @@
+# Keep the build context small and deterministic: never ship local build output or caches.
+**/bin/
+**/obj/
+**/node_modules/
+**/dist/
+artifacts/
+.tamp/
+.git/
+.github/
+**/_spool/
+**/_dist/
+src/collector/_dist/
+src/collector/**/_spool/
+**/*.user
+**/.vs/
+docs/

@@ -1,5 +1,15 @@
-# Floor deployment (ADR 0001): the default is one `docker compose up`, Postgres only.
-# No Valkey, no ClickHouse. This is the baseline storage tier (ADR 0005).
+# Single-host floor deployment (ADR 0001): one `docker compose up` brings up the whole stack on one host,
+# Postgres only for storage (no Valkey, no ClickHouse; ADR 0005). The Go collector lands OTLP to a shared file
+# spool (the raw-bucket floor, ADR 0004); the .NET evaluator drains the spool into Postgres; the API serves the
+# read surface and the built Svelte SPA (ADR 0014) from one container.
+#
+# Quick start:
+#   docker compose up --build
+#   docker compose run --rm evaluator create-project my-app      # create a trust-root Project (ADR 0007)
+# Then point your app's OTLP exporter at localhost:4317 (gRPC) or :4318 (HTTP), and open http://localhost:8080.
+#
+# AuthN is always external (ADR 0013): set OBSERVER_OIDC_AUTHORITY/AUDIENCE to your IdP to reach /api. The SPA,
+# /health, and /openapi are anonymous.
 services:
   postgres:
     image: postgres:16-alpine
@@ -18,5 +28,51 @@ services:
       timeout: 3s
       retries: 10
 
+  collector:
+    build:
+      context: .
+      dockerfile: src/collector/Dockerfile
+    container_name: tamp-observer-collector
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+    volumes:
+      - observer-spool:/spool
+    restart: unless-stopped
+
+  evaluator:
+    build:
+      context: .
+      dockerfile: src/Tamp.Observer.Evaluator.Host/Dockerfile
+    container_name: tamp-observer-evaluator
+    environment:
+      OBSERVER_DB: "Host=postgres;Port=5432;Database=observer;Username=observer;Password=observer"
+      OBSERVER_SPOOL: /spool
+      OBSERVER_RAWBUCKET: file
+    volumes:
+      - observer-spool:/spool
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: src/Tamp.Observer.Api/Dockerfile
+    container_name: tamp-observer-api
+    ports:
+      - "8080:8080"
+    environment:
+      OBSERVER_DB: "Host=postgres;Port=5432;Database=observer;Username=observer;Password=observer"
+      # External OIDC (ADR 0013); leave unset for a connected-dev IdP you configure, e.g. GitHub OIDC.
+      OBSERVER_OIDC_AUTHORITY: "${OBSERVER_OIDC_AUTHORITY:-}"
+      OBSERVER_OIDC_AUDIENCE: "${OBSERVER_OIDC_AUDIENCE:-}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   observer-pgdata:
+  observer-spool:
