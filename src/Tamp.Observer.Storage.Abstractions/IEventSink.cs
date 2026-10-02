@@ -13,11 +13,12 @@ public sealed record AdmittedBatch(
     IReadOnlyList<DeploymentEnvironment> NewEnvironments,
     IReadOnlyList<ServiceVersion> NewVersions,
     IReadOnlyList<IngestedSpan> Spans,
-    IReadOnlyList<IngestedLog> Logs)
+    IReadOnlyList<IngestedLog> Logs,
+    IReadOnlyList<Issue> Issues)
 {
     public bool IsEmpty =>
         NewServices.Count == 0 && NewEnvironments.Count == 0 && NewVersions.Count == 0
-        && Spans.Count == 0 && Logs.Count == 0;
+        && Spans.Count == 0 && Logs.Count == 0 && Issues.Count == 0;
 }
 
 /// <summary>

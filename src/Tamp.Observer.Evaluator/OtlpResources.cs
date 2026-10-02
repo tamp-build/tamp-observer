@@ -13,6 +13,9 @@ public static class ResourceKeys
     public const string ServiceVersion = "service.version";
     public const string DeploymentEnvironment = "deployment.environment";
     public const string ServiceInstanceId = "service.instance.id";
+
+    /// <summary>OTLP exception attribute; the preferred Issue fingerprint source (ADR 0015).</summary>
+    public const string ExceptionType = "exception.type";
 }
 
 /// <summary>The resource attributes of one resource block within an OTLP payload.</summary>

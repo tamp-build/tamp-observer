@@ -41,6 +41,7 @@ that supersedes it. Typo fixes and link repairs are fine.
 | 0012 | [Capture policy bound to Environment (operator knobs)](0012-capture-policy-bound-to-environment.md) | Proposed | TOBS-12 |
 | 0013 | [External-only authN (OIDC) + native RBAC; audit via chokepoint later](0013-external-authn-native-rbac.md) | Proposed | TOBS-13 |
 | 0014 | [Frontend: Svelte over Blazor WASM](0014-frontend-svelte-over-blazor-wasm.md)            | Proposed | TOBS-14 |
+| 0015 | [Issue model (error grouping, fingerprinting, resolved/regressed)](0015-issue-model-error-grouping.md) | Proposed | TOBS-16 |
 
 ADR numbers are stable and gap-allowed: they correspond 1:1 with the YouTrack tracking issues
 (`TOBS-N`), so a deferred ADR keeps its slot until written. `Planned` rows are reserved slots with

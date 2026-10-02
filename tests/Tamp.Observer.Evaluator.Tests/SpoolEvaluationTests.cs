@@ -156,6 +156,74 @@ public sealed class SpoolEvaluationTests : IAsyncLifetime
         Assert.Equal("INFO", log.SeverityText);
     }
 
+    [Fact]
+    public async Task Error_spans_create_and_increment_an_issue()
+    {
+        await SeedProjectAsync("acme");
+        LandErrorTrace("acme", "api", "v1", "NullReferenceException");
+        LandErrorTrace("acme", "api", "v1", "NullReferenceException");
+
+        var evaluator = new IngestEvaluator(_store, new FileSpoolRawBucketReader(_spoolDir), new MartenEventSink(_store), NullLogger<IngestEvaluator>.Instance);
+        Assert.Equal(2, (await evaluator.DrainAsync()).Admitted);
+
+        await using var q = _store.QuerySession();
+        var issue = await q.Query<Issue>().SingleAsync();
+        Assert.Equal(2, issue.Count);
+        Assert.Equal(IssueStatus.Unresolved, issue.Status);
+        Assert.Equal("NullReferenceException", issue.ErrorType);
+        Assert.Equal([1L], issue.AffectedVersionSequences);
+    }
+
+    [Fact]
+    public async Task Resolved_issue_regresses_in_a_later_version()
+    {
+        await SeedProjectAsync("acme");
+        var evaluator = new IngestEvaluator(_store, new FileSpoolRawBucketReader(_spoolDir), new MartenEventSink(_store), NullLogger<IngestEvaluator>.Instance);
+
+        LandErrorTrace("acme", "api", "v1", "Boom");
+        await evaluator.DrainAsync();
+
+        // A human resolves it in v1 (sequence 1).
+        await using (var s = _store.LightweightSession())
+        {
+            var issue = await s.Query<Issue>().SingleAsync();
+            issue.Status = IssueStatus.Resolved;
+            issue.ResolvedInVersionSequence = issue.FirstSeenVersionSequence;
+            s.Store(issue);
+            await s.SaveChangesAsync();
+        }
+
+        // It recurs in v2 (sequence 2) -> regressed.
+        LandErrorTrace("acme", "api", "v2", "Boom");
+        await evaluator.DrainAsync();
+
+        await using var q = _store.QuerySession();
+        var regressed = await q.Query<Issue>().SingleAsync();
+        Assert.Equal(IssueStatus.Regressed, regressed.Status);
+        Assert.Contains(2L, regressed.AffectedVersionSequences);
+    }
+
+    private void LandErrorTrace(string projectKey, string service, string version, string exceptionType)
+    {
+        var resource = BuildResource(projectKey, service, version, "prod");
+        var span = new Span
+        {
+            TraceId = ByteString.CopyFrom(new byte[16]),
+            SpanId = ByteString.CopyFrom(new byte[8]),
+            Name = "GET /x",
+            Kind = 2,
+            StartTimeUnixNano = 1000,
+            EndTimeUnixNano = 1100,
+            Status = new Status { Code = 2, Message = "boom" },
+        };
+        span.Attributes.Add(new KeyValue { Key = ResourceKeys.ExceptionType, Value = new AnyValue { StringValue = exceptionType } });
+        var data = new TracesData
+        {
+            ResourceSpans = { new ResourceSpans { Resource = resource, ScopeSpans = { new ScopeSpans { Spans = { span } } } } },
+        };
+        Land("traces", data.ToByteArray());
+    }
+
     private async Task SeedProjectAsync(string key)
     {
         await using var s = _store.LightweightSession();

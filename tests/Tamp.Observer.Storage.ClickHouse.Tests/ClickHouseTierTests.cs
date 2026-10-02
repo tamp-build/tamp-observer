@@ -49,7 +49,7 @@ public sealed class ClickHouseTierTests : IAsyncLifetime
         };
         var logs = new[] { Log(project, service, version, "trace-1", "boom") };
 
-        await _sink.WriteAsync(new AdmittedBatch([], [], [], spans, logs));
+        await _sink.WriteAsync(new AdmittedBatch([], [], [], spans, logs, []));
 
         var query = new SpanQuery(project, new TimeWindow(1000, 2000), ServiceId: service);
 

@@ -88,6 +88,7 @@ public sealed partial class IngestEvaluator(
 
         await using var read = _store.QuerySession();
         var resolver = new BatchResolver(read);
+        var issueProjector = new IssueProjector(read);
 
         // Validate the trust-root Project and service grain for every resource first; if any resource
         // fails, the whole event is quarantined and nothing is written (atomic, ADR 0004).
@@ -187,15 +188,40 @@ public sealed partial class IngestEvaluator(
                     ReceivedAt = item.Envelope.ReceivedAt,
                 });
             }
+
+            // Project error signals into Issues (ADR 0015): ERROR-status spans and error-severity logs.
+            foreach (var s in res.Spans)
+            {
+                if (s.StatusCode != 2)
+                    continue;
+                var errorType = s.Attributes.GetValueOrDefault(ResourceKeys.ExceptionType);
+                var title = errorType ?? s.Name;
+                var groupingKey = errorType ?? $"{s.Name}|{s.StatusMessage}";
+                await issueProjector.ProjectAsync(project.Id, service.Id, version.Sequence, errorType, title, groupingKey, item.Envelope.ReceivedAt, ct);
+            }
+
+            foreach (var l in res.Logs)
+            {
+                if (l.SeverityNumber < 17) // OTLP SEVERITY_NUMBER_ERROR
+                    continue;
+                var errorType = l.Attributes.GetValueOrDefault(ResourceKeys.ExceptionType);
+                var key = errorType ?? Normalize(l.Body) ?? "log-error";
+                await issueProjector.ProjectAsync(project.Id, service.Id, version.Sequence, errorType, errorType ?? key, key, item.Envelope.ReceivedAt, ct);
+            }
         }
 
         var batch = new AdmittedBatch(
-            resolver.NewServices, resolver.NewEnvironments, resolver.NewVersions, spans, logs);
+            resolver.NewServices, resolver.NewEnvironments, resolver.NewVersions, spans, logs,
+            issueProjector.Touched.ToList());
         await _sink.WriteAsync(batch, ct);
 
         LogAdmitted(item.Envelope.ReceiptId, item.Envelope.Signal);
         return true;
     }
+
+    // Coarse grouping key for a log without an exception.type: trimmed, length-bounded body.
+    private static string? Normalize(string? body) =>
+        string.IsNullOrWhiteSpace(body) ? null : body.Trim()[..Math.Min(body.Trim().Length, 200)];
 
     private async Task QuarantineAsync(RawBucketItem item, string reason, string? claimedProjectKey, CancellationToken ct)
     {

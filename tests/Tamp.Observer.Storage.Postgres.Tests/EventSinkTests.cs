@@ -41,7 +41,7 @@ public sealed class EventSinkTests : IAsyncLifetime
             ReceiptId = "r", ReceivedAt = DateTimeOffset.UtcNow,
         };
 
-        await _sink.WriteAsync(new AdmittedBatch([service], [], [version], [span], []));
+        await _sink.WriteAsync(new AdmittedBatch([service], [], [version], [span], [], []));
 
         await using var q = _store.QuerySession();
         Assert.Single(await q.Query<Service>().ToListAsync());
@@ -52,7 +52,7 @@ public sealed class EventSinkTests : IAsyncLifetime
     [Fact]
     public async Task Empty_batch_is_a_no_op()
     {
-        await _sink.WriteAsync(new AdmittedBatch([], [], [], [], []));
+        await _sink.WriteAsync(new AdmittedBatch([], [], [], [], [], []));
 
         await using var q = _store.QuerySession();
         Assert.Empty(await q.Query<Service>().ToListAsync());

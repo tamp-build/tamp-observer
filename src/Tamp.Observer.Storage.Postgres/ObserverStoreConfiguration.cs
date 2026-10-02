@@ -67,5 +67,11 @@ public static class ObserverStoreConfiguration
             .Index(x => x.VersionId)
             .Index(x => x.TraceId)
             .Index(x => x.TimeUnixNano);
+
+        // Issue model (ADR 0015): one Issue per (Project, Service, Fingerprint); queried by status/recency.
+        options.Schema.For<Issue>()
+            .UniqueIndex(x => x.ProjectId, x => x.ServiceId, x => x.Fingerprint)
+            .Index(x => x.Status)
+            .Index(x => x.LastSeenAtUtc);
     }
 }
