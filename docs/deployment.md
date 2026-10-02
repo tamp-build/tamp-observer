@@ -64,6 +64,26 @@ docker compose -f docker-compose.yml -f deploy/compose.valkey.yml -f deploy/comp
   and goes idle. DuckDB downloads that extension on first use (needs network); an air-gapped install
   pre-bundles it.
 
+## Persistent dogfood instance
+
+For dogfooding (and to give the connectors a stable target), run a long-lived instance that exercises the
+higher tiers, Valkey raw-bucket plus ClickHouse telemetry, with persistent storage:
+
+```
+TAMP_API_PORT=8088 docker compose \
+  -f docker-compose.yml \
+  -f deploy/compose.valkey.yml \
+  -f deploy/compose.clickhouse.yml \
+  -f deploy/compose.dogfood.yml \
+  up -d --build
+```
+
+`deploy/compose.dogfood.yml` adds `restart: always` and a parameterized API host port (`TAMP_API_PORT`,
+default 8080; set it when 8080 is taken). Data lives in the `pgdata` and `chdata` named volumes and survives
+restarts, so manage this instance with `stop`/`up`, never `down -v`. Valkey is a transient buffer by design.
+Send OTLP to `localhost:4317`/`:4318` and open the UI on your chosen port. (The bundled Dex dev client already
+allows the 8080, 8088, and 5173 origins.)
+
 ## Configuration dials (env)
 
 The overlays set these; you can also set them directly.

@@ -1,0 +1,32 @@
+# Persistent dogfood instance (TOBS-20): a long-lived local instance exercising the higher tiers (Valkey
+# raw-bucket + ClickHouse telemetry), the target the .NET/Blazor connectors send real data into. Stack it on
+# top of the floor and both tier overlays:
+#
+#   TAMP_API_PORT=8088 docker compose \
+#     -f docker-compose.yml \
+#     -f deploy/compose.valkey.yml \
+#     -f deploy/compose.clickhouse.yml \
+#     -f deploy/compose.dogfood.yml \
+#     up -d --build
+#
+# This overlay only adds persistence posture: restart:always on the long-lived services and a parameterized
+# API host port (default 8080; set TAMP_API_PORT if 8080 is taken). Data persists in the pgdata and chdata
+# named volumes across restarts; do NOT `down -v` this instance. Postgres/ClickHouse hold data; Valkey is a
+# transient buffer by design.
+services:
+  api:
+    ports: !override
+      - "${TAMP_API_PORT:-8080}:8080"
+    restart: always
+  postgres:
+    restart: always
+  dex:
+    restart: always
+  collector:
+    restart: always
+  evaluator:
+    restart: always
+  valkey:
+    restart: always
+  clickhouse:
+    restart: always
