@@ -77,7 +77,7 @@ public sealed class ValkeyRawBucketReader : IRawBucketReader, IAsyncDisposable
         {
             if (_db is null)
             {
-                _mux = await ConnectionMultiplexer.ConnectAsync(_connectionString);
+                _mux = await ConnectionMultiplexer.ConnectAsync(ValkeyStream.ConnectionOptions(_connectionString));
                 _db = _mux.GetDatabase();
                 try
                 {

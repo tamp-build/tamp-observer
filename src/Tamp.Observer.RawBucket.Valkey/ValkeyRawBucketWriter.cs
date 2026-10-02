@@ -33,7 +33,7 @@ public sealed class ValkeyRawBucketWriter(string connectionString, string stream
         await _gate.WaitAsync(ct);
         try
         {
-            _mux ??= await ConnectionMultiplexer.ConnectAsync(connectionString);
+            _mux ??= await ConnectionMultiplexer.ConnectAsync(ValkeyStream.ConnectionOptions(connectionString));
             _db ??= _mux.GetDatabase();
         }
         finally

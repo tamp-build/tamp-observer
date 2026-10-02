@@ -1,3 +1,5 @@
+using StackExchange.Redis;
+
 namespace Tamp.Observer.RawBucket.Valkey;
 
 /// <summary>
@@ -17,4 +19,17 @@ public static class ValkeyStream
 
     /// <summary>Default consumer group drained by the evaluator.</summary>
     public const string DefaultConsumerGroup = "evaluator";
+
+    /// <summary>
+    /// Parse a connection string into options that retry quietly rather than throw when Valkey is not yet
+    /// reachable. On a cold start (k8s or <c>docker compose up</c>) the evaluator reliably comes up before
+    /// Valkey is accepting connections; <c>AbortOnConnectFail=false</c> lets the multiplexer reconnect in the
+    /// background instead of surfacing a connection exception that looks like a real fault.
+    /// </summary>
+    public static ConfigurationOptions ConnectionOptions(string connectionString)
+    {
+        var options = ConfigurationOptions.Parse(connectionString);
+        options.AbortOnConnectFail = false;
+        return options;
+    }
 }
