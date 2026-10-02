@@ -28,6 +28,17 @@ services:
       timeout: 3s
       retries: 10
 
+  # Bundled development OIDC provider (ADR 0013): makes /api reachable out of the box on a single box. The API
+  # validates its tokens like any external IdP. Production repoints OBSERVER_OIDC_AUTHORITY and drops this.
+  dex:
+    build:
+      context: .
+      dockerfile: deploy/dex/Dockerfile
+    container_name: tamp-observer-dex
+    ports:
+      - "5556:5556"
+    restart: unless-stopped
+
   collector:
     build:
       context: .
@@ -65,12 +76,19 @@ services:
       - "8080:8080"
     environment:
       OBSERVER_DB: "Host=postgres;Port=5432;Database=observer;Username=observer;Password=observer"
-      # External OIDC (ADR 0013); leave unset for a connected-dev IdP you configure, e.g. GitHub OIDC.
-      OBSERVER_OIDC_AUTHORITY: "${OBSERVER_OIDC_AUTHORITY:-}"
-      OBSERVER_OIDC_AUDIENCE: "${OBSERVER_OIDC_AUDIENCE:-}"
+      # External OIDC (ADR 0013). Defaults to the bundled Dex; override to point at your own IdP (then remove
+      # the dex service). The issuer host id.localhost resolves to loopback in the browser and, via the
+      # host-gateway alias below, to the same Dex from inside this container, so the token issuer matches both.
+      OBSERVER_OIDC_AUTHORITY: "${OBSERVER_OIDC_AUTHORITY:-http://id.localhost:5556/dex}"
+      OBSERVER_OIDC_AUDIENCE: "${OBSERVER_OIDC_AUDIENCE:-tamp-observer}"
+      OBSERVER_OIDC_ALLOW_HTTP: "${OBSERVER_OIDC_ALLOW_HTTP:-1}"
+    extra_hosts:
+      - "id.localhost:host-gateway"
     depends_on:
       postgres:
         condition: service_healthy
+      dex:
+        condition: service_started
     restart: unless-stopped
 
 volumes:

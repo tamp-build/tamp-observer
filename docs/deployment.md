@@ -78,7 +78,29 @@ It prints the selected engine and a span count (for DuckDB this exercises the po
 
 ## Authentication
 
-Authentication is always external (ADR 0013); there is no local credential store. Set `OBSERVER_OIDC_AUTHORITY`
-and `OBSERVER_OIDC_AUDIENCE` on the API to point at your IdP (GitHub OIDC for connected dev, a definable
-in-enclave OIDC such as Keycloak for air-gapped). The SPA, `/health`, and `/openapi` are anonymous; every
-`/api` route requires a token. A laptop with no IdP can load the UI but cannot reach `/api`.
+Authentication is always external (ADR 0013); there is no local credential store. The SPA, `/health`, and
+`/openapi` are anonymous; every `/api` route requires a valid OIDC token.
+
+The floor bundles a development OIDC provider (**Dex**) so `/api` works out of the box on a single box, while
+keeping authN genuinely external: the API validates real OIDC tokens, the same code path as production. A dev
+user is preconfigured: `dev@tamp.local` / `password`.
+
+Get a token and call the API directly (handy for scripts and smoke tests):
+
+```
+TOKEN=$(curl -s -X POST http://localhost:5556/dex/token \
+  -d grant_type=password -d client_id=tamp-observer -d scope="openid profile email" \
+  -d username=dev@tamp.local -d password=password | jq -r .id_token)
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/me
+```
+
+The issuer host is `id.localhost` on purpose: browsers resolve `*.localhost` to loopback automatically, and
+the API container reaches the same name via `host-gateway`, so the token issuer string matches from both the
+browser and the API.
+
+For a hardened, connected, or air-gapped deploy, point `OBSERVER_OIDC_AUTHORITY` / `OBSERVER_OIDC_AUDIENCE` at
+your own IdP (GitHub OIDC for connected dev, a definable in-enclave OIDC such as Keycloak/AD for air-gapped)
+and drop the `dex` service. Nothing in the app depends on Dex specifically.
+
+> Note: the browser login flow in the SPA is the remaining piece; today the UI reaches `/api` by pasting a
+> token obtained as above.

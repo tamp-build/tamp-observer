@@ -1,0 +1,39 @@
+# Bundled development OIDC provider (Dex) for the single-box floor (ADR 0013). This makes `/api` reachable out
+# of the box without standing up an external IdP, while keeping authN genuinely external: the API validates
+# real OIDC tokens, same code path as production. For a hardened or air-gapped deploy, point
+# OBSERVER_OIDC_AUTHORITY at the enclave IdP (AD/Keycloak/etc) and drop this service; nothing in the app
+# depends on Dex specifically.
+#
+# The issuer host is id.localhost on purpose: browsers resolve *.localhost to loopback automatically, and the
+# API container reaches the same name via host-gateway (see docker-compose.yml), so the token issuer string is
+# identical from the browser and from the API. Dev only: in-memory storage, HTTP, one static user.
+issuer: http://id.localhost:5556/dex
+
+storage:
+  type: memory
+
+web:
+  http: 0.0.0.0:5556
+
+oauth2:
+  skipApprovalScreen: true
+  passwordConnector: local
+
+enablePasswordDB: true
+staticPasswords:
+  # dev@tamp.local / password  (bcrypt). Dev convenience only; never ship this.
+  - email: "dev@tamp.local"
+    hash: "$2y$10$JvXbjkRvTryTbLEEcCpMre6xtVle8WoInZfSnJ10SvvkrH.uBRnfa"
+    username: "dev"
+    userID: "dev-0001"
+
+staticClients:
+  # Public client for the Svelte SPA (authorization code + PKCE, no secret).
+  - id: tamp-observer
+    name: tamp-observer
+    public: true
+    redirectURIs:
+      - http://localhost:8080/
+      - http://localhost:8080/callback
+      - http://localhost:5173/
+      - http://localhost:5173/callback
