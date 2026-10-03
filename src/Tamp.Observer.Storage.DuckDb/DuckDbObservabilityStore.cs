@@ -1,3 +1,4 @@
+using System.Data;
 using System.Data.Common;
 using DuckDB.NET.Data;
 using Tamp.Observer.Domain;
@@ -14,11 +15,29 @@ namespace Tamp.Observer.Storage.DuckDb;
 /// Note: the postgres extension and (first run) its download require network; an air-gapped deployment
 /// pre-bundles the extension. The span/log fields are read out of Marten's jsonb `data` column.
 /// </summary>
-public sealed class DuckDbObservabilityStore(string postgresConnectionString, string schema = "observer") : IObservabilityStore
+public sealed class DuckDbObservabilityStore(string postgresConnectionString, string schema = "observer")
+    : IObservabilityStore, IDisposable
 {
     private readonly string _attach = ToLibpq(postgresConnectionString);
     private readonly string _spans = $"pg.{schema}.mt_doc_ingestedspan";
     private readonly string _logs = $"pg.{schema}.mt_doc_ingestedlog";
+
+    // One long-lived in-process DuckDB connection with the Postgres attach held open, reused across reads
+    // (TOBS-34). The connection is single-threaded, so access is serialized through the gate; with the attach
+    // already established each query is fast, so serializing a handful of parallel reads is cheap. A broken
+    // connection is rebuilt on the next acquire.
+    private readonly SemaphoreSlim _gate = new(1, 1);
+    private DuckDBConnection? _shared;
+
+    private sealed class Lease(SemaphoreSlim gate, DuckDBConnection conn) : IAsyncDisposable
+    {
+        public DuckDBConnection Conn => conn;
+        public ValueTask DisposeAsync()
+        {
+            gate.Release();
+            return ValueTask.CompletedTask;
+        }
+    }
 
     public async Task<LatencyPercentiles> GetLatencyPercentilesAsync(SpanQuery query, CancellationToken ct = default)
     {
@@ -30,7 +49,8 @@ SELECT count(*) AS c,
        quantile_cont(CAST(json_extract_string(data,'$.DurationNano') AS BIGINT), 0.99) AS p99
 FROM {_spans} WHERE {where}";
 
-        await using var conn = await OpenAsync(ct);
+        await using var lease = await OpenAsync(ct);
+        var conn = lease.Conn;
         await using var cmd = Command(conn, sql, bind);
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         if (!await reader.ReadAsync(ct))
@@ -52,7 +72,8 @@ SELECT json_extract_string(data,'$.Name') AS name,
 FROM {_spans} WHERE {where}
 GROUP BY name ORDER BY c DESC, name ASC LIMIT {top}";
 
-        await using var conn = await OpenAsync(ct);
+        await using var lease = await OpenAsync(ct);
+        var conn = lease.Conn;
         await using var cmd = Command(conn, sql, bind);
         var result = new List<OperationStat>();
         await using var reader = await cmd.ExecuteReaderAsync(ct);
@@ -63,7 +84,8 @@ GROUP BY name ORDER BY c DESC, name ASC LIMIT {top}";
 
     public async Task<TraceView> GetTraceAsync(Guid projectId, string traceId, CancellationToken ct = default)
     {
-        await using var conn = await OpenAsync(ct);
+        await using var lease = await OpenAsync(ct);
+        var conn = lease.Conn;
 
         var spans = new List<IngestedSpan>();
         var spanSql = $@"
@@ -72,12 +94,15 @@ SELECT json_extract_string(data,'$.ProjectId') AS project_id,
        json_extract_string(data,'$.VersionId') AS version_id,
        json_extract_string(data,'$.TraceId') AS trace_id,
        json_extract_string(data,'$.SpanId') AS span_id,
+       json_extract_string(data,'$.ParentSpanId') AS parent_span_id,
        json_extract_string(data,'$.Name') AS name,
        CAST(json_extract_string(data,'$.Kind') AS INTEGER) AS kind,
        CAST(json_extract_string(data,'$.StartUnixNano') AS BIGINT) AS start_nano,
        CAST(json_extract_string(data,'$.EndUnixNano') AS BIGINT) AS end_nano,
        CAST(json_extract_string(data,'$.DurationNano') AS BIGINT) AS duration_nano,
        CAST(json_extract_string(data,'$.StatusCode') AS INTEGER) AS status_code,
+       json_extract_string(data,'$.StatusMessage') AS status_message,
+       json_extract(data,'$.Attributes')::VARCHAR AS attributes,
        json_extract_string(data,'$.InstanceId') AS instance_id,
        json_extract_string(data,'$.ReceiptId') AS receipt_id
 FROM {_spans}
@@ -93,12 +118,15 @@ WHERE json_extract_string(data,'$.ProjectId') = $projectId AND json_extract_stri
                     VersionId = Guid.Parse((string)reader["version_id"]),
                     TraceId = (string)reader["trace_id"],
                     SpanId = (string)reader["span_id"],
+                    ParentSpanId = reader["parent_span_id"] as string,
                     Name = (string)reader["name"],
                     Kind = Convert.ToInt32(reader["kind"]),
                     StartUnixNano = Convert.ToInt64(reader["start_nano"]),
                     EndUnixNano = Convert.ToInt64(reader["end_nano"]),
                     DurationNano = Convert.ToInt64(reader["duration_nano"]),
                     StatusCode = Convert.ToInt32(reader["status_code"]),
+                    StatusMessage = reader["status_message"] as string,
+                    Attributes = ParseAttrs(reader["attributes"] as string),
                     InstanceId = (string)reader["instance_id"],
                     ReceiptId = (string)reader["receipt_id"],
                 });
@@ -142,7 +170,8 @@ WHERE json_extract_string(data,'$.ProjectId') = $projectId AND json_extract_stri
 
     public async Task<IReadOnlyList<IngestedLog>> GetLogsAsync(LogQuery query, CancellationToken ct = default)
     {
-        await using var conn = await OpenAsync(ct);
+        await using var lease = await OpenAsync(ct);
+        var conn = lease.Conn;
         var where = "json_extract_string(data,'$.ProjectId') = $projectId"
                   + " AND CAST(json_extract_string(data,'$.TimeUnixNano') AS BIGINT) >= $start"
                   + " AND CAST(json_extract_string(data,'$.TimeUnixNano') AS BIGINT) < $end";
@@ -198,7 +227,8 @@ ORDER BY time_nano DESC LIMIT {(query.Limit <= 0 ? 200 : query.Limit)}";
     public async Task<IssueOccurrence?> GetLatestOccurrenceAsync(Guid projectId, string fingerprint, CancellationToken ct = default)
     {
         const string match = "json_extract_string(data,'$.Fingerprint') = $match";
-        await using var conn = await OpenAsync(ct);
+        await using var lease = await OpenAsync(ct);
+        var conn = lease.Conn;
         var span = await LatestOccurrence(conn, _spans, "StartUnixNano", "span", projectId, match, fingerprint, ct);
         var log = await LatestOccurrence(conn, _logs, "TimeUnixNano", "log", projectId, match, fingerprint, ct);
         if (span is null) return log;
@@ -211,7 +241,8 @@ ORDER BY time_nano DESC LIMIT {(query.Limit <= 0 ? 200 : query.Limit)}";
         // Latest error occurrence (has a fingerprint) carrying this session id.
         const string match = "json_extract_string(data,'$.Attributes.\"tamp.session.id\"') = $match"
                            + " AND json_extract_string(data,'$.Fingerprint') IS NOT NULL";
-        await using var conn = await OpenAsync(ct);
+        await using var lease = await OpenAsync(ct);
+        var conn = lease.Conn;
         var span = await LatestOccurrence(conn, _spans, "StartUnixNano", "span", projectId, match, sessionId, ct);
         var log = await LatestOccurrence(conn, _logs, "TimeUnixNano", "log", projectId, match, sessionId, ct);
         if (span is null) return log;
@@ -243,7 +274,8 @@ SELECT CAST((CAST(json_extract_string(data,'$.StartUnixNano') AS BIGINT) - $star
 FROM {_spans} WHERE {where} GROUP BY b";
         var counts = new long[buckets];
         var errors = new long[buckets];
-        await using var conn = await OpenAsync(ct);
+        await using var lease = await OpenAsync(ct);
+        var conn = lease.Conn;
         await using var cmd = Command(conn, sql, bind.ToArray());
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
@@ -264,7 +296,8 @@ FROM {_spans} WHERE {where} GROUP BY b";
         var width = Math.Max(1, (window.EndUnixNano - window.StartUnixNano) / buckets);
         var byFp = new Dictionary<string, long[]>();
         var sessions = new Dictionary<string, HashSet<string>>();
-        await using var conn = await OpenAsync(ct);
+        await using var lease = await OpenAsync(ct);
+        var conn = lease.Conn;
 
         async Task Bucketize(string table, string timeField)
         {
@@ -320,7 +353,8 @@ WHERE json_extract_string(data,'$.ProjectId') = $projectId
     {
         const string match = "json_extract_string(data,'$.TraceId') = $match"
                            + " AND json_extract_string(data,'$.Fingerprint') IS NOT NULL";
-        await using var conn = await OpenAsync(ct);
+        await using var lease = await OpenAsync(ct);
+        var conn = lease.Conn;
         var span = await LatestOccurrence(conn, _spans, "StartUnixNano", "span", projectId, match, traceId, ct);
         var log = await LatestOccurrence(conn, _logs, "TimeUnixNano", "log", projectId, match, traceId, ct);
         if (span is null) return log;
@@ -375,7 +409,28 @@ ORDER BY at_nano DESC LIMIT 1";
         return (where, bind.ToArray());
     }
 
-    private async Task<DuckDBConnection> OpenAsync(CancellationToken ct)
+    // Acquire the shared connection under the gate, (re)building it if absent or broken. The returned lease
+    // releases the gate on dispose; it never closes the shared connection.
+    private async Task<Lease> OpenAsync(CancellationToken ct)
+    {
+        await _gate.WaitAsync(ct);
+        try
+        {
+            if (_shared is null || _shared.State != ConnectionState.Open)
+            {
+                _shared?.Dispose();
+                _shared = await CreateAsync(ct);
+            }
+            return new Lease(_gate, _shared);
+        }
+        catch
+        {
+            _gate.Release();
+            throw;
+        }
+    }
+
+    private async Task<DuckDBConnection> CreateAsync(CancellationToken ct)
     {
         var conn = new DuckDBConnection("DataSource=:memory:");
         await conn.OpenAsync(ct);
@@ -393,6 +448,12 @@ ORDER BY at_nano DESC LIMIT 1";
         return conn;
     }
 
+    public void Dispose()
+    {
+        _shared?.Dispose();
+        _gate.Dispose();
+    }
+
     private static DuckDBCommand Command(DuckDBConnection conn, string sql, (string Name, object Value)[] bind)
     {
         var cmd = conn.CreateCommand();
@@ -403,6 +464,26 @@ ORDER BY at_nano DESC LIMIT 1";
     }
 
     private static double Dbl(object value) => value is DBNull ? 0 : Convert.ToDouble(value);
+
+    // Parse the span Attributes JSON object (string values) back into a dictionary; tolerant of nulls/non-strings.
+    private static Dictionary<string, string> ParseAttrs(string? json)
+    {
+        var dict = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (string.IsNullOrWhiteSpace(json)) return dict;
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            if (doc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Object)
+                foreach (var p in doc.RootElement.EnumerateObject())
+                    dict[p.Name] = p.Value.ValueKind == System.Text.Json.JsonValueKind.String
+                        ? p.Value.GetString() ?? "" : p.Value.ToString();
+        }
+        catch
+        {
+            // malformed attributes blob: skip
+        }
+        return dict;
+    }
 
     /// <summary>Convert an Npgsql-style connection string to a libpq string for DuckDB's postgres ATTACH.</summary>
     private static string ToLibpq(string npgsql)
