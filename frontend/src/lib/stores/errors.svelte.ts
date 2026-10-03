@@ -1,16 +1,32 @@
-// Frontend error capture: nothing should fail silently (the Logs each_key_duplicate crash span forever with
-// no signal). Everything funnels here: render errors via <svelte:boundary>, data-load failures via the load
-// guard, and anything else (async rejections, bad event handlers, resource loads) via the global hooks below.
-// Captured errors are logged to the console, kept in a short ring, and surfaced in the UI (ErrorToast).
+// The client observability store: one place every failure lands. Capture is automatic (the fetch patch and
+// global hooks in observability.ts feed this); components never have to wire it. This is the Sentry-style
+// contract: install the adapter once, get maximum coverage, no per-call-site code.
+
+export type ErrorKind =
+  | "network"
+  | "timeout"
+  | "server"
+  | "client"
+  | "render"
+  | "script"
+  | "unhandled"
+  | "console";
+
+// Grab the native console methods at module load, before the observability adapter patches them. capture()
+// echoes through these so logging can never re-enter the patched console and loop.
+const nativeError = console.error.bind(console);
 
 export interface AppError {
+  kind: ErrorKind;
   context: string;
   message: string;
   at: string;
+  url?: string;
+  status?: number;
   stack?: string;
 }
 
-function toMessage(error: unknown): string {
+export function errorMessage(error: unknown): string {
   if (error == null) return "Unknown error";
   if (error instanceof Error) return error.message || error.name;
   if (typeof error === "string") return error;
@@ -21,22 +37,33 @@ function toMessage(error: unknown): string {
   }
 }
 
+// Which captured errors get surfaced to the user (toast). 4xx are usually expected control flow the component
+// already renders; server/network/timeout/render/script/unhandled are loud by default.
+function shouldSurface(kind: ErrorKind, status?: number): boolean {
+  if (kind === "client") return (status ?? 0) >= 500;
+  return true;
+}
+
 class ErrorLog {
+  /** Recent captured errors (newest first); the basis for an error log view and future backend forwarding. */
   recent = $state<AppError[]>([]);
+  /** The most recent surfaced error, shown by the toast. */
   last = $state<AppError | null>(null);
 
-  report(context: string, error: unknown): AppError {
-    const entry: AppError = {
-      context,
-      message: toMessage(error),
-      at: new Date().toISOString(),
-      stack: error instanceof Error ? error.stack : undefined,
-    };
-    this.recent = [entry, ...this.recent].slice(0, 20);
-    this.last = entry;
-    // Keep a real console trail; a future step can forward these to the backend as self-telemetry logs.
-    console.error(`[tamp-observer] ${context}:`, error);
-    return entry;
+  capture(entry: Omit<AppError, "at">, opts: { surface?: boolean; echo?: boolean } = {}): AppError {
+    const full: AppError = { ...entry, at: new Date().toISOString() };
+    this.recent = [full, ...this.recent].slice(0, 50);
+    // echo defaults on; the console patch passes echo:false because it re-logs the original args itself.
+    if (opts.echo ?? true) nativeError(`[tamp-observer] ${full.context}: ${full.message}`, full.status ?? "");
+    const surface = opts.surface ?? shouldSurface(full.kind, full.status);
+    if (surface && !this.isDuplicateOfLast(full)) this.last = full;
+    // Transport-agnostic: a pluggable sink can forward `recent` later; no backend coupling here.
+    return full;
+  }
+
+  private isDuplicateOfLast(e: AppError): boolean {
+    const l = this.last;
+    return !!l && l.context === e.context && l.message === e.message;
   }
 
   dismiss(): void {
@@ -45,14 +72,3 @@ class ErrorLog {
 }
 
 export const errors = new ErrorLog();
-
-/** Install process-wide capture for errors that escape component boundaries. Call once at startup. */
-export function installGlobalErrorCapture(): void {
-  window.addEventListener("error", (e) => {
-    // Resource load errors (img/script) also raise "error"; keep them, they are still signal.
-    errors.report("window.error", e.error ?? e.message ?? "Script error");
-  });
-  window.addEventListener("unhandledrejection", (e) => {
-    errors.report("unhandledRejection", e.reason);
-  });
-}

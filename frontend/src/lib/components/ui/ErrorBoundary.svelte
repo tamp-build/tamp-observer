@@ -2,7 +2,7 @@
   // Catches errors thrown while rendering its children (Svelte 5 <svelte:boundary>), reports them to the error
   // store, and shows a real error state with a reset instead of a frozen/blank view.
   import type { Snippet } from "svelte";
-  import { errors } from "../../stores/errors.svelte";
+  import { errors, errorMessage } from "../../stores/errors.svelte";
   import ErrorState from "./ErrorState.svelte";
 
   interface Props {
@@ -11,7 +11,7 @@
   let { children }: Props = $props();
 </script>
 
-<svelte:boundary onerror={(error) => errors.report("render", error)}>
+<svelte:boundary onerror={(error) => errors.capture({ kind: "render", context: "render", message: errorMessage(error), stack: error instanceof Error ? error.stack : undefined })}>
   {@render children()}
 
   {#snippet failed(error, reset)}

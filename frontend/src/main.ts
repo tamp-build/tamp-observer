@@ -1,9 +1,10 @@
 import { mount } from "svelte";
 import App from "./App.svelte";
-import { installGlobalErrorCapture } from "./lib/stores/errors.svelte";
+import { installClientObservability } from "./lib/observability";
 
-// Capture anything that escapes a component boundary (async rejections, event handlers) before the app mounts.
-installGlobalErrorCapture();
+// Install the intrusive client observability adapter once, before anything runs. From here on every fetch/XHR
+// failure, unhandled error and rejection, and resource load failure is captured automatically.
+installClientObservability();
 
 const app = mount(App, { target: document.getElementById("app")! });
 

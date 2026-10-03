@@ -1,32 +1,21 @@
-import { errors } from "./stores/errors.svelte";
+// UX sugar for data loads. Capture/timeout are NOT here anymore: the observability adapter (observability.ts)
+// patches fetch/XHR globally, so every failure is captured and every request is bounded without any call-site
+// code. guard() just maps a response to an error string for an ErrorState, and timeout() is a no-op kept so
+// existing call sites compile; a surface that drops both is still fully covered by the adapter.
 
-// Shared request helpers. A hanging request should surface as an error, not an endless spinner, so every call
-// gets a timeout; and load failures funnel through the error store so nothing fails silently.
-
-export const REQUEST_TIMEOUT_MS = 15000;
-
-/** An options fragment giving an openapi-fetch call a hard timeout (AbortSignal). */
-export function timeout(ms: number = REQUEST_TIMEOUT_MS): { signal: AbortSignal } {
-  return { signal: AbortSignal.timeout(ms) };
+/** No-op: a global default timeout is applied by the observability adapter. Kept for call-site compatibility. */
+export function timeout(): Record<string, never> {
+  return {};
 }
 
 /**
- * Run a data load with uniform failure handling: a thrown error (network, abort/timeout) or an HTTP error both
- * end up reported and returned as a message, and the caller's `finally` still runs. Returns null on success,
- * or an error string to show in an ErrorState.
+ * Map a load to an ErrorState message. Returns null on success, or a short message on failure. Does no
+ * capturing (the adapter already did); this is purely for the component's own error UI.
  */
 export async function guard(
-  context: string,
+  _context: string,
   run: () => Promise<{ ok: boolean; status: number; statusText: string }>,
 ): Promise<string | null> {
-  try {
-    const res = await run();
-    if (res.ok) return null;
-    const msg = `${res.status} ${res.statusText}`.trim();
-    errors.report(context, msg);
-    return msg;
-  } catch (e) {
-    errors.report(context, e);
-    return e instanceof Error ? e.message : String(e);
-  }
+  const res = await run();
+  return res.ok ? null : `${res.status} ${res.statusText}`.trim();
 }
