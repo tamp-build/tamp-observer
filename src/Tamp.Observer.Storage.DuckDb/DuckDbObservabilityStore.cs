@@ -140,6 +140,61 @@ WHERE json_extract_string(data,'$.ProjectId') = $projectId AND json_extract_stri
         return new TraceView(spans, logs);
     }
 
+    public async Task<IReadOnlyList<IngestedLog>> GetLogsAsync(LogQuery query, CancellationToken ct = default)
+    {
+        await using var conn = await OpenAsync(ct);
+        var where = "json_extract_string(data,'$.ProjectId') = $projectId"
+                  + " AND CAST(json_extract_string(data,'$.TimeUnixNano') AS BIGINT) >= $start"
+                  + " AND CAST(json_extract_string(data,'$.TimeUnixNano') AS BIGINT) < $end";
+        var bind = new List<(string, object)>
+        {
+            ("projectId", query.ProjectId.ToString()),
+            ("start", query.Window.StartUnixNano),
+            ("end", query.Window.EndUnixNano),
+        };
+        if (query.ServiceId is Guid serviceId)
+        {
+            where += " AND json_extract_string(data,'$.ServiceId') = $serviceId";
+            bind.Add(("serviceId", serviceId.ToString()));
+        }
+        if (query.MinSeverityNumber is int min)
+        {
+            where += " AND CAST(json_extract_string(data,'$.SeverityNumber') AS INTEGER) >= $minSev";
+            bind.Add(("minSev", min));
+        }
+        var sql = $@"
+SELECT json_extract_string(data,'$.ProjectId') AS project_id,
+       json_extract_string(data,'$.ServiceId') AS service_id,
+       json_extract_string(data,'$.VersionId') AS version_id,
+       CAST(json_extract_string(data,'$.TimeUnixNano') AS BIGINT) AS time_nano,
+       CAST(json_extract_string(data,'$.SeverityNumber') AS INTEGER) AS sev_num,
+       json_extract_string(data,'$.SeverityText') AS sev_text,
+       json_extract_string(data,'$.Body') AS body,
+       json_extract_string(data,'$.TraceId') AS trace_id,
+       json_extract_string(data,'$.InstanceId') AS instance_id,
+       json_extract_string(data,'$.ReceiptId') AS receipt_id
+FROM {_logs} WHERE {where}
+ORDER BY time_nano DESC LIMIT {(query.Limit <= 0 ? 200 : query.Limit)}";
+        var logs = new List<IngestedLog>();
+        await using var cmd = Command(conn, sql, bind.ToArray());
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+            logs.Add(new IngestedLog
+            {
+                ProjectId = Guid.Parse((string)reader["project_id"]),
+                ServiceId = Guid.Parse((string)reader["service_id"]),
+                VersionId = Guid.Parse((string)reader["version_id"]),
+                TimeUnixNano = Convert.ToInt64(reader["time_nano"]),
+                SeverityNumber = Convert.ToInt32(reader["sev_num"]),
+                SeverityText = reader["sev_text"] as string,
+                Body = reader["body"] as string,
+                TraceId = reader["trace_id"] as string,
+                InstanceId = (string)reader["instance_id"],
+                ReceiptId = (string)reader["receipt_id"],
+            });
+        return logs;
+    }
+
     private (string Where, (string Name, object Value)[] Bind) SpanWhere(SpanQuery query)
     {
         var where = "json_extract_string(data,'$.ProjectId') = $projectId"

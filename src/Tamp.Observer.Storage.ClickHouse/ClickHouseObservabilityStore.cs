@@ -99,6 +99,36 @@ FROM {ClickHouseSchema.LogsTable} WHERE project_id = {{projectId:UUID}} AND trac
         return new TraceView(spans, logs);
     }
 
+    public async Task<IReadOnlyList<IngestedLog>> GetLogsAsync(LogQuery query, CancellationToken ct = default)
+    {
+        await using var conn = new ClickHouseConnection(connectionString);
+        await conn.OpenAsync(ct);
+        var where = "project_id = {projectId:UUID} AND time_unix_nano >= {start:Int64} AND time_unix_nano < {end:Int64}";
+        if (query.ServiceId is not null)
+            where += " AND service_id = {serviceId:UUID}";
+        if (query.MinSeverityNumber is not null)
+            where += " AND severity_number >= {minSev:Int32}";
+
+        var logs = new List<IngestedLog>();
+        await using var cmd = (ClickHouseCommand)conn.CreateCommand();
+        cmd.CommandText = $@"
+SELECT project_id, service_id, environment_id, version_id, time_unix_nano, severity_number, severity_text, body,
+       trace_id, span_id, instance_id, receipt_id, received_at
+FROM {ClickHouseSchema.LogsTable} WHERE {where}
+ORDER BY time_unix_nano DESC LIMIT {(query.Limit <= 0 ? 200 : query.Limit)}";
+        cmd.AddParameter("projectId", "UUID", query.ProjectId);
+        cmd.AddParameter("start", "Int64", query.Window.StartUnixNano);
+        cmd.AddParameter("end", "Int64", query.Window.EndUnixNano);
+        if (query.ServiceId is not null)
+            cmd.AddParameter("serviceId", "UUID", query.ServiceId.Value);
+        if (query.MinSeverityNumber is not null)
+            cmd.AddParameter("minSev", "Int32", query.MinSeverityNumber.Value);
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+            logs.Add(MapLog(reader));
+        return logs;
+    }
+
     private static string SpanWhere(SpanQuery query, out bool hasService)
     {
         hasService = query.ServiceId is not null;

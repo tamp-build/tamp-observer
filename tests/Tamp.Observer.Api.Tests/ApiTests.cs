@@ -59,7 +59,7 @@ public sealed class ApiTests
 
         Assert.NotNull(me);
         Assert.Equal("user-123", me!.SubjectId);
-        Assert.True(me.Authenticated);
+        Assert.True(me.Admitted);
     }
 
     [Fact]
@@ -87,21 +87,23 @@ public sealed class ApiTests
     }
 
     [Fact]
-    public async Task Protected_read_is_forbidden_when_the_chokepoint_denies()
+    public async Task Capability_gated_route_is_forbidden_without_the_capability()
     {
-        using var app = new ApiFactory(authorize: false);
+        // A Viewer is admitted but lacks ManageUsers, so the admin-only user list is refused with 403.
+        using var app = new ApiFactory(role: Domain.Role.Viewer);
         using var client = app.CreateClient();
         client.DefaultRequestHeaders.Add(TestAuthHandler.SubjectHeader, "user-123");
 
-        var response = await client.GetAsync(LatencyUrl);
+        var response = await client.GetAsync("/api/users");
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
     [Fact]
-    public async Task Protected_read_returns_data_when_the_chokepoint_allows()
+    public async Task Protected_read_returns_data_when_the_capability_is_held()
     {
-        using var app = new ApiFactory(authorize: true);
+        // The default caller is an admitted Admin, so ViewTraces is held and latency returns.
+        using var app = new ApiFactory();
         using var client = app.CreateClient();
         client.DefaultRequestHeaders.Add(TestAuthHandler.SubjectHeader, "user-123");
 

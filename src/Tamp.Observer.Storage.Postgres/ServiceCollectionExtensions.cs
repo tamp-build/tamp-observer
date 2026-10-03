@@ -30,6 +30,9 @@ public static class ServiceCollectionExtensions
         // The admission list (ADR 0013): who is pre-registered to use the instance at all.
         services.AddSingleton<IAllowedIdentityStore, MartenAllowedIdentityStore>();
 
+        // Issue read/write (ADR 0015); Postgres-canonical, not a per-engine translator.
+        services.AddSingleton<IIssueStore, MartenIssueStore>();
+
         // Symbol artifact store (ADR 0017); the symbolicator itself lives in the Symbolication assembly.
         services.AddSingleton<ISymbolArtifactStore, MartenSymbolArtifactStore>();
 

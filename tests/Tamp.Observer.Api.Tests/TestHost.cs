@@ -55,29 +55,40 @@ public sealed class FakeObservabilityStore : IObservabilityStore
 
     public Task<TraceView> GetTraceAsync(Guid projectId, string traceId, CancellationToken ct = default) =>
         Task.FromResult(new TraceView([], []));
+
+    public Task<IReadOnlyList<IngestedLog>> GetLogsAsync(LogQuery query, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<IngestedLog>>([]);
 }
 
-/// <summary>A controllable chokepoint so allow/deny maps to HTTP status can be asserted directly.</summary>
-public sealed class FakeAuthorizationService(bool allow) : IAuthorizationService
-{
-    public Task<bool> CheckAsync(string subjectId, Capability capability, ResourceScope target, CancellationToken ct = default) =>
-        Task.FromResult(allow);
-}
-
-/// <summary>A controllable admission list so allowlisted/not maps to HTTP status can be asserted directly.</summary>
-public sealed class FakeAllowedIdentityStore(bool allow) : IAllowedIdentityStore
+/// <summary>A controllable admission list: the role drives the caller's capabilities, so allow/deny and
+/// capability gating map to HTTP status can be asserted directly.</summary>
+public sealed class FakeAllowedIdentityStore(bool allow, Role role = Role.Admin) : IAllowedIdentityStore
 {
     public Task<AllowedIdentity?> FindAsync(string email, CancellationToken ct = default) =>
-        Task.FromResult(allow ? new AllowedIdentity { Email = email, Role = Role.Admin } : null);
+        Task.FromResult(allow ? new AllowedIdentity { Email = email, Role = role } : null);
 
-    public Task AddAsync(string email, Role role, CancellationToken ct = default) => Task.CompletedTask;
+    public Task AddAsync(string email, Role r, CancellationToken ct = default) => Task.CompletedTask;
 
     public Task<IReadOnlyList<AllowedIdentity>> ListAsync(CancellationToken ct = default) =>
         Task.FromResult<IReadOnlyList<AllowedIdentity>>([]);
 }
 
-/// <summary>Boots the real API pipeline with the external IdP and the stores swapped for test doubles.</summary>
-public sealed class ApiFactory(bool authorize = true, bool allowlisted = true) : WebApplicationFactory<Program>
+/// <summary>An empty issue store so issue endpoints resolve without a database.</summary>
+public sealed class FakeIssueStore : IIssueStore
+{
+    public Task<IReadOnlyList<Issue>> ListAsync(Guid projectId, IssueStatus? status = null, Guid? serviceId = null, int limit = 100, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<Issue>>([]);
+
+    public Task<Issue?> GetAsync(Guid projectId, Guid issueId, CancellationToken ct = default) =>
+        Task.FromResult<Issue?>(null);
+
+    public Task<bool> SetStatusAsync(Guid projectId, Guid issueId, IssueStatus status, long? resolvedInVersionSequence = null, CancellationToken ct = default) =>
+        Task.FromResult(false);
+}
+
+/// <summary>Boots the real API pipeline with the external IdP and the stores swapped for test doubles. The
+/// caller's <paramref name="role"/> sets their capabilities (when admitted).</summary>
+public sealed class ApiFactory(bool allowlisted = true, Role role = Role.Admin) : WebApplicationFactory<Program>
 {
     protected override void ConfigureWebHost(Microsoft.AspNetCore.Hosting.IWebHostBuilder builder)
     {
@@ -89,8 +100,8 @@ public sealed class ApiFactory(bool authorize = true, bool allowlisted = true) :
                 .AddScheme<AuthenticationSchemeOptions, TestAuthHandler>(TestAuthHandler.SchemeName, _ => { });
 
             services.AddSingleton<IObservabilityStore>(new FakeObservabilityStore());
-            services.AddSingleton<IAuthorizationService>(new FakeAuthorizationService(authorize));
-            services.AddSingleton<IAllowedIdentityStore>(new FakeAllowedIdentityStore(allowlisted));
+            services.AddSingleton<IAllowedIdentityStore>(new FakeAllowedIdentityStore(allowlisted, role));
+            services.AddSingleton<IIssueStore>(new FakeIssueStore());
         });
     }
 }

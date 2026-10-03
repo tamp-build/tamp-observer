@@ -12,7 +12,6 @@ using Tamp.Observer.Storage.Abstractions;
 using Tamp.Observer.Storage.ClickHouse;
 using Tamp.Observer.Storage.DuckDb;
 using Tamp.Observer.Storage.Postgres;
-using IAuthorizationService = Tamp.Observer.Domain.IAuthorizationService;
 
 // The read-facing HTTP API (ADR 0014): a plain .NET OpenAPI surface that a generated typed TS client (the
 // Svelte frontend) consumes. Every read routes through the RBAC chokepoint (ADR 0013). Floor config is env
@@ -193,12 +192,101 @@ app.MapPost("/ingest/replay", async (
 
 var api = app.MapGroup("/api").RequireAuthorization(AllowlistedHandler.PolicyName);
 
-// Whoami: proves external authN end to end without touching the store. No capability needed beyond being
-// authenticated; it reports the subject the IdP asserted.
-api.MapGet("/me", (HttpContext http) =>
-        Results.Ok(new MeResponse(http.User.SubjectId() ?? string.Empty, true)))
+// Whoami + access: who you are and what you can do. Drives the UI's capability gating (ADR 0013) so the
+// frontend never shows an action that would 403.
+api.MapGet("/me", async (HttpContext http, IAllowedIdentityStore allow, CancellationToken ct) =>
+    {
+        var (role, capabilities) = await HttpAuthorization.AccessAsync(http, allow, ct);
+        return Results.Ok(new MeResponse(
+            http.User.SubjectId() ?? string.Empty,
+            http.User.Email() ?? string.Empty,
+            role is not null,
+            role?.ToString(),
+            capabilities.Select(c => c.ToString()).OrderBy(x => x).ToArray()));
+    })
     .WithName("Me")
     .Produces<MeResponse>();
+
+// Projects the viewer can access (project switcher). Instance-role MVP: an admitted user sees all projects;
+// per-project scoping is future work on the same seam.
+api.MapGet("/projects", async (IDocumentStore docs, CancellationToken ct) =>
+    {
+        await using var session = docs.QuerySession();
+        var projects = await session.Query<Project>().OrderBy(p => p.Name).ToListAsync(ct);
+        return projects.Select(p => new ProjectSummary(p.Id, p.Key, p.Name)).ToList();
+    })
+    .WithName("ListProjects")
+    .Produces<IReadOnlyList<ProjectSummary>>();
+
+// Enforcement posture (the mode badge + explainer, ADR 0002).
+api.MapGet("/enforcement", async (IDocumentStore docs, CancellationToken ct) =>
+    {
+        await using var session = docs.QuerySession();
+        var settings = await session.LoadAsync<InstanceSettings>(InstanceSettings.SingletonId, ct) ?? new InstanceSettings();
+        return new EnforcementView(settings.EnforcementMode.ToString(), settings.Locked);
+    })
+    .WithName("Enforcement")
+    .Produces<EnforcementView>();
+
+// Notification channel catalog + policy gating (ADR 0016). Enablement/config is managed on the evaluator today;
+// this reports the supported channels, their reachback nature, and whether the current mode permits them.
+api.MapGet("/channels", async (HttpContext http, IAllowedIdentityStore allow, IDocumentStore docs, CancellationToken ct) =>
+    {
+        var denied = await HttpAuthorization.RequireAsync(http, allow, Capability.AdministerInstance, ct);
+        if (denied is not null)
+            return denied;
+        await using var session = docs.QuerySession();
+        var settings = await session.LoadAsync<InstanceSettings>(InstanceSettings.SingletonId, ct) ?? new InstanceSettings();
+        var enforcing = settings.EnforcementMode == EnforcementMode.Enforcing;
+        ChannelView Channel(string type, bool reachback) => new(type, reachback, !(reachback && enforcing));
+        return Results.Ok(new[] { Channel("smtp", false), Channel("telegram", true), Channel("slack", true) });
+    })
+    .WithName("Channels")
+    .Produces<ChannelView[]>()
+    .Produces(StatusCodes.Status403Forbidden);
+
+// Admission list (Users & roles). ManageUsers only.
+api.MapGet("/users", async (HttpContext http, IAllowedIdentityStore allow, CancellationToken ct) =>
+    {
+        var denied = await HttpAuthorization.RequireAsync(http, allow, Capability.ManageUsers, ct);
+        if (denied is not null)
+            return denied;
+        var users = await allow.ListAsync(ct);
+        return Results.Ok(users.Select(u => new UserView(u.Email, u.Role.ToString(), u.CreatedAtUtc)).ToList());
+    })
+    .WithName("ListUsers")
+    .Produces<IReadOnlyList<UserView>>()
+    .Produces(StatusCodes.Status403Forbidden);
+
+api.MapPost("/users/allow", async (AllowUserRequest body, HttpContext http, IAllowedIdentityStore allow, CancellationToken ct) =>
+    {
+        var denied = await HttpAuthorization.RequireAsync(http, allow, Capability.ManageUsers, ct);
+        if (denied is not null)
+            return denied;
+        if (string.IsNullOrWhiteSpace(body.Email))
+            return Results.BadRequest("email required");
+        var role = Enum.TryParse<Role>(body.Role, ignoreCase: true, out var r) ? r : Role.Viewer;
+        await allow.AddAsync(body.Email, role, ct);
+        return Results.Ok(new UserView(AllowedIdentity.Normalize(body.Email), role.ToString(), DateTimeOffset.UtcNow));
+    })
+    .WithName("AllowUser")
+    .Produces<UserView>()
+    .Produces(StatusCodes.Status403Forbidden);
+
+// Storage/health (what tiers this instance runs). AdministerInstance only. The API knows its read store and
+// whether ClickHouse is configured; the write-side tiers live on the evaluator.
+api.MapGet("/health/storage", async (HttpContext http, IAllowedIdentityStore allow, CancellationToken ct) =>
+    {
+        var denied = await HttpAuthorization.RequireAsync(http, allow, Capability.AdministerInstance, ct);
+        if (denied is not null)
+            return denied;
+        var readStore = Environment.GetEnvironmentVariable("OBSERVER_STORE") ?? "postgres";
+        var clickHouse = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("OBSERVER_CLICKHOUSE"));
+        return Results.Ok(new StorageHealth("postgres", readStore, clickHouse));
+    })
+    .WithName("StorageHealth")
+    .Produces<StorageHealth>()
+    .Produces(StatusCodes.Status403Forbidden);
 
 // Latency percentiles for a project window (read interface, ADR 0006). Guarded by ViewTraces at the project
 // scope through the chokepoint (ADR 0013).
@@ -208,12 +296,11 @@ api.MapGet("/projects/{projectId:guid}/latency", async (
         long end,
         Guid? service,
         HttpContext http,
-        IAuthorizationService authz,
+        IAllowedIdentityStore allow,
         IObservabilityStore store,
         CancellationToken ct) =>
     {
-        var denied = await HttpAuthorization.RequireAsync(
-            http, authz, Capability.ViewTraces, ResourceScope.ForProject(projectId), ct);
+        var denied = await HttpAuthorization.RequireAsync(http, allow, Capability.ViewTraces, ct);
         if (denied is not null)
             return denied;
 
@@ -234,12 +321,11 @@ api.MapGet("/projects/{projectId:guid}/operations", async (
         Guid? service,
         int limit,
         HttpContext http,
-        IAuthorizationService authz,
+        IAllowedIdentityStore allow,
         IObservabilityStore store,
         CancellationToken ct) =>
     {
-        var denied = await HttpAuthorization.RequireAsync(
-            http, authz, Capability.ViewTraces, ResourceScope.ForProject(projectId), ct);
+        var denied = await HttpAuthorization.RequireAsync(http, allow, Capability.ViewTraces, ct);
         if (denied is not null)
             return denied;
 
@@ -257,12 +343,11 @@ api.MapGet("/projects/{projectId:guid}/traces/{traceId}", async (
         Guid projectId,
         string traceId,
         HttpContext http,
-        IAuthorizationService authz,
+        IAllowedIdentityStore allow,
         IObservabilityStore store,
         CancellationToken ct) =>
     {
-        var denied = await HttpAuthorization.RequireAsync(
-            http, authz, Capability.ViewTraces, ResourceScope.ForProject(projectId), ct);
+        var denied = await HttpAuthorization.RequireAsync(http, allow, Capability.ViewTraces, ct);
         if (denied is not null)
             return denied;
 
@@ -279,12 +364,11 @@ api.MapGet("/projects/{projectId:guid}/sessions", async (
         Guid projectId,
         int? limit,
         HttpContext http,
-        IAuthorizationService authz,
+        IAllowedIdentityStore allow,
         IReplaySessionStore sessions,
         CancellationToken ct) =>
     {
-        var denied = await HttpAuthorization.RequireAsync(
-            http, authz, Capability.ViewReplay, ResourceScope.ForProject(projectId), ct);
+        var denied = await HttpAuthorization.RequireAsync(http, allow, Capability.ViewReplay, ct);
         if (denied is not null)
             return denied;
 
@@ -300,12 +384,11 @@ api.MapGet("/projects/{projectId:guid}/sessions/{sessionId}/events", async (
         Guid projectId,
         string sessionId,
         HttpContext http,
-        IAuthorizationService authz,
+        IAllowedIdentityStore allow,
         IReplayBlobStore blobs,
         CancellationToken ct) =>
     {
-        var denied = await HttpAuthorization.RequireAsync(
-            http, authz, Capability.ViewReplay, ResourceScope.ForProject(projectId), ct);
+        var denied = await HttpAuthorization.RequireAsync(http, allow, Capability.ViewReplay, ct);
         if (denied is not null)
             return denied;
 
@@ -328,14 +411,130 @@ api.MapGet("/projects/{projectId:guid}/sessions/{sessionId}/events", async (
     .Produces(StatusCodes.Status401Unauthorized)
     .Produces(StatusCodes.Status403Forbidden);
 
+// Issues: the error-grouping surface (ADR 0015). ViewErrors.
+api.MapGet("/projects/{projectId:guid}/issues", async (
+        Guid projectId, string? status, Guid? service, int? limit,
+        HttpContext http, IAllowedIdentityStore allow, IIssueStore issues, CancellationToken ct) =>
+    {
+        var denied = await HttpAuthorization.RequireAsync(http, allow, Capability.ViewErrors, ct);
+        if (denied is not null)
+            return denied;
+        IssueStatus? st = Enum.TryParse<IssueStatus>(status, ignoreCase: true, out var parsed) ? parsed : null;
+        var list = await issues.ListAsync(projectId, st, service, limit ?? 100, ct);
+        return Results.Ok(list);
+    })
+    .WithName("ListIssues")
+    .Produces<IReadOnlyList<Issue>>()
+    .Produces(StatusCodes.Status403Forbidden);
+
+api.MapGet("/projects/{projectId:guid}/issues/{issueId:guid}", async (
+        Guid projectId, Guid issueId,
+        HttpContext http, IAllowedIdentityStore allow, IIssueStore issues, CancellationToken ct) =>
+    {
+        var denied = await HttpAuthorization.RequireAsync(http, allow, Capability.ViewErrors, ct);
+        if (denied is not null)
+            return denied;
+        var issue = await issues.GetAsync(projectId, issueId, ct);
+        return issue is null ? Results.NotFound() : Results.Ok(issue);
+    })
+    .WithName("GetIssue")
+    .Produces<Issue>()
+    .Produces(StatusCodes.Status404NotFound)
+    .Produces(StatusCodes.Status403Forbidden);
+
+// Issue triage (resolve / reopen / ignore). Editor+ (EditCapturePolicy is the Editor-tier verb today).
+api.MapPost("/projects/{projectId:guid}/issues/{issueId:guid}/status", async (
+        Guid projectId, Guid issueId, IssueStatusRequest body,
+        HttpContext http, IAllowedIdentityStore allow, IIssueStore issues, CancellationToken ct) =>
+    {
+        var denied = await HttpAuthorization.RequireAsync(http, allow, Capability.EditCapturePolicy, ct);
+        if (denied is not null)
+            return denied;
+        if (!Enum.TryParse<IssueStatus>(body.Status, ignoreCase: true, out var st))
+            return Results.BadRequest("status must be one of: unresolved, resolved, ignored, regressed");
+        var ok = await issues.SetStatusAsync(projectId, issueId, st, body.ResolvedInVersionSequence, ct);
+        return ok ? Results.NoContent() : Results.NotFound();
+    })
+    .WithName("SetIssueStatus")
+    .Produces(StatusCodes.Status204NoContent)
+    .Produces(StatusCodes.Status404NotFound)
+    .Produces(StatusCodes.Status403Forbidden);
+
+// Logs explorer (read interface, ADR 0006). ViewLogs.
+api.MapGet("/projects/{projectId:guid}/logs", async (
+        Guid projectId, long start, long end, Guid? service, int? minSeverity, int? limit,
+        HttpContext http, IAllowedIdentityStore allow, IObservabilityStore store, CancellationToken ct) =>
+    {
+        var denied = await HttpAuthorization.RequireAsync(http, allow, Capability.ViewLogs, ct);
+        if (denied is not null)
+            return denied;
+        var logs = await store.GetLogsAsync(
+            new LogQuery(projectId, new TimeWindow(start, end), service, minSeverity, limit ?? 200), ct);
+        return Results.Ok(logs);
+    })
+    .WithName("ProjectLogs")
+    .Produces<IReadOnlyList<IngestedLog>>()
+    .Produces(StatusCodes.Status403Forbidden);
+
+// Alerts (ADR 0016). ViewErrors. Built-in rules fire on new/regressed issues today; spike/threshold/heartbeat
+// rules and persisted history are future work, so history is empty for now.
+api.MapGet("/projects/{projectId:guid}/alerts", async (
+        Guid projectId, HttpContext http, IAllowedIdentityStore allow, CancellationToken ct) =>
+    {
+        var denied = await HttpAuthorization.RequireAsync(http, allow, Capability.ViewErrors, ct);
+        if (denied is not null)
+            return denied;
+        var rules = new[]
+        {
+            new AlertRuleView("new-issue", "New issue", true),
+            new AlertRuleView("regressed-issue", "Regressed issue", true),
+        };
+        return Results.Ok(new AlertsView(rules, Array.Empty<AlertEventView>()));
+    })
+    .WithName("ProjectAlerts")
+    .Produces<AlertsView>()
+    .Produces(StatusCodes.Status403Forbidden);
+
 // Client-side routes (deep links into the SPA) fall back to index.html. API/health/openapi routes are
 // already matched above, so this only catches unmatched GETs; it is a no-op when wwwroot is absent.
 app.MapFallbackToFile("index.html");
 
 await app.RunAsync();
 
-/// <summary>The authenticated subject, as asserted by the external IdP (ADR 0013).</summary>
-public sealed record MeResponse(string SubjectId, bool Authenticated);
+/// <summary>Who the caller is and what they can do (ADR 0013): the subject + email the IdP asserted, whether
+/// they are admitted, their role, and the capability verbs that drive the UI's gating.</summary>
+public sealed record MeResponse(
+    string SubjectId, string Email, bool Admitted, string? Role, IReadOnlyList<string> Capabilities);
+
+/// <summary>A project in the switcher.</summary>
+public sealed record ProjectSummary(Guid Id, string Key, string Name);
+
+/// <summary>The instance enforcement posture (ADR 0002).</summary>
+public sealed record EnforcementView(string Mode, bool Locked);
+
+/// <summary>A notification channel's nature and whether the current mode permits it (ADR 0016).</summary>
+public sealed record ChannelView(string Type, bool Reachback, bool AllowedUnderMode);
+
+/// <summary>A pre-registered identity (ADR 0013).</summary>
+public sealed record UserView(string Email, string Role, DateTimeOffset CreatedAtUtc);
+
+/// <summary>Pre-register an email with a role.</summary>
+public sealed record AllowUserRequest(string Email, string? Role);
+
+/// <summary>Which storage tiers this instance runs (ADR 0005).</summary>
+public sealed record StorageHealth(string WriteStore, string ReadStore, bool ClickHouseConfigured);
+
+/// <summary>Set an issue's status (ADR 0015).</summary>
+public sealed record IssueStatusRequest(string Status, long? ResolvedInVersionSequence);
+
+/// <summary>An alert rule (ADR 0016).</summary>
+public sealed record AlertRuleView(string Id, string Name, bool Enabled);
+
+/// <summary>A fired alert (history; not persisted yet).</summary>
+public sealed record AlertEventView(string Kind, Guid IssueId, string Title, DateTimeOffset AtUtc);
+
+/// <summary>Alert rules + recent history for a project.</summary>
+public sealed record AlertsView(IReadOnlyList<AlertRuleView> Rules, IReadOnlyList<AlertEventView> History);
 
 /// <summary>Runtime OIDC settings the SPA fetches at startup (ADR 0014), so the image is deployment-portable.</summary>
 public sealed record SpaConfig(string OidcAuthority, string OidcAudience, string OidcClientId);

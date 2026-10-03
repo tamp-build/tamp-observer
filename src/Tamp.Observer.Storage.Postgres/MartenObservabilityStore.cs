@@ -59,6 +59,20 @@ public sealed class MartenObservabilityStore(IDocumentStore store) : IObservabil
         return new TraceView(spans, logs);
     }
 
+    public async Task<IReadOnlyList<IngestedLog>> GetLogsAsync(LogQuery query, CancellationToken ct = default)
+    {
+        await using var session = _store.QuerySession();
+        var q = session.Query<IngestedLog>()
+            .Where(l => l.ProjectId == query.ProjectId
+                && l.TimeUnixNano >= query.Window.StartUnixNano
+                && l.TimeUnixNano < query.Window.EndUnixNano);
+        if (query.ServiceId is Guid serviceId)
+            q = q.Where(l => l.ServiceId == serviceId);
+        if (query.MinSeverityNumber is int min)
+            q = q.Where(l => l.SeverityNumber >= min);
+        return await q.OrderByDescending(l => l.TimeUnixNano).Take(query.Limit <= 0 ? 200 : query.Limit).ToListAsync(ct);
+    }
+
     private static IQueryable<IngestedSpan> WindowedSpans(IQuerySession session, SpanQuery query)
     {
         var q = session.Query<IngestedSpan>()
