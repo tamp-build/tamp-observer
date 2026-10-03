@@ -1,0 +1,273 @@
+/* Global base + the shared classes ported from the design mockups (README section 1: .btn/.pill/.tag/.panel/
+   .nav/.seg/.field are identical across pages, treated as the component CSS). Everything is tokenized against
+   tokens.css so the single visual system lives in one place. Offline-safe: system fonts only, no CDNs. */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: var(--fs-base);
+  line-height: var(--lh);
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+a:hover {
+  color: var(--accent-hover);
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-size: var(--fs-mono);
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Section label (11px uppercase, tracked, muted). */
+.h {
+  font-size: var(--fs-label);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 600;
+  margin: 0;
+}
+
+h1 {
+  font-size: var(--fs-h1);
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+
+/* Buttons. Primary = accent; disabled = muted text + dashed border (README section 3). */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gap-2);
+  min-height: var(--ctl-h);
+  padding: 0 var(--gap-3);
+  border: 1px solid var(--border-ctl);
+  border-radius: var(--r-ctl);
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+.btn.pri {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
+}
+.btn.pri:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+.btn:disabled {
+  color: var(--disabled);
+  border-style: dashed;
+  background: transparent;
+  cursor: not-allowed;
+}
+
+/* Status pills. */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: var(--r-pill);
+  font-size: var(--fs-label);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.pill.regr {
+  background: var(--regr-bg);
+  color: var(--regr-fg);
+}
+.pill.unres {
+  background: var(--unres-bg);
+  color: var(--unres-fg);
+}
+.pill.res {
+  background: var(--res-bg);
+  color: var(--res-fg);
+}
+.pill.muted-pill {
+  background: var(--surface-2);
+  color: var(--muted);
+}
+.pill.enf {
+  background: var(--enf-bg);
+  color: var(--enf-fg);
+  border: 1px solid var(--enf-border);
+}
+.pill.mask {
+  background: var(--mask-bg);
+  color: var(--mask-fg);
+  border: 1px solid var(--mask-border);
+}
+
+/* Inline tag chip. */
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gap-1);
+  padding: 1px 6px;
+  border: 1px solid var(--divider);
+  border-radius: var(--r-tag);
+  background: var(--surface);
+  color: var(--text-2);
+  font-size: var(--fs-label);
+  white-space: nowrap;
+}
+
+/* Count badge (nav item counts). */
+.ct {
+  padding: 0 6px;
+  border-radius: var(--r-pill);
+  background: var(--surface-sel);
+  font-size: var(--fs-label);
+  color: var(--text-2);
+  font-weight: 500;
+}
+.ct.alert {
+  color: var(--regr-fg);
+}
+
+/* Panel. */
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-panel);
+}
+
+/* Segmented control. */
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--border-ctl);
+  border-radius: var(--r-ctl);
+  overflow: hidden;
+}
+.seg button {
+  min-height: 30px;
+  padding: 0 var(--gap-3);
+  border: 0;
+  background: var(--surface);
+  color: var(--text-nav);
+  font: inherit;
+  cursor: pointer;
+}
+.seg button + button {
+  border-left: 1px solid var(--border-ctl);
+}
+.seg button.on {
+  background: var(--surface-sel);
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* Keyboard hint. */
+.kbd {
+  border: 1px solid var(--border-ctl);
+  border-bottom-width: 2px;
+  border-radius: var(--r-tag);
+  padding: 0 5px;
+  font-size: var(--fs-label);
+  color: var(--muted);
+}
+
+/* Input field shell. */
+.field {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-2);
+  min-height: var(--ctl-h);
+  padding: 0 10px;
+  border: 1px solid var(--border-ctl);
+  border-radius: var(--r-ctl);
+  background: var(--surface);
+  color: var(--muted);
+}
+.field input,
+.field select {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: 0;
+  outline: 0;
+  color: var(--text);
+  font: inherit;
+}
+
+/* Avatar. */
+.av {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--surface-sel);
+  color: var(--text);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+/* Underline tabs. */
+.tab {
+  min-height: 36px;
+  padding: 0 var(--gap-3);
+  border: 0;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gap-2);
+}
+.tab.on {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+
+/* Horizontal-scroll box for wide tables; the page itself never scrolls sideways (README section 3). */
+.scroll-x {
+  overflow-x: auto;
+}
+
+@media (max-width: 520px) {
+  body {
+    font-size: 14px;
+  }
+}
