@@ -227,10 +227,10 @@
               {#if label === "Resolved" && issue.resolvedInVersionSequence != null}<span class="n-res">resolved in v{int64(issue.resolvedInVersionSequence)}</span>{/if}
             </div>
           </div>
-          <span class="spark"><Sparkline values={seriesMap[issue.fingerprint]?.buckets?.map((n) => int64(n)) ?? []} color={sparkColor[label]} /></span>
+          <span class="spark mob-hide"><Sparkline values={seriesMap[issue.fingerprint]?.buckets?.map((n) => int64(n)) ?? []} color={sparkColor[label]} /></span>
           <span class="num mono">{int64(issue.count).toLocaleString()}</span>
-          <span class="num mono" class:muted={!seriesMap[issue.fingerprint]?.sessions}>{seriesMap[issue.fingerprint]?.sessions ?? "—"}</span>
-          <span class="seen"><span>{timeAgo(issue.lastSeenAtUtc)}</span><span class="muted tiny">{timeAgo(issue.firstSeenAtUtc)}</span></span>
+          <span class="num mono mob-hide" class:muted={!seriesMap[issue.fingerprint]?.sessions}>{seriesMap[issue.fingerprint]?.sessions ?? "—"}</span>
+          <span class="seen mob-hide"><span>{timeAgo(issue.lastSeenAtUtc)}</span><span class="muted tiny">{timeAgo(issue.firstSeenAtUtc)}</span></span>
           <span class="mono vers">{int64(issue.firstSeenVersionSequence)} → {int64(issue.lastSeenVersionSequence)}</span>
         </a>
       {/each}
@@ -269,4 +269,11 @@
   .tiny { font-size: 11px; }
   .vers { color: var(--text-2); }
   .foot { margin: 0; padding: 10px 14px; border-top: 1px solid var(--divider); font-size: 12px; }
+  @media (max-width: 640px) {
+    .grid-wrap { min-width: 0; }
+    .tr.th { display: none; }
+    .tr { grid-template-columns: 20px minmax(0, 1fr) 70px; gap: 8px; align-items: start; }
+    .mob-hide { display: none; }
+    .vers { grid-column: 2 / 4; }
+  }
 </style>

@@ -6,6 +6,7 @@
   import TopBar from "./TopBar.svelte";
   import SideNav from "./SideNav.svelte";
   import DemoBanner from "./DemoBanner.svelte";
+  import MobileTabBar from "./MobileTabBar.svelte";
   import Icon from "../ui/Icon.svelte";
 
   interface Props {
@@ -44,6 +45,10 @@
       {@render children()}
     </main>
   </div>
+
+  {#if projectId}
+    <MobileTabBar {projectId} />
+  {/if}
 </div>
 
 <style>
@@ -89,6 +94,11 @@
     }
     .side.open {
       display: block;
+    }
+  }
+  @media (max-width: 640px) {
+    .content {
+      padding-bottom: 64px; /* clear the fixed mobile tab bar */
     }
   }
 </style>

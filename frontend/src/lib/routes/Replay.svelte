@@ -27,6 +27,17 @@
   let loading = $state(true);
   let error = $state<string | null>(null);
 
+  const sessionDurationMs = $derived.by(() => {
+    const e = events as Array<{ timestamp?: number }> | null;
+    if (!e || e.length < 2) return 0;
+    const ts = e.map((x) => x.timestamp).filter((n): n is number => typeof n === "number");
+    return ts.length ? Math.max(...ts) - Math.min(...ts) : 0;
+  });
+  const sessionStartUrl = $derived.by(() => {
+    const e = events as Array<{ type?: number; data?: { href?: string } }> | null;
+    return e?.find((x) => x?.type === 4)?.data?.href ?? "";
+  });
+
   async function loadList() {
     loading = true;
     error = null;
@@ -70,6 +81,16 @@
     <span>{sessionId}</span>
   </nav>
 
+  <section class="panel session-head">
+    <div class="sh-main">
+      <h1 class="sid mono">{sessionId}</h1>
+      {#if events}<span class="muted small">{events.length} events{#if sessionDurationMs} · {(sessionDurationMs / 1000).toFixed(0)}s{/if}{#if sessionStartUrl} · {sessionStartUrl}{/if}</span>{/if}
+    </div>
+    <div class="sh-pills">
+      <span class="pill mask"><Icon name="lock" size={11} />Masking: strict</span>
+    </div>
+  </section>
+
   <section class="panel walk-panel">
     <h2 class="h">Correlation walk</h2>
     <CorrelationWalk {projectId} current="replay" {sessionId} />
@@ -81,7 +102,7 @@
     {:else if error}
       <ErrorState message={`Could not load session (${error}).`} onretry={() => loadSession(sessionId)} />
     {:else if events}
-      <div class="overlay-note muted">Reconstructed DOM, not video. Masking as captured.</div>
+      <div class="overlay-note muted">Reconstructed DOM, not video. Inputs masked at capture (irreversible).</div>
       <ReplayPlayer {events} />
     {/if}
   </section>
@@ -123,6 +144,18 @@
     flex-direction: column;
     gap: var(--gap-3);
   }
+  .session-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--gap-3);
+    padding: var(--gap-3) var(--gap-4);
+  }
+  .sh-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .sid { font-size: 15px; margin: 0; word-break: break-all; }
+  .small { font-size: 12px; }
+  .sh-pills { display: flex; gap: var(--gap-2); }
   .player {
     padding: var(--gap-3);
     display: flex;
