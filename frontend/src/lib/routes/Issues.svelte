@@ -42,8 +42,75 @@
   let seriesMap = $state<Record<string, Series>>({});
   let loading = $state(true);
   let error = $state<string | null>(null);
+  let query = $state("");
+  let sortBy = $state<"last" | "events" | "first">("last");
+  let selected = $state<Set<string>>(new Set());
+  let bulkBusy = $state(false);
   const canEdit = $derived(session.can("EditCapturePolicy", { project: projectId }));
   const projectName = $derived(instance.project(projectId)?.name ?? "Project");
+
+  const SORT_LABEL: Record<string, string> = { last: "last seen", events: "events", first: "first seen" };
+
+  // Client-side query syntax: is:<status> switches tab, service:<name> filters by service, the rest is free text
+  // over error type / title / id.
+  const shown = $derived.by(() => {
+    const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    let svc: string | null = null;
+    const free: string[] = [];
+    for (const t of terms) {
+      if (t.startsWith("service:")) svc = t.slice(8);
+      else if (t.startsWith("is:")) { /* applied to the tab on submit */ }
+      else free.push(t);
+    }
+    let rows = issues;
+    if (svc && svc !== "any") rows = rows.filter((i) => services.name(projectId, i.serviceId).toLowerCase().includes(svc));
+    if (free.length) rows = rows.filter((i) => {
+      const hay = `${i.errorType ?? ""} ${i.title} ${i.id ?? ""}`.toLowerCase();
+      return free.every((f) => hay.includes(f));
+    });
+    const by = sortBy;
+    return [...rows].sort((a, b) => {
+      if (by === "events") return int64(b.count) - int64(a.count);
+      const key = by === "first" ? "firstSeenAtUtc" : "lastSeenAtUtc";
+      return new Date(b[key] ?? 0).getTime() - new Date(a[key] ?? 0).getTime();
+    });
+  });
+
+  function applyQuery(e: Event) {
+    e.preventDefault();
+    const m = query.toLowerCase().match(/is:(unresolved|regressed|resolved|muted|ignored)/);
+    if (m) {
+      const map: Record<string, string> = { unresolved: "Unresolved", regressed: "Regressed", resolved: "Resolved", muted: "Muted", ignored: "Muted" };
+      const tab = map[m[1]];
+      if (tab && tab !== activeTab) setTab(tab);
+    }
+  }
+
+  function cycleSort() {
+    sortBy = sortBy === "last" ? "events" : sortBy === "events" ? "first" : "last";
+  }
+
+  function toggle(id: string | undefined) {
+    if (!id) return;
+    const next = new Set(selected);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    selected = next;
+  }
+
+  async function applyBulk(status: string) {
+    if (!canEdit || selected.size === 0) return;
+    bulkBusy = true;
+    for (const id of selected) {
+      await api.POST("/api/projects/{projectId}/issues/{issueId}/status", {
+        params: { path: { projectId, issueId: id } },
+        body: { status, resolvedInVersionSequence: null },
+      });
+    }
+    selected = new Set();
+    bulkBusy = false;
+    await load();
+  }
 
   function countFor(label: string): number | null {
     if (!counts) return null;
@@ -113,20 +180,20 @@
     {/each}
   </div>
   <div class="tools">
-    <div class="field q"><Icon name="search" size={14} /><input class="mono" placeholder="is:{activeTab.toLowerCase()} service:any" aria-label="Filter issues" /></div>
+    <form class="field q" onsubmit={applyQuery}><Icon name="search" size={14} /><input class="mono" bind:value={query} placeholder="is:{activeTab.toLowerCase()} service:any" aria-label="Filter issues" /></form>
     <button class="btn" disabled>Service</button>
     <button class="btn" disabled>Area</button>
-    <button class="btn" disabled>Sort: last seen</button>
+    <button class="btn" onclick={cycleSort}>Sort: {SORT_LABEL[sortBy]}</button>
   </div>
 </div>
 
 {#if canEdit}
   <div class="bulk">
-    <span class="muted">0 selected</span>
-    <button class="btn" disabled>Resolve</button>
+    <span class="muted">{selected.size} selected</span>
+    <button class="btn" disabled={selected.size === 0 || bulkBusy} onclick={() => applyBulk("Resolved")}>Resolve</button>
     <button class="btn" disabled>Assign</button>
     <button class="btn" disabled>Tag area</button>
-    <button class="btn" disabled>Mute</button>
+    <button class="btn" disabled={selected.size === 0 || bulkBusy} onclick={() => applyBulk("Ignored")}>Mute</button>
   </div>
 {/if}
 
@@ -143,10 +210,10 @@
         <span></span><span>Issue</span><span>Last 24h</span><span class="num">Events</span>
         <span class="num">Sessions</span><span>Last / first seen</span><span>Versions</span>
       </div>
-      {#each issues as issue (issue.id)}
+      {#each shown as issue (issue.id)}
         {@const label = issueStatusLabel(issue.status)}
         <a class="tr row" href={router.projectHref(projectId, `/issues/${issue.id}`)} use:link data-keep-filters="true">
-          <input type="checkbox" aria-label="Select issue" onclick={(e) => e.preventDefault()} disabled={!canEdit} />
+          <input type="checkbox" aria-label="Select issue" checked={!!issue.id && selected.has(issue.id)} disabled={!canEdit} onclick={(e) => { e.preventDefault(); e.stopPropagation(); toggle(issue.id); }} />
           <div class="issue">
             <div class="issue-line">
               <StatusPill status={label} />
@@ -168,7 +235,7 @@
         </a>
       {/each}
     </div></div>
-    <p class="muted foot">Showing {issues.length}{counts ? ` of ${counts.total}` : ""} · grouped by fingerprint. Per-issue sparkline and session counts need an occurrence histogram (not collected yet).</p>
+    <p class="muted foot">Showing {shown.length}{counts ? ` of ${counts.total}` : ""} · grouped by fingerprint.</p>
   {/if}
 </section>
 
