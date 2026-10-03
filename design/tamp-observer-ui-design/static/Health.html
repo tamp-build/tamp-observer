@@ -1,0 +1,473 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Storage and health</title>
+<style>
+body{margin:0;background:#0D1012}
+a{color:#6FD3E0;text-decoration:none}a:hover{color:#A6E9F2}
+.app{font-family:ui-sans-serif,-apple-system,"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;color:#E4E9EB;background:#0D1012;font-size:13px;line-height:1.45;-webkit-font-smoothing:antialiased}
+.mono{font-family:ui-monospace,"Cascadia Mono","SF Mono",Menlo,Consolas,"Liberation Mono",monospace;font-size:12px}
+.muted{color:#93A0A7}
+.h{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#93A0A7;font-weight:600;margin:0}
+.btn{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:0 12px;border:1px solid #2C363C;border-radius:6px;background:#161C20;color:#E4E9EB;font:inherit;cursor:pointer;white-space:nowrap}
+.btn:hover{background:#1C2429;color:#E4E9EB}
+.pill{display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600;white-space:nowrap}
+.ok{background:#13291F;color:#80D8B0}
+.warn{background:#33290F;color:#FFD27A}
+.crit{background:#3A1A1C;color:#FF9A9A}
+.off{background:#1B2328;color:#B4BFC5}
+.adv{background:#271E3A;color:#D2B8FF;border:1px solid #47366B}
+.tag{display:inline-flex;align-items:center;gap:4px;padding:1px 6px;border:1px solid #29333A;border-radius:4px;background:#151B1F;color:#B4BFC5;font-size:11px;white-space:nowrap}
+.panel{background:#12171A;border:1px solid #222A2F;border-radius:8px}
+.top{display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:8px 16px;background:#090B0D;border-bottom:1px solid #20282D}
+.nav{display:flex;flex-direction:column;gap:1px;padding:12px 8px;border-right:1px solid #1D2529;background:#0B0E10}
+.nav a{display:flex;align-items:center;gap:10px;min-height:32px;padding:0 10px;border-radius:6px;color:#AEB9BF}
+.nav a:hover{background:#141A1E;color:#E4E9EB}
+.nav a.on{background:#17252A;color:#E4E9EB;font-weight:600}
+.nav a.soon{color:#748087}
+.nav .h{padding:16px 10px 6px}
+.kbd{border:1px solid #2C363C;border-bottom-width:2px;border-radius:4px;padding:0 5px;font-size:11px;color:#93A0A7}
+.field{display:flex;align-items:center;gap:8px;min-height:32px;padding:0 10px;border:1px solid #2C363C;border-radius:6px;background:#12171A;color:#93A0A7}
+.field input{flex:1;min-width:0;background:transparent;border:0;outline:0;color:#E4E9EB;font:inherit}
+.av{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;background:#2B3A40;color:#E4E9EB;font-size:10px;font-weight:700}
+.tile{display:flex;flex-direction:column;gap:4px;padding:14px 16px;background:#12171A;border:1px solid #222A2F;border-radius:8px;min-width:0}
+.big{font-size:24px;font-weight:650;letter-spacing:-0.01em;font-variant-numeric:tabular-nums}
+.stage{flex:1 1 130px;min-width:0;display:flex;flex-direction:column;gap:6px;padding:12px 14px;background:#12171A;border:1px solid #222A2F;border-radius:8px}
+.stage.w{border-color:#5C4A1A;background:#1A160B}
+.stage.x{border-style:dashed;background:transparent}
+.flow{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;color:#5F6C73;min-width:48px}
+.bar{height:6px;border-radius:3px;background:#1E262A;overflow:hidden}
+.bar span{display:block;height:6px;border-radius:3px}
+.kv{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;padding:6px 0;border-top:1px solid #1C2428;align-items:baseline}
+.st{display:grid;grid-template-columns:minmax(120px,1.3fr) 84px 84px 72px 72px 96px 72px 72px 104px;gap:12px;align-items:center;padding:9px 14px;border-top:1px solid #1C2428}
+.st.th{border-top:0;padding:8px 14px;font-size:11px;color:#93A0A7;text-transform:uppercase;letter-spacing:.06em;font-weight:600}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+.cmp{display:grid;grid-template-columns:minmax(140px,1.2fr) 80px 110px 100px 90px 90px 80px;gap:12px;align-items:center;padding:9px 14px;border-top:1px solid #1C2428}
+.cmp.th{border-top:0;padding:8px 14px;font-size:11px;color:#93A0A7;text-transform:uppercase;letter-spacing:.06em;font-weight:600}
+.rt{display:grid;grid-template-columns:minmax(120px,1fr) 80px 90px 100px 110px;gap:12px;align-items:center;padding:8px 0;border-top:1px solid #1C2428}
+.evt{display:grid;grid-template-columns:56px 84px minmax(0,1fr);gap:12px;padding:8px 14px;border-top:1px solid #1C2428;align-items:baseline}
+</style>
+</head>
+<body>
+
+<div class="app" style="min-height:100vh;display:flex;flex-direction:column">
+<header class="top">
+<a href="Main.html" style="display:flex;align-items:center;gap:8px;color:#E4E9EB;font-weight:700"><span class="mono" style="font-size:13px;font-weight:700">tamp<span style="color:#6FD3E0">/</span>observer</span></a>
+<button class="btn" aria-label="Switch project">Demo App<svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="m4 6 4 4 4-4"></path></svg></button>
+<label class="field" style="flex:1 1 260px;max-width:420px"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="7" cy="7" r="4.5"></circle><path d="m10.5 10.5 3.5 3.5"></path></svg><input type="text" placeholder="Jump to issue, trace, session…" aria-label="Search everything"><span class="kbd">Ctrl K</span></label>
+<div style="flex:1 1 0"></div>
+<button class="pill adv" style="min-height:24px;cursor:pointer" aria-label="Instance enforcement mode: advisory"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 1.5 2.5 3.5v4c0 3.2 2.3 5.8 5.5 7 3.2-1.2 5.5-3.8 5.5-7v-4z"></path></svg>Advisory</button>
+<button class="btn" style="border:0;background:none;padding:0 4px" aria-label="Account menu"><span class="av">S</span><svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="m4 6 4 4 4-4"></path></svg></button>
+</header>
+<div style="flex:1 1 auto;display:flex;flex-wrap:wrap;align-items:stretch">
+<nav class="nav" aria-label="Main" style="flex:1 1 190px;max-width:210px">
+<a href="#"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1.5 8h3l2-5 3 10 2-5h3"></path></svg>Overview</a>
+<a href="Main.html"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 2 14.5 13.5h-13z"></path></svg>Issues</a>
+<a class="soon" href="Trace.html"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 2 14 5 8 8 2 5zM2 8l6 3 6-3M2 11l6 3 6-3"></path></svg>Traces<span class="h" style="margin-left:auto;font-size:10px">Soon</span></a>
+<a href="#"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 4h9M5 8h9M5 12h9M2 4h.5M2 8h.5M2 12h.5"></path></svg>Logs</a>
+<a href="Replay.html"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4.5 2.5v11l9-5.5z"></path></svg>Session replay</a>
+<a href="#"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 11V7a4 4 0 0 1 8 0v4l1.5 1.5h-11zM6.5 14h3"></path></svg>Alerts</a>
+<p class="h">Admin</p>
+<a href="#"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="6" cy="5.5" r="2.5"></circle><path d="M1.5 14c0-2.5 2-4 4.5-4s4.5 1.5 4.5 4M11 3.2a2.4 2.4 0 0 1 0 4.6M12.5 10.3c1.3.6 2 1.8 2 3.7"></path></svg>Users &amp; roles</a>
+<a href="Channels.html"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 11V7a4 4 0 0 1 8 0v4l1.5 1.5h-11zM6.5 14h3"></path></svg>Notification channels</a>
+<a href="Access.html"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1.5 2.5 3.5v4c0 3.2 2.3 5.8 5.5 7 3.2-1.2 5.5-3.8 5.5-7v-4z"></path></svg>Enforcement</a>
+<a class="on" href="Health.html"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><ellipse cx="8" cy="3.5" rx="5.5" ry="2"></ellipse><path d="M2.5 3.5v9c0 1.1 2.5 2 5.5 2s5.5-.9 5.5-2v-9M2.5 8c0 1.1 2.5 2 5.5 2s5.5-.9 5.5-2"></path></svg>Storage &amp; health</a>
+</nav>
+
+<main style="flex:999 1 560px;min-width:0;display:flex;flex-direction:column;gap:20px;padding:20px 24px 40px">
+<div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px">
+<div style="display:flex;flex-direction:column;gap:2px">
+<h1 style="margin:0;font-size:22px;font-weight:650;letter-spacing:-0.01em">Storage &amp; health</h1>
+<span class="muted">Instance-wide · every project shares this pipeline</span>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+<span class="muted" style="font-size:12px">Checked 4 s ago</span>
+<label style="display:flex;align-items:center;gap:6px;min-height:32px;padding:0 4px"><input type="checkbox" checked> Auto-refresh 15 s</label>
+<div style="display:inline-flex;border:1px solid #2C363C;border-radius:6px;overflow:hidden" role="group" aria-label="Chart window"><button class="btn" style="border:0;border-radius:0;background:#20303A;font-weight:600">1 h</button><button class="btn" style="border:0;border-left:1px solid #2C363C;border-radius:0">6 h</button><button class="btn" style="border:0;border-left:1px solid #2C363C;border-radius:0">24 h</button></div>
+<button class="btn">Copy diagnostics</button>
+</div>
+</div>
+
+<section aria-label="Overall status" style="display:flex;flex-wrap:wrap;align-items:center;gap:12px 16px;padding:14px 16px;border:1px solid #5C4A1A;border-radius:8px;background:#1A160B">
+<span class="pill warn" style="font-size:12px;padding:3px 10px"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 1.8 15 14H1z"></path><path d="M8 6v4M8 11.8v.4"></path></svg>Degraded</span>
+<p style="margin:0;flex:1 1 420px;color:#F3E6C2"><strong>Replay events are falling behind.</strong> Stream <span class="mono">raw:replay</span> is 38 s behind (threshold 30 s) and growing. Ingest is still accepting data; nothing has been dropped. Errors, logs and spans are unaffected.</p>
+<a class="btn" href="#streams">View stream</a>
+</section>
+
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(200px,100%),1fr));gap:12px">
+<div class="tile"><span class="h">Ingest rate</span><span class="big">1,240<span class="muted" style="font-size:13px;font-weight:500"> events/s</span></span><span class="muted" style="font-size:12px">all signals · peak 1,610 in last hour</span></div>
+<div class="tile"><span class="h">Freshness p95</span><span class="big">4.2<span class="muted" style="font-size:13px;font-weight:500"> s</span></span><span class="muted" style="font-size:12px">received → queryable · target under 10 s</span></div>
+<div class="tile"><span class="h">Buffered in Valkey</span><span class="big">18,402<span class="muted" style="font-size:13px;font-weight:500"> pending</span></span><span style="font-size:12px;color:#FFD27A">98% of it is raw:replay</span></div>
+<div class="tile"><span class="h">Dropped · last 24 h</span><span class="big">0</span><span class="muted" style="font-size:12px">rejected 12 (bad project key)</span></div>
+<div class="tile"><span class="h">Dead letters</span><span class="big">3</span><a href="#streams" style="font-size:12px">Inspect dlq:evaluator</a></div>
+</div>
+
+<section aria-label="Ingest pipeline" class="panel" style="padding:16px;display:flex;flex-direction:column;gap:12px">
+<div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap"><h2 class="h">Ingest pipeline · live</h2><span class="muted" style="font-size:12px">arrow labels are events/s between stages</span></div>
+<div style="display:flex;flex-wrap:wrap;align-items:stretch;gap:6px">
+<div class="stage"><div style="display:flex;justify-content:space-between;align-items:center;gap:6px"><strong>Receivers</strong><span class="pill ok">OK</span></div><span class="mono muted">OTLP gRPC :4317</span><span class="mono muted">OTLP HTTP :4318</span><span class="mono muted">POST /ingest/replay</span></div>
+<div class="flow" aria-hidden="true"><span class="mono" style="color:#B4BFC5">1,240</span><svg width="40" height="12" viewBox="0 0 40 12" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M1 6h36M32 2l5 4-5 4"></path></svg></div>
+<div class="stage"><div style="display:flex;justify-content:space-between;align-items:center;gap:6px"><strong>Collector</strong><span class="pill ok">OK</span></div><span class="muted">Go · 2 replicas</span><span class="muted">batch 512 · queue 3%</span></div>
+<div class="flow" aria-hidden="true"><span class="mono" style="color:#B4BFC5">1,240</span><svg width="40" height="12" viewBox="0 0 40 12" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M1 6h36M32 2l5 4-5 4"></path></svg></div>
+<div class="stage w"><div style="display:flex;justify-content:space-between;align-items:center;gap:6px"><strong>Valkey streams</strong><span class="pill warn">Lagging</span></div><span class="muted">5 streams · 18,402 pending</span><span style="color:#FFD27A">raw:replay 38 s behind</span></div>
+<div class="flow" aria-hidden="true"><span class="mono" style="color:#FFD27A">1,204</span><svg width="40" height="12" viewBox="0 0 40 12" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M1 6h36M32 2l5 4-5 4"></path></svg></div>
+<div class="stage"><div style="display:flex;justify-content:space-between;align-items:center;gap:6px"><strong>Evaluator</strong><span class="pill ok">OK</span></div><span class="muted">.NET · 2 workers</span><span class="muted">0 errors · 3 dead-lettered</span></div>
+<div class="flow" aria-hidden="true"><span class="mono" style="color:#B4BFC5">1,204</span><svg width="40" height="12" viewBox="0 0 40 12" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M1 6h36M32 2l5 4-5 4"></path></svg></div>
+<div style="flex:1.6 1 210px;min-width:0;display:flex;flex-direction:column;gap:6px">
+<div class="stage" style="flex:0 0 auto"><div style="display:flex;justify-content:space-between;align-items:center;gap:6px"><strong>Postgres</strong><span class="tag">write</span><span class="pill ok" style="margin-left:auto">OK</span></div></div>
+<div class="stage" style="flex:0 0 auto"><div style="display:flex;justify-content:space-between;align-items:center;gap:6px"><strong>DuckDB</strong><span class="tag">read</span><span class="pill ok" style="margin-left:auto">2.1 s behind</span></div></div>
+<div class="stage x" style="flex:0 0 auto"><div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:6px"><strong style="color:#B4BFC5">ClickHouse</strong><span class="tag">analytics</span><span class="pill off" style="margin-left:auto">Off</span></div></div>
+</div>
+</div>
+</section>
+
+<section aria-label="Throughput and freshness" style="display:flex;flex-wrap:wrap;gap:12px;align-items:stretch">
+<div class="panel" style="flex:2 1 600px;min-width:0;padding:14px 16px;display:flex;flex-direction:column;gap:10px">
+<div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap"><h2 class="h">Throughput by signal · last hour</h2><span class="muted" style="font-size:12px">events/s · each chart on its own scale</span></div>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(150px,100%),1fr));gap:14px">
+
+<div style="display:flex;flex-direction:column;gap:4px;min-width:0">
+<div style="display:flex;justify-content:space-between;gap:8px"><span>Spans</span><span class="mono" style="color:#E4E9EB">820/s</span></div>
+<svg viewBox="0 0 160 44" preserveAspectRatio="none" style="width:100%;height:44px" role="img" aria-label="Spans throughput, last hour"><line x1="0" y1="43" x2="160" y2="43" stroke="#222A2F" stroke-width="1"></line><polyline points="0.0,8.9 2.7,10.9 5.4,12.7 8.1,11.8 10.8,9.9 13.6,11.1 16.3,15.0 19.0,17.6 21.7,16.7 24.4,15.0 27.1,15.8 29.8,18.3 32.5,18.6 35.3,15.3 38.0,12.0 40.7,11.9 43.4,13.5 46.1,12.9 48.8,9.9 51.5,8.2 54.2,10.3 56.9,13.7 59.7,14.6 62.4,13.1 65.1,13.1 67.8,16.2 70.5,19.2 73.2,18.5 75.9,15.6 78.6,14.3 81.4,15.7 84.1,16.4 86.8,13.8 89.5,10.0 92.2,9.1 94.9,11.3 97.6,12.8 100.3,11.3 103.1,9.7 105.8,11.4 108.5,15.4 111.2,17.5 113.9,16.3 116.6,14.8 119.3,16.2 122.0,18.7 124.7,18.3 127.5,14.8 130.2,11.9 132.9,12.3 135.6,13.7 138.3,12.6 141.0,9.4 143.7,8.3 146.4,10.8 149.2,14.0 151.9,14.2 154.6,12.7 157.3,13.3 160.0,16.8" fill="none" stroke="#6FD3E0" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"></polyline></svg>
+<span class="mono muted" style="font-size:11px">peak 1,040/s</span>
+</div>
+
+
+<div style="display:flex;flex-direction:column;gap:4px;min-width:0">
+<div style="display:flex;justify-content:space-between;gap:8px"><span>Logs</span><span class="mono" style="color:#E4E9EB">311/s</span></div>
+<svg viewBox="0 0 160 44" preserveAspectRatio="none" style="width:100%;height:44px" role="img" aria-label="Logs throughput, last hour"><line x1="0" y1="43" x2="160" y2="43" stroke="#222A2F" stroke-width="1"></line><polyline points="0.0,12.9 2.7,13.9 5.4,12.2 8.1,11.8 10.8,15.2 13.6,19.3 16.3,19.7 19.0,17.0 21.7,15.7 24.4,17.6 27.1,19.1 29.8,16.6 32.5,12.1 35.3,10.3 38.0,12.0 40.7,13.4 43.4,11.5 46.1,8.9 48.8,9.8 51.5,14.1 54.2,16.9 56.9,16.1 59.7,14.6 62.4,16.3 65.1,19.9 67.8,20.6 70.5,17.4 73.2,14.1 75.9,14.2 78.6,15.8 81.4,14.7 84.1,10.6 86.8,8.2 89.5,10.1 92.2,13.3 94.9,13.6 97.6,11.7 100.3,11.9 103.1,15.8 105.8,19.5 108.5,19.3 111.2,16.6 113.9,15.9 116.6,18.1 119.3,19.1 122.0,16.1 124.7,11.7 127.5,10.5 130.2,12.5 132.9,13.3 135.6,10.9 138.3,8.6 141.0,10.3 143.7,14.6 146.4,16.8 149.2,15.6 151.9,14.5 154.6,16.8 157.3,20.3 160.0,20.4" fill="none" stroke="#6FD3E0" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"></polyline></svg>
+<span class="mono muted" style="font-size:11px">peak 402/s</span>
+</div>
+
+
+<div style="display:flex;flex-direction:column;gap:4px;min-width:0">
+<div style="display:flex;justify-content:space-between;gap:8px"><span>Session replay</span><span class="mono" style="color:#E4E9EB">96/s</span></div>
+<svg viewBox="0 0 160 44" preserveAspectRatio="none" style="width:100%;height:44px" role="img" aria-label="Session replay throughput, last hour"><line x1="0" y1="43" x2="160" y2="43" stroke="#222A2F" stroke-width="1"></line><polyline points="0.0,14.6 2.7,13.0 5.4,14.7 8.1,18.8 10.8,20.8 13.6,18.5 16.3,15.3 19.0,15.4 21.7,17.3 24.4,16.6 27.1,12.4 29.8,9.0 32.5,9.8 35.3,12.5 38.0,12.8 40.7,10.4 43.4,9.9 46.1,13.4 48.8,17.7 51.5,18.3 54.2,16.2 56.9,15.7 59.7,18.4 62.4,20.4 65.1,18.1 67.8,13.7 70.5,11.9 73.2,13.4 75.9,14.2 78.6,11.5 81.4,8.2 84.1,8.7 86.8,12.6 89.5,15.1 92.2,14.1 94.9,12.8 97.6,15.1 100.3,19.3 103.1,20.6 105.8,17.9 108.5,15.2 111.2,15.9 113.9,17.7 116.6,16.2 119.3,11.8 122.0,8.9 124.7,10.3 127.5,12.8 130.2,12.4 132.9,9.9 135.6,10.0 138.3,14.0 141.0,17.9 143.7,17.9 146.4,15.8 149.2,16.0 151.9,18.9 154.6,20.4 157.3,17.6 160.0,13.3" fill="none" stroke="#6FD3E0" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"></polyline></svg>
+<span class="mono muted" style="font-size:11px">peak 131/s</span>
+</div>
+
+
+<div style="display:flex;flex-direction:column;gap:4px;min-width:0">
+<div style="display:flex;justify-content:space-between;gap:8px"><span>Errors</span><span class="mono" style="color:#E4E9EB">4/s</span></div>
+<svg viewBox="0 0 160 44" preserveAspectRatio="none" style="width:100%;height:44px" role="img" aria-label="Errors throughput, last hour"><line x1="0" y1="43" x2="160" y2="43" stroke="#222A2F" stroke-width="1"></line><polyline points="0.0,23.4 2.7,30.4 5.4,37.4 8.1,34.8 10.8,25.5 13.6,20.6 16.3,23.6 19.0,25.8 21.7,19.4 24.4,9.9 27.1,8.2 29.8,15.3 32.5,20.9 35.3,18.6 38.0,14.9 40.7,19.3 43.4,30.0 46.1,35.5 48.8,31.3 51.5,25.8 54.2,27.7 56.9,33.2 59.7,31.8 62.4,21.8 65.1,13.5 67.8,14.6 70.5,19.5 73.2,18.1 75.9,11.0 78.6,8.7 81.4,16.5 84.1,26.0 86.8,27.5 89.5,23.3 92.2,23.8 94.9,31.8 97.6,37.8 100.3,33.6 103.1,24.4 105.8,21.1 108.5,24.8 111.2,25.7 113.9,18.0 116.6,9.0 119.3,9.0 122.0,16.6 124.7,20.8 127.5,17.4 130.2,14.5 132.9,20.5 135.6,31.1 138.3,35.1 141.0,30.0 143.7,25.6 146.4,28.9 149.2,34.0 151.9,30.9 154.6,20.4 157.3,13.4 160.0,15.8" fill="none" stroke="#6FD3E0" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"></polyline></svg>
+<span class="mono muted" style="font-size:11px">peak 11/s</span>
+</div>
+
+
+<div style="display:flex;flex-direction:column;gap:4px;min-width:0">
+<div style="display:flex;justify-content:space-between;gap:8px"><span>Metrics</span><span class="mono" style="color:#E4E9EB">10/s</span></div>
+<svg viewBox="0 0 160 44" preserveAspectRatio="none" style="width:100%;height:44px" role="img" aria-label="Metrics throughput, last hour"><line x1="0" y1="43" x2="160" y2="43" stroke="#222A2F" stroke-width="1"></line><polyline points="0.0,18.6 2.7,19.0 5.4,15.7 8.1,12.3 10.8,12.2 13.6,13.8 16.3,13.2 19.0,10.1 21.7,8.2 24.4,10.2 27.1,13.7 29.8,14.5 32.5,13.0 35.3,13.0 38.0,16.2 40.7,19.3 43.4,18.8 46.1,15.9 48.8,14.6 51.5,16.1 54.2,16.9 56.9,14.2 59.7,10.3 62.4,9.3 65.1,11.4 67.8,12.9 70.5,11.3 73.2,9.6 75.9,11.3 78.6,15.3 81.4,17.5 84.1,16.3 86.8,14.9 89.5,16.3 92.2,19.0 94.9,18.7 97.6,15.2 100.3,12.2 103.1,12.6 105.8,14.1 108.5,12.9 111.2,9.6 113.9,8.3 116.6,10.8 119.3,13.9 122.0,14.2 124.7,12.6 127.5,13.2 130.2,16.7 132.9,19.5 135.6,18.4 138.3,15.5 141.0,14.8 143.7,16.6 146.4,16.8 149.2,13.7 151.9,10.0 154.6,9.6 157.3,11.9 160.0,12.8" fill="none" stroke="#6FD3E0" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"></polyline></svg>
+<span class="mono muted" style="font-size:11px">peak 14/s</span>
+</div>
+
+</div>
+</div>
+<div class="panel" style="flex:1 1 300px;min-width:0;padding:14px 16px;display:flex;flex-direction:column;gap:10px">
+<div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap"><h2 class="h">Freshness p95 · last hour</h2><span class="mono">4.2 s</span></div>
+<svg viewBox="0 0 300 110" preserveAspectRatio="none" style="width:100%;height:110px" role="img" aria-label="Freshness p95 over the last hour, steady near 4 seconds, below the 10 second target">
+<line x1="0" y1="22" x2="300" y2="22" stroke="#93A0A7" stroke-width="1" stroke-dasharray="4 4" vector-effect="non-scaling-stroke"></line>
+<line x1="0" y1="109" x2="300" y2="109" stroke="#222A2F" stroke-width="1"></line>
+<polyline points="0.0,69.7 5.1,70.4 10.2,73.1 15.3,73.3 20.3,70.8 25.4,70.2 30.5,73.7 35.6,78.2 40.7,79.0 45.8,76.8 50.8,76.4 55.9,79.2 61.0,81.4 66.1,79.2 71.2,74.7 76.3,72.8 81.4,74.3 86.4,75.1 91.5,72.3 96.6,68.7 101.7,69.1 106.8,73.0 111.9,75.6 116.9,74.5 122.0,73.2 127.1,75.6 132.2,80.0 137.3,81.5 142.4,78.8 147.5,76.1 152.5,76.8 157.6,78.7 162.7,77.3 167.8,72.7 172.9,69.7 178.0,70.9 183.1,73.5 188.1,73.0 193.2,70.4 198.3,70.3 203.4,74.4 208.5,78.4 213.6,78.5 218.6,76.4 223.7,76.6 228.8,79.8 233.9,81.4 239.0,78.6 244.1,74.3 249.2,73.1 254.2,74.8 259.3,75.0 264.4,71.7 269.5,68.5 274.6,69.6 279.7,73.5 284.7,75.4 289.8,74.0 294.9,73.1 300.0,76.2" fill="none" stroke="#6FD3E0" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke"></polyline>
+</svg>
+<div class="mono muted" style="display:flex;justify-content:space-between;font-size:11px"><span>-60 min</span><span>dashed: 10 s target</span><span>now</span></div>
+</div>
+</section>
+
+<section id="streams" aria-label="Valkey" style="display:flex;flex-direction:column;gap:12px">
+<div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap"><h2 style="margin:0;font-size:16px">Valkey <span class="muted" style="font-weight:400;font-size:13px">memory streams between the collector and the evaluator</span></h2><span class="pill warn">1 stream lagging</span></div>
+<div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start">
+<div class="panel" style="flex:1 1 280px;min-width:0;padding:14px 16px;display:flex;flex-direction:column;gap:10px">
+<h3 class="h">Server</h3>
+<div style="display:flex;flex-direction:column;gap:6px"><div style="display:flex;justify-content:space-between"><span>Memory</span><span class="mono">312 MB of 1 GB</span></div><div class="bar"><span style="width:31%;background:#80D8B0"></span></div></div>
+<div>
+<div class="kv"><span class="muted">Eviction policy</span><span class="mono">noeviction</span></div>
+<div class="kv" style="border-top:0;padding-top:0"><span class="muted" style="font-size:12px;grid-column:span 2">Correct for streams: at the limit, ingest pushes back instead of losing data.</span></div>
+<div class="kv"><span class="muted">Persistence</span><span class="mono">AOF everysec</span></div>
+<div class="kv"><span class="muted">Last AOF rewrite</span><span>2 h ago · ok</span></div>
+<div class="kv"><span class="muted">Ops/s</span><span class="mono">3,912</span></div>
+<div class="kv"><span class="muted">Clients</span><span class="mono">14</span></div>
+<div class="kv"><span class="muted">Version · uptime</span><span class="mono">8.0 · 12 d</span></div>
+</div>
+</div>
+<div style="flex:999 1 640px;min-width:0;display:flex;flex-direction:column;gap:12px">
+<div class="panel" style="overflow:hidden">
+<div style="overflow-x:auto"><div style="min-width:900px">
+<div class="st th"><span>Stream</span><span class="num">Length</span><span class="num">Pending</span><span class="num">In/s</span><span class="num">Out/s</span><span class="num">Lag</span><span class="num">Oldest</span><span class="num">Consumers</span><span>Status</span></div>
+
+<div class="st" style="background:transparent">
+<span class="mono" style="color:#E4E9EB">raw:spans</span>
+<span class="num mono">41,203</span>
+<span class="num mono" style="color:#E4E9EB">212</span>
+<span class="num mono">820</span>
+<span class="num mono" style="color:#E4E9EB">818</span>
+<span class="num mono" style="color:#E4E9EB">0.4 s</span>
+<span class="num mono">0.9 s</span>
+<span class="num mono">2</span>
+<span><span class="pill ok">OK</span></span>
+</div>
+
+
+<div class="st" style="background:transparent">
+<span class="mono" style="color:#E4E9EB">raw:logs</span>
+<span class="num mono">22,950</span>
+<span class="num mono" style="color:#E4E9EB">88</span>
+<span class="num mono">311</span>
+<span class="num mono" style="color:#E4E9EB">311</span>
+<span class="num mono" style="color:#E4E9EB">0.2 s</span>
+<span class="num mono">0.5 s</span>
+<span class="num mono">2</span>
+<span><span class="pill ok">OK</span></span>
+</div>
+
+
+<div class="st" style="background:#1A160B">
+<span class="mono" style="color:#E4E9EB">raw:replay</span>
+<span class="num mono">96,440</span>
+<span class="num mono" style="color:#FFD27A">18,021</span>
+<span class="num mono">96</span>
+<span class="num mono" style="color:#FFD27A">61</span>
+<span class="num mono" style="color:#FFD27A">38 s</span>
+<span class="num mono">2m 41s</span>
+<span class="num mono">1 of 2</span>
+<span><span class="pill warn">Lagging</span></span>
+</div>
+
+
+<div class="st" style="background:transparent">
+<span class="mono" style="color:#E4E9EB">raw:errors</span>
+<span class="num mono">1,804</span>
+<span class="num mono" style="color:#E4E9EB">3</span>
+<span class="num mono">4</span>
+<span class="num mono" style="color:#E4E9EB">4</span>
+<span class="num mono" style="color:#E4E9EB">0.1 s</span>
+<span class="num mono">0.2 s</span>
+<span class="num mono">2</span>
+<span><span class="pill ok">OK</span></span>
+</div>
+
+
+<div class="st" style="background:transparent">
+<span class="mono" style="color:#E4E9EB">raw:metrics</span>
+<span class="num mono">8,112</span>
+<span class="num mono" style="color:#E4E9EB">78</span>
+<span class="num mono">10</span>
+<span class="num mono" style="color:#E4E9EB">10</span>
+<span class="num mono" style="color:#E4E9EB">0.3 s</span>
+<span class="num mono">0.6 s</span>
+<span class="num mono">2</span>
+<span><span class="pill ok">OK</span></span>
+</div>
+
+
+<div class="st" style="background:transparent">
+<span class="mono" style="color:#E4E9EB">dlq:evaluator</span>
+<span class="num mono">3</span>
+<span class="num mono" style="color:#E4E9EB">—</span>
+<span class="num mono">0</span>
+<span class="num mono" style="color:#E4E9EB">—</span>
+<span class="num mono" style="color:#E4E9EB">—</span>
+<span class="num mono">5h 12m</span>
+<span class="num mono">—</span>
+<span><span class="pill off">Review</span></span>
+</div>
+
+</div></div>
+<p class="muted" style="margin:0;padding:10px 14px;border-top:1px solid #1C2428;font-size:12px">Trimmed with <span class="mono">MAXLEN ~</span> per stream. Lag = age of the oldest unacknowledged entry in the consumer group.</p>
+</div>
+<div class="panel" style="padding:14px 16px;display:flex;flex-direction:column;gap:8px">
+<div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap"><h3 class="h">raw:replay consumer lag · last hour</h3><span class="mono" style="color:#FFD27A">38 s</span></div>
+<svg viewBox="0 0 600 90" preserveAspectRatio="none" style="width:100%;height:90px" role="img" aria-label="raw:replay lag flat near zero until 20 minutes ago, then rising to 38 seconds, above the 30 second threshold">
+<line x1="0" y1="20" x2="600" y2="20" stroke="#FFD27A" stroke-width="1" stroke-dasharray="4 4" vector-effect="non-scaling-stroke"></line>
+<line x1="0" y1="89" x2="600" y2="89" stroke="#222A2F" stroke-width="1"></line>
+<polyline points="0.0,88.3 10.2,87.4 20.3,87.4 30.5,88.2 40.7,87.5 50.8,87.3 61.0,88.0 71.2,87.6 81.4,87.3 91.5,87.9 101.7,87.8 111.9,87.3 122.0,87.8 132.2,87.9 142.4,87.3 152.5,87.6 162.7,88.0 172.9,87.3 183.1,87.5 193.2,88.2 203.4,87.4 213.6,87.4 223.7,88.3 233.9,87.4 244.1,87.4 254.2,88.2 264.4,87.5 274.6,87.3 284.7,88.0 294.9,87.6 305.1,87.3 315.3,87.9 325.4,87.7 335.6,87.3 345.8,87.8 355.9,87.9 366.1,87.3 376.3,87.6 386.4,88.0 396.6,87.3 406.8,88.3 416.9,87.7 427.1,86.5 437.3,84.9 447.5,83.0 457.6,80.7 467.8,78.1 478.0,75.2 488.1,72.1 498.3,68.7 508.5,65.2 518.6,61.3 528.8,57.3 539.0,53.1 549.2,48.6 559.3,44.0 569.5,39.2 579.7,34.2 589.8,29.0 600.0,23.6" fill="none" stroke="#6FD3E0" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke"></polyline>
+</svg>
+<div class="mono muted" style="display:flex;justify-content:space-between;font-size:11px"><span>-60 min</span><span>dashed: 30 s warning threshold</span><span>now</span></div>
+<p style="margin:0;color:#C9D2D6">Out/s dropped from 96 to 61 at 13:41, when the replay consumer went from 2 to 1. <a href="#components">See evaluator workers</a>.</p>
+</div>
+</div>
+</div>
+</section>
+
+<section aria-label="Storage tiers" style="display:flex;flex-direction:column;gap:12px">
+<h2 style="margin:0;font-size:16px">Storage tiers</h2>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),1fr));gap:12px">
+<div class="panel" style="padding:16px;display:flex;flex-direction:column;gap:10px">
+<div style="display:flex;align-items:center;gap:8px"><strong style="font-size:15px">Postgres</strong><span class="tag">write store · system of record</span><span class="pill ok" style="margin-left:auto">Healthy</span></div>
+<div style="display:flex;flex-direction:column;gap:6px"><div style="display:flex;justify-content:space-between"><span>Connections</span><span class="mono">18 of 100</span></div><div class="bar"><span style="width:18%;background:#80D8B0"></span></div></div>
+<div>
+<div class="kv"><span class="muted">Database size</span><span class="mono">2.4 GB · +140 MB/day</span></div>
+<div class="kv"><span class="muted">Cache hit ratio</span><span class="mono">99.4%</span></div>
+<div class="kv"><span class="muted">Slow queries (&gt;1 s), 1 h</span><span class="mono">2</span></div>
+<div class="kv"><span class="muted">Oldest open transaction</span><span class="mono">0.8 s</span></div>
+<div class="kv"><span class="muted">Last autovacuum · spans</span><span>14 min ago</span></div>
+<div class="kv"><span class="muted">Version</span><span class="mono">17.2</span></div>
+</div>
+<h3 class="h" style="margin-top:4px">Largest tables</h3>
+<div style="display:grid;grid-template-columns:110px minmax(0,1fr) 64px;gap:8px;align-items:center"><span class="mono">spans</span><div class="bar"><span style="width:100%;background:#6FD3E0"></span></div><span class="mono" style="text-align:right">1.1 GB</span><span class="mono">logs</span><div class="bar"><span style="width:56%;background:#6FD3E0"></span></div><span class="mono" style="text-align:right">620 MB</span><span class="mono">replay_events</span><div class="bar"><span style="width:49%;background:#6FD3E0"></span></div><span class="mono" style="text-align:right">540 MB</span><span class="mono">issues</span><div class="bar"><span style="width:1%;background:#6FD3E0"></span></div><span class="mono" style="text-align:right">4 MB</span></div>
+</div>
+<div class="panel" style="padding:16px;display:flex;flex-direction:column;gap:10px">
+<div style="display:flex;align-items:center;gap:8px"><strong style="font-size:15px">DuckDB</strong><span class="tag">read store · in-process</span><span class="pill ok" style="margin-left:auto">Healthy</span></div>
+<div style="display:flex;flex-direction:column;gap:6px"><div style="display:flex;justify-content:space-between"><span>Memory</span><span class="mono">640 MB of 2 GB limit</span></div><div class="bar"><span style="width:32%;background:#80D8B0"></span></div></div>
+<div>
+<div class="kv"><span class="muted">Behind Postgres</span><span class="mono">2.1 s</span></div>
+<div class="kv"><span class="muted">Last refresh</span><span>3 s ago · 1,840 rows</span></div>
+<div class="kv"><span class="muted">Query time p95, 1 h</span><span class="mono">38 ms</span></div>
+<div class="kv"><span class="muted">Database file</span><span class="mono">1.8 GB</span></div>
+<div class="kv"><span class="muted">Copies</span><span>one per API instance (2)</span></div>
+</div>
+</div>
+<div class="panel" style="padding:16px;display:flex;flex-direction:column;gap:10px;border-style:dashed;background:transparent">
+<div style="display:flex;align-items:center;gap:8px"><strong style="font-size:15px;color:#B4BFC5">ClickHouse</strong><span class="tag">analytical tier · optional</span><span class="pill off" style="margin-left:auto">Not configured</span></div>
+<p style="margin:0;color:#C9D2D6">Not needed at this volume. Postgres and DuckDB are serving every query.</p>
+<p class="muted" style="margin:0">Consider it when DuckDB query times or Postgres growth become the bottleneck. It's switched on in deployment configuration, not from this page.</p>
+<a href="#">How to add the ClickHouse tier</a>
+</div>
+</div>
+</section>
+
+<div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start">
+<section aria-label="Retention and disk" class="panel" style="flex:1 1 560px;min-width:0;padding:14px 16px;display:flex;flex-direction:column;gap:12px">
+<h2 class="h">Retention</h2>
+<div style="overflow-x:auto"><div style="min-width:500px">
+<div class="rt h" style="border-top:0;padding-top:0"><span>Data</span><span>Keep</span><span class="num">Size</span><span class="num">Oldest</span><span class="num">Next purge</span></div>
+<div class="rt"><span>Spans</span><span>14 d</span><span class="num mono">1.1 GB</span><span class="num">14 d</span><span class="num mono">02:00</span></div>
+<div class="rt"><span>Logs</span><span>14 d</span><span class="num mono">620 MB</span><span class="num">14 d</span><span class="num mono">02:00</span></div>
+<div class="rt"><span>Session replay</span><span>30 d</span><span class="num mono">540 MB</span><span class="num">30 d</span><span class="num mono">02:00</span></div>
+<div class="rt"><span>Issues &amp; events</span><span>90 d</span><span class="num mono">96 MB</span><span class="num">61 d</span><span class="num muted">not due</span></div>
+<div class="rt"><span>Metrics</span><span>30 d</span><span class="num mono">48 MB</span><span class="num">30 d</span><span class="num mono">02:00</span></div>
+</div></div>
+<h2 class="h" style="margin-top:4px">Disk</h2>
+<div style="display:grid;grid-template-columns:minmax(120px,170px) minmax(0,1fr) 120px;gap:10px;align-items:center">
+<span>Postgres volume</span><div class="bar"><span style="width:12%;background:#80D8B0"></span></div><span class="mono" style="text-align:right">2.4 / 20 GB</span>
+<span>DuckDB files</span><div class="bar"><span style="width:18%;background:#80D8B0"></span></div><span class="mono" style="text-align:right">3.6 / 20 GB</span>
+<span>Valkey AOF</span><div class="bar"><span style="width:8%;background:#80D8B0"></span></div><span class="mono" style="text-align:right">410 MB / 5 GB</span>
+</div>
+<p class="muted" style="margin:0;font-size:12px">At current growth the Postgres volume fills in about 4 months.</p>
+</section>
+
+<section id="components" aria-label="Components" class="panel" style="flex:1 1 760px;min-width:0;overflow:hidden">
+<div style="padding:12px 14px"><h2 class="h">Components</h2></div>
+<div style="overflow-x:auto"><div style="min-width:740px">
+<div class="cmp th"><span>Component</span><span class="num">Running</span><span>Status</span><span class="num">CPU</span><span class="num">Memory</span><span class="num">Restarts</span><span class="num">Uptime</span></div>
+
+<div class="cmp">
+<span style="display:flex;flex-direction:column"><span>API</span><span class="mono muted" style="font-size:11px">serves UI + DuckDB</span></span>
+<span class="num mono">2 / 2</span>
+<span><span class="pill ok">Healthy</span></span>
+<span class="num mono">9%</span>
+<span class="num mono">1.1 GB</span>
+<span class="num mono" style="color:#E4E9EB">0</span>
+<span class="num mono">6 d</span>
+</div>
+
+
+<div class="cmp">
+<span style="display:flex;flex-direction:column"><span>Collector</span><span class="mono muted" style="font-size:11px">Go OTel</span></span>
+<span class="num mono">2 / 2</span>
+<span><span class="pill ok">Healthy</span></span>
+<span class="num mono">14%</span>
+<span class="num mono">220 MB</span>
+<span class="num mono" style="color:#E4E9EB">0</span>
+<span class="num mono">6 d</span>
+</div>
+
+
+<div class="cmp">
+<span style="display:flex;flex-direction:column"><span>Evaluator</span><span class="mono muted" style="font-size:11px">.NET workers</span></span>
+<span class="num mono">2 / 2</span>
+<span><span class="pill warn">1 consumer idle</span></span>
+<span class="num mono">41%</span>
+<span class="num mono">780 MB</span>
+<span class="num mono" style="color:#FFD27A">1</span>
+<span class="num mono">19 min</span>
+</div>
+
+
+<div class="cmp">
+<span style="display:flex;flex-direction:column"><span>Valkey</span><span class="mono muted" style="font-size:11px">streams</span></span>
+<span class="num mono">1 / 1</span>
+<span><span class="pill ok">Healthy</span></span>
+<span class="num mono">6%</span>
+<span class="num mono">312 MB</span>
+<span class="num mono" style="color:#E4E9EB">0</span>
+<span class="num mono">12 d</span>
+</div>
+
+
+<div class="cmp">
+<span style="display:flex;flex-direction:column"><span>Postgres</span><span class="mono muted" style="font-size:11px">write store</span></span>
+<span class="num mono">1 / 1</span>
+<span><span class="pill ok">Healthy</span></span>
+<span class="num mono">11%</span>
+<span class="num mono">1.6 GB</span>
+<span class="num mono" style="color:#E4E9EB">0</span>
+<span class="num mono">12 d</span>
+</div>
+
+
+<div class="cmp">
+<span style="display:flex;flex-direction:column"><span>Dex</span><span class="mono muted" style="font-size:11px">OIDC broker</span></span>
+<span class="num mono">1 / 1</span>
+<span><span class="pill ok">Healthy</span></span>
+<span class="num mono">1%</span>
+<span class="num mono">40 MB</span>
+<span class="num mono" style="color:#E4E9EB">0</span>
+<span class="num mono">12 d</span>
+</div>
+
+</div></div>
+</section>
+</div>
+
+<section aria-label="Health events" class="panel" style="overflow:hidden">
+<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 14px;flex-wrap:wrap"><h2 class="h">Health events · last 24 h</h2><a href="Channels.html">Send these to a channel</a></div>
+
+<div class="evt">
+<span class="mono muted">14:02</span>
+<span><span class="pill warn">Warning</span></span>
+<span style="color:#D5DCDF">raw:replay lag passed 30 s. Still rising.</span>
+</div>
+
+
+<div class="evt">
+<span class="mono muted">13:41</span>
+<span><span class="pill warn">Warning</span></span>
+<span style="color:#D5DCDF">evaluator-1 restarted; its replay consumer did not rejoin the group.</span>
+</div>
+
+
+<div class="evt">
+<span class="mono muted">11:20</span>
+<span><span class="pill ok">Resolved</span></span>
+<span style="color:#D5DCDF">Postgres slow-query count back to normal (was 14 in 5 min).</span>
+</div>
+
+
+<div class="evt">
+<span class="mono muted">09:05</span>
+<span><span class="pill off">Info</span></span>
+<span style="color:#D5DCDF">Collector config reloaded on both replicas.</span>
+</div>
+
+
+<div class="evt">
+<span class="mono muted">02:00</span>
+<span><span class="pill off">Info</span></span>
+<span style="color:#D5DCDF">Retention purge removed 412,880 spans and 1,204 replay sessions.</span>
+</div>
+
+
+<div class="evt">
+<span class="mono muted">02:00</span>
+<span><span class="pill off">Info</span></span>
+<span style="color:#D5DCDF">Valkey AOF rewrite completed (410 MB).</span>
+</div>
+
+</section>
+</main>
+</div>
+</div>
+</body>
+</html>

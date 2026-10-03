@@ -6,6 +6,7 @@
 
   <ItemGroup Label="Storage (ADR 0005 / 0006: Postgres+Marten baseline)">
     <PackageVersion Include="Marten" Version="9.44.0" />
+    <PackageVersion Include="Npgsql" Version="9.0.4" />
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.12" />
   </ItemGroup>
 

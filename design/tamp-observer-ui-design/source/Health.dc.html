@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Storage and health</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0;background:#0D1012}
+a{color:#6FD3E0;text-decoration:none}a:hover{color:#A6E9F2}
+.app{font-family:ui-sans-serif,-apple-system,"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;color:#E4E9EB;background:#0D1012;font-size:13px;line-height:1.45;-webkit-font-smoothing:antialiased}
+.mono{font-family:ui-monospace,"Cascadia Mono","SF Mono",Menlo,Consolas,"Liberation Mono",monospace;font-size:12px}
+.muted{color:#93A0A7}
+.h{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#93A0A7;font-weight:600;margin:0}
+.btn{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:0 12px;border:1px solid #2C363C;border-radius:6px;background:#161C20;color:#E4E9EB;font:inherit;cursor:pointer;white-space:nowrap}
+.btn:hover{background:#1C2429;color:#E4E9EB}
+.pill{display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600;white-space:nowrap}
+.ok{background:#13291F;color:#80D8B0}
+.warn{background:#33290F;color:#FFD27A}
+.crit{background:#3A1A1C;color:#FF9A9A}
+.off{background:#1B2328;color:#B4BFC5}
+.adv{background:#271E3A;color:#D2B8FF;border:1px solid #47366B}
+.tag{display:inline-flex;align-items:center;gap:4px;padding:1px 6px;border:1px solid #29333A;border-radius:4px;background:#151B1F;color:#B4BFC5;font-size:11px;white-space:nowrap}
+.panel{background:#12171A;border:1px solid #222A2F;border-radius:8px}
+.top{display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:8px 16px;background:#090B0D;border-bottom:1px solid #20282D}
+.nav{display:flex;flex-direction:column;gap:1px;padding:12px 8px;border-right:1px solid #1D2529;background:#0B0E10}
+.nav a{display:flex;align-items:center;gap:10px;min-height:32px;padding:0 10px;border-radius:6px;color:#AEB9BF}
+.nav a:hover{background:#141A1E;color:#E4E9EB}
+.nav a.on{background:#17252A;color:#E4E9EB;font-weight:600}
+.nav a.soon{color:#748087}
+.nav .h{padding:16px 10px 6px}
+.kbd{border:1px solid #2C363C;border-bottom-width:2px;border-radius:4px;padding:0 5px;font-size:11px;color:#93A0A7}
+.field{display:flex;align-items:center;gap:8px;min-height:32px;padding:0 10px;border:1px solid #2C363C;border-radius:6px;background:#12171A;color:#93A0A7}
+.field input{flex:1;min-width:0;background:transparent;border:0;outline:0;color:#E4E9EB;font:inherit}
+.av{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;background:#2B3A40;color:#E4E9EB;font-size:10px;font-weight:700}
+.tile{display:flex;flex-direction:column;gap:4px;padding:14px 16px;background:#12171A;border:1px solid #222A2F;border-radius:8px;min-width:0}
+.big{font-size:24px;font-weight:650;letter-spacing:-0.01em;font-variant-numeric:tabular-nums}
+.stage{flex:1 1 130px;min-width:0;display:flex;flex-direction:column;gap:6px;padding:12px 14px;background:#12171A;border:1px solid #222A2F;border-radius:8px}
+.stage.w{border-color:#5C4A1A;background:#1A160B}
+.stage.x{border-style:dashed;background:transparent}
+.flow{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;color:#5F6C73;min-width:48px}
+.bar{height:6px;border-radius:3px;background:#1E262A;overflow:hidden}
+.bar span{display:block;height:6px;border-radius:3px}
+.kv{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;padding:6px 0;border-top:1px solid #1C2428;align-items:baseline}
+.st{display:grid;grid-template-columns:minmax(120px,1.3fr) 84px 84px 72px 72px 96px 72px 72px 104px;gap:12px;align-items:center;padding:9px 14px;border-top:1px solid #1C2428}
+.st.th{border-top:0;padding:8px 14px;font-size:11px;color:#93A0A7;text-transform:uppercase;letter-spacing:.06em;font-weight:600}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+.cmp{display:grid;grid-template-columns:minmax(140px,1.2fr) 80px 110px 100px 90px 90px 80px;gap:12px;align-items:center;padding:9px 14px;border-top:1px solid #1C2428}
+.cmp.th{border-top:0;padding:8px 14px;font-size:11px;color:#93A0A7;text-transform:uppercase;letter-spacing:.06em;font-weight:600}
+.rt{display:grid;grid-template-columns:minmax(120px,1fr) 80px 90px 100px 110px;gap:12px;align-items:center;padding:8px 0;border-top:1px solid #1C2428}
+.evt{display:grid;grid-template-columns:56px 84px minmax(0,1fr);gap:12px;padding:8px 14px;border-top:1px solid #1C2428;align-items:baseline}
+</style>
+</helmet>
+<div class="app" style="min-height:100vh;display:flex;flex-direction:column">
+<header class="top">
+<a href="Main.dc.html" style="display:flex;align-items:center;gap:8px;color:#E4E9EB;font-weight:700"><span class="mono" style="font-size:13px;font-weight:700">tamp<span style="color:#6FD3E0">/</span>observer</span></a>
+<button class="btn" aria-label="Switch project">Demo App<svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="m4 6 4 4 4-4"></path></svg></button>
+<label class="field" style="flex:1 1 260px;max-width:420px"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="7" cy="7" r="4.5"></circle><path d="m10.5 10.5 3.5 3.5"></path></svg><input type="text" placeholder="Jump to issue, trace, session…" aria-label="Search everything"><span class="kbd">Ctrl K</span></label>
+<div style="flex:1 1 0"></div>
+<button class="pill adv" style="min-height:24px;cursor:pointer" aria-label="Instance enforcement mode: advisory"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 1.5 2.5 3.5v4c0 3.2 2.3 5.8 5.5 7 3.2-1.2 5.5-3.8 5.5-7v-4z"></path></svg>Advisory</button>
+<button class="btn" style="border:0;background:none;padding:0 4px" aria-label="Account menu"><span class="av">S</span><svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="m4 6 4 4 4-4"></path></svg></button>
+</header>
+<div style="flex:1 1 auto;display:flex;flex-wrap:wrap;align-items:stretch">
+<nav class="nav" aria-label="Main" style="flex:1 1 190px;max-width:210px">
+<a href="#"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1.5 8h3l2-5 3 10 2-5h3"></path></svg>Overview</a>
+<a href="Main.dc.html"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 2 14.5 13.5h-13z"></path></svg>Issues</a>
+<a class="soon" href="Trace.dc.html"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 2 14 5 8 8 2 5zM2 8l6 3 6-3M2 11l6 3 6-3"></path></svg>Traces<span class="h" style="margin-left:auto;font-size:10px">Soon</span></a>
+<a href="#"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 4h9M5 8h9M5 12h9M2 4h.5M2 8h.5M2 12h.5"></path></svg>Logs</a>
+<a href="Replay.dc.html"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4.5 2.5v11l9-5.5z"></path></svg>Session replay</a>
+<a href="#"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 11V7a4 4 0 0 1 8 0v4l1.5 1.5h-11zM6.5 14h3"></path></svg>Alerts</a>
+<p class="h">Admin</p>
+<a href="#"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="6" cy="5.5" r="2.5"></circle><path d="M1.5 14c0-2.5 2-4 4.5-4s4.5 1.5 4.5 4M11 3.2a2.4 2.4 0 0 1 0 4.6M12.5 10.3c1.3.6 2 1.8 2 3.7"></path></svg>Users &amp; roles</a>
+<a href="Channels.dc.html"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 11V7a4 4 0 0 1 8 0v4l1.5 1.5h-11zM6.5 14h3"></path></svg>Notification channels</a>
+<a href="Access.dc.html"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1.5 2.5 3.5v4c0 3.2 2.3 5.8 5.5 7 3.2-1.2 5.5-3.8 5.5-7v-4z"></path></svg>Enforcement</a>
+<a class="on" href="Health.dc.html"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><ellipse cx="8" cy="3.5" rx="5.5" ry="2"></ellipse><path d="M2.5 3.5v9c0 1.1 2.5 2 5.5 2s5.5-.9 5.5-2v-9M2.5 8c0 1.1 2.5 2 5.5 2s5.5-.9 5.5-2"></path></svg>Storage &amp; health</a>
+</nav>
+
+<main style="flex:999 1 560px;min-width:0;display:flex;flex-direction:column;gap:20px;padding:20px 24px 40px">
+<div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px">
+<div style="display:flex;flex-direction:column;gap:2px">
+<h1 style="margin:0;font-size:22px;font-weight:650;letter-spacing:-0.01em">Storage &amp; health</h1>
+<span class="muted">Instance-wide · every project shares this pipeline</span>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+<span class="muted" style="font-size:12px">Checked 4 s ago</span>
+<label style="display:flex;align-items:center;gap:6px;min-height:32px;padding:0 4px"><input type="checkbox" checked> Auto-refresh 15 s</label>
+<div style="display:inline-flex;border:1px solid #2C363C;border-radius:6px;overflow:hidden" role="group" aria-label="Chart window"><button class="btn" style="border:0;border-radius:0;background:#20303A;font-weight:600">1 h</button><button class="btn" style="border:0;border-left:1px solid #2C363C;border-radius:0">6 h</button><button class="btn" style="border:0;border-left:1px solid #2C363C;border-radius:0">24 h</button></div>
+<button class="btn">Copy diagnostics</button>
+</div>
+</div>
+
+<section aria-label="Overall status" style="display:flex;flex-wrap:wrap;align-items:center;gap:12px 16px;padding:14px 16px;border:1px solid #5C4A1A;border-radius:8px;background:#1A160B">
+<span class="pill warn" style="font-size:12px;padding:3px 10px"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 1.8 15 14H1z"></path><path d="M8 6v4M8 11.8v.4"></path></svg>Degraded</span>
+<p style="margin:0;flex:1 1 420px;color:#F3E6C2"><strong>Replay events are falling behind.</strong> Stream <span class="mono">raw:replay</span> is 38 s behind (threshold 30 s) and growing. Ingest is still accepting data; nothing has been dropped. Errors, logs and spans are unaffected.</p>
+<a class="btn" href="#streams">View stream</a>
+</section>
+
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(200px,100%),1fr));gap:12px">
+<div class="tile"><span class="h">Ingest rate</span><span class="big">1,240<span class="muted" style="font-size:13px;font-weight:500"> events/s</span></span><span class="muted" style="font-size:12px">all signals · peak 1,610 in last hour</span></div>
+<div class="tile"><span class="h">Freshness p95</span><span class="big">4.2<span class="muted" style="font-size:13px;font-weight:500"> s</span></span><span class="muted" style="font-size:12px">received → queryable · target under 10 s</span></div>
+<div class="tile"><span class="h">Buffered in Valkey</span><span class="big">18,402<span class="muted" style="font-size:13px;font-weight:500"> pending</span></span><span style="font-size:12px;color:#FFD27A">98% of it is raw:replay</span></div>
+<div class="tile"><span class="h">Dropped · last 24 h</span><span class="big">0</span><span class="muted" style="font-size:12px">rejected 12 (bad project key)</span></div>
+<div class="tile"><span class="h">Dead letters</span><span class="big">3</span><a href="#streams" style="font-size:12px">Inspect dlq:evaluator</a></div>
+</div>
+
+<section aria-label="Ingest pipeline" class="panel" style="padding:16px;display:flex;flex-direction:column;gap:12px">
+<div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap"><h2 class="h">Ingest pipeline · live</h2><span class="muted" style="font-size:12px">arrow labels are events/s between stages</span></div>
+<div style="display:flex;flex-wrap:wrap;align-items:stretch;gap:6px">
+<div class="stage"><div style="display:flex;justify-content:space-between;align-items:center;gap:6px"><strong>Receivers</strong><span class="pill ok">OK</span></div><span class="mono muted">OTLP gRPC :4317</span><span class="mono muted">OTLP HTTP :4318</span><span class="mono muted">POST /ingest/replay</span></div>
+<div class="flow" aria-hidden="true"><span class="mono" style="color:#B4BFC5">1,240</span><svg width="40" height="12" viewBox="0 0 40 12" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M1 6h36M32 2l5 4-5 4"></path></svg></div>
+<div class="stage"><div style="display:flex;justify-content:space-between;align-items:center;gap:6px"><strong>Collector</strong><span class="pill ok">OK</span></div><span class="muted">Go · 2 replicas</span><span class="muted">batch 512 · queue 3%</span></div>
+<div class="flow" aria-hidden="true"><span class="mono" style="color:#B4BFC5">1,240</span><svg width="40" height="12" viewBox="0 0 40 12" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M1 6h36M32 2l5 4-5 4"></path></svg></div>
+<div class="stage w"><div style="display:flex;justify-content:space-between;align-items:center;gap:6px"><strong>Valkey streams</strong><span class="pill warn">Lagging</span></div><span class="muted">5 streams · 18,402 pending</span><span style="color:#FFD27A">raw:replay 38 s behind</span></div>
+<div class="flow" aria-hidden="true"><span class="mono" style="color:#FFD27A">1,204</span><svg width="40" height="12" viewBox="0 0 40 12" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M1 6h36M32 2l5 4-5 4"></path></svg></div>
+<div class="stage"><div style="display:flex;justify-content:space-between;align-items:center;gap:6px"><strong>Evaluator</strong><span class="pill ok">OK</span></div><span class="muted">.NET · 2 workers</span><span class="muted">0 errors · 3 dead-lettered</span></div>
+<div class="flow" aria-hidden="true"><span class="mono" style="color:#B4BFC5">1,204</span><svg width="40" height="12" viewBox="0 0 40 12" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M1 6h36M32 2l5 4-5 4"></path></svg></div>
+<div style="flex:1.6 1 210px;min-width:0;display:flex;flex-direction:column;gap:6px">
+<div class="stage" style="flex:0 0 auto"><div style="display:flex;justify-content:space-between;align-items:center;gap:6px"><strong>Postgres</strong><span class="tag">write</span><span class="pill ok" style="margin-left:auto">OK</span></div></div>
+<div class="stage" style="flex:0 0 auto"><div style="display:flex;justify-content:space-between;align-items:center;gap:6px"><strong>DuckDB</strong><span class="tag">read</span><span class="pill ok" style="margin-left:auto">2.1 s behind</span></div></div>
+<div class="stage x" style="flex:0 0 auto"><div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:6px"><strong style="color:#B4BFC5">ClickHouse</strong><span class="tag">analytics</span><span class="pill off" style="margin-left:auto">Off</span></div></div>
+</div>
+</div>
+</section>
+
+<section aria-label="Throughput and freshness" style="display:flex;flex-wrap:wrap;gap:12px;align-items:stretch">
+<div class="panel" style="flex:2 1 600px;min-width:0;padding:14px 16px;display:flex;flex-direction:column;gap:10px">
+<div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap"><h2 class="h">Throughput by signal · last hour</h2><span class="muted" style="font-size:12px">events/s · each chart on its own scale</span></div>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(150px,100%),1fr));gap:14px">
+<sc-for list="{{signals}}" as="s" hint-placeholder-count="5">
+<div style="display:flex;flex-direction:column;gap:4px;min-width:0">
+<div style="display:flex;justify-content:space-between;gap:8px"><span>{{s.name}}</span><span class="mono" style="color:#E4E9EB">{{s.now}}</span></div>
+<svg viewBox="0 0 160 44" preserveAspectRatio="none" style="width:100%;height:44px" role="img" aria-label="{{s.name}} throughput, last hour"><line x1="0" y1="43" x2="160" y2="43" stroke="#222A2F" stroke-width="1"></line><polyline points="{{s.pts}}" fill="none" stroke="#6FD3E0" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"></polyline></svg>
+<span class="mono muted" style="font-size:11px">peak {{s.peak}}</span>
+</div>
+</sc-for>
+</div>
+</div>
+<div class="panel" style="flex:1 1 300px;min-width:0;padding:14px 16px;display:flex;flex-direction:column;gap:10px">
+<div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap"><h2 class="h">Freshness p95 · last hour</h2><span class="mono">4.2 s</span></div>
+<svg viewBox="0 0 300 110" preserveAspectRatio="none" style="width:100%;height:110px" role="img" aria-label="Freshness p95 over the last hour, steady near 4 seconds, below the 10 second target">
+<line x1="0" y1="22" x2="300" y2="22" stroke="#93A0A7" stroke-width="1" stroke-dasharray="4 4" vector-effect="non-scaling-stroke"></line>
+<line x1="0" y1="109" x2="300" y2="109" stroke="#222A2F" stroke-width="1"></line>
+<polyline points="{{fresh}}" fill="none" stroke="#6FD3E0" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke"></polyline>
+</svg>
+<div class="mono muted" style="display:flex;justify-content:space-between;font-size:11px"><span>-60 min</span><span>dashed: 10 s target</span><span>now</span></div>
+</div>
+</section>
+
+<section id="streams" aria-label="Valkey" style="display:flex;flex-direction:column;gap:12px">
+<div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap"><h2 style="margin:0;font-size:16px">Valkey <span class="muted" style="font-weight:400;font-size:13px">memory streams between the collector and the evaluator</span></h2><span class="pill warn">1 stream lagging</span></div>
+<div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start">
+<div class="panel" style="flex:1 1 280px;min-width:0;padding:14px 16px;display:flex;flex-direction:column;gap:10px">
+<h3 class="h">Server</h3>
+<div style="display:flex;flex-direction:column;gap:6px"><div style="display:flex;justify-content:space-between"><span>Memory</span><span class="mono">312 MB of 1 GB</span></div><div class="bar"><span style="width:31%;background:#80D8B0"></span></div></div>
+<div>
+<div class="kv"><span class="muted">Eviction policy</span><span class="mono">noeviction</span></div>
+<div class="kv" style="border-top:0;padding-top:0"><span class="muted" style="font-size:12px;grid-column:span 2">Correct for streams: at the limit, ingest pushes back instead of losing data.</span></div>
+<div class="kv"><span class="muted">Persistence</span><span class="mono">AOF everysec</span></div>
+<div class="kv"><span class="muted">Last AOF rewrite</span><span>2 h ago · ok</span></div>
+<div class="kv"><span class="muted">Ops/s</span><span class="mono">3,912</span></div>
+<div class="kv"><span class="muted">Clients</span><span class="mono">14</span></div>
+<div class="kv"><span class="muted">Version · uptime</span><span class="mono">8.0 · 12 d</span></div>
+</div>
+</div>
+<div style="flex:999 1 640px;min-width:0;display:flex;flex-direction:column;gap:12px">
+<div class="panel" style="overflow:hidden">
+<div style="overflow-x:auto"><div style="min-width:900px">
+<div class="st th"><span>Stream</span><span class="num">Length</span><span class="num">Pending</span><span class="num">In/s</span><span class="num">Out/s</span><span class="num">Lag</span><span class="num">Oldest</span><span class="num">Consumers</span><span>Status</span></div>
+<sc-for list="{{streams}}" as="r" hint-placeholder-count="6">
+<div class="st" style="background:{{r.bg}}">
+<span class="mono" style="color:#E4E9EB">{{r.name}}</span>
+<span class="num mono">{{r.len}}</span>
+<span class="num mono" style="color:{{r.pc}}">{{r.pend}}</span>
+<span class="num mono">{{r.inr}}</span>
+<span class="num mono" style="color:{{r.pc}}">{{r.outr}}</span>
+<span class="num mono" style="color:{{r.pc}}">{{r.lag}}</span>
+<span class="num mono">{{r.old}}</span>
+<span class="num mono">{{r.cons}}</span>
+<span><span class="pill {{r.cls}}">{{r.st}}</span></span>
+</div>
+</sc-for>
+</div></div>
+<p class="muted" style="margin:0;padding:10px 14px;border-top:1px solid #1C2428;font-size:12px">Trimmed with <span class="mono">MAXLEN ~</span> per stream. Lag = age of the oldest unacknowledged entry in the consumer group.</p>
+</div>
+<div class="panel" style="padding:14px 16px;display:flex;flex-direction:column;gap:8px">
+<div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap"><h3 class="h">raw:replay consumer lag · last hour</h3><span class="mono" style="color:#FFD27A">38 s</span></div>
+<svg viewBox="0 0 600 90" preserveAspectRatio="none" style="width:100%;height:90px" role="img" aria-label="raw:replay lag flat near zero until 20 minutes ago, then rising to 38 seconds, above the 30 second threshold">
+<line x1="0" y1="20" x2="600" y2="20" stroke="#FFD27A" stroke-width="1" stroke-dasharray="4 4" vector-effect="non-scaling-stroke"></line>
+<line x1="0" y1="89" x2="600" y2="89" stroke="#222A2F" stroke-width="1"></line>
+<polyline points="{{lagPts}}" fill="none" stroke="#6FD3E0" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke"></polyline>
+</svg>
+<div class="mono muted" style="display:flex;justify-content:space-between;font-size:11px"><span>-60 min</span><span>dashed: 30 s warning threshold</span><span>now</span></div>
+<p style="margin:0;color:#C9D2D6">Out/s dropped from 96 to 61 at 13:41, when the replay consumer went from 2 to 1. <a href="#components">See evaluator workers</a>.</p>
+</div>
+</div>
+</div>
+</section>
+
+<section aria-label="Storage tiers" style="display:flex;flex-direction:column;gap:12px">
+<h2 style="margin:0;font-size:16px">Storage tiers</h2>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),1fr));gap:12px">
+<div class="panel" style="padding:16px;display:flex;flex-direction:column;gap:10px">
+<div style="display:flex;align-items:center;gap:8px"><strong style="font-size:15px">Postgres</strong><span class="tag">write store · system of record</span><span class="pill ok" style="margin-left:auto">Healthy</span></div>
+<div style="display:flex;flex-direction:column;gap:6px"><div style="display:flex;justify-content:space-between"><span>Connections</span><span class="mono">18 of 100</span></div><div class="bar"><span style="width:18%;background:#80D8B0"></span></div></div>
+<div>
+<div class="kv"><span class="muted">Database size</span><span class="mono">2.4 GB · +140 MB/day</span></div>
+<div class="kv"><span class="muted">Cache hit ratio</span><span class="mono">99.4%</span></div>
+<div class="kv"><span class="muted">Slow queries (&gt;1 s), 1 h</span><span class="mono">2</span></div>
+<div class="kv"><span class="muted">Oldest open transaction</span><span class="mono">0.8 s</span></div>
+<div class="kv"><span class="muted">Last autovacuum · spans</span><span>14 min ago</span></div>
+<div class="kv"><span class="muted">Version</span><span class="mono">17.2</span></div>
+</div>
+<h3 class="h" style="margin-top:4px">Largest tables</h3>
+<div style="display:grid;grid-template-columns:110px minmax(0,1fr) 64px;gap:8px;align-items:center"><span class="mono">spans</span><div class="bar"><span style="width:100%;background:#6FD3E0"></span></div><span class="mono" style="text-align:right">1.1 GB</span><span class="mono">logs</span><div class="bar"><span style="width:56%;background:#6FD3E0"></span></div><span class="mono" style="text-align:right">620 MB</span><span class="mono">replay_events</span><div class="bar"><span style="width:49%;background:#6FD3E0"></span></div><span class="mono" style="text-align:right">540 MB</span><span class="mono">issues</span><div class="bar"><span style="width:1%;background:#6FD3E0"></span></div><span class="mono" style="text-align:right">4 MB</span></div>
+</div>
+<div class="panel" style="padding:16px;display:flex;flex-direction:column;gap:10px">
+<div style="display:flex;align-items:center;gap:8px"><strong style="font-size:15px">DuckDB</strong><span class="tag">read store · in-process</span><span class="pill ok" style="margin-left:auto">Healthy</span></div>
+<div style="display:flex;flex-direction:column;gap:6px"><div style="display:flex;justify-content:space-between"><span>Memory</span><span class="mono">640 MB of 2 GB limit</span></div><div class="bar"><span style="width:32%;background:#80D8B0"></span></div></div>
+<div>
+<div class="kv"><span class="muted">Behind Postgres</span><span class="mono">2.1 s</span></div>
+<div class="kv"><span class="muted">Last refresh</span><span>3 s ago · 1,840 rows</span></div>
+<div class="kv"><span class="muted">Query time p95, 1 h</span><span class="mono">38 ms</span></div>
+<div class="kv"><span class="muted">Database file</span><span class="mono">1.8 GB</span></div>
+<div class="kv"><span class="muted">Copies</span><span>one per API instance (2)</span></div>
+</div>
+</div>
+<div class="panel" style="padding:16px;display:flex;flex-direction:column;gap:10px;border-style:dashed;background:transparent">
+<div style="display:flex;align-items:center;gap:8px"><strong style="font-size:15px;color:#B4BFC5">ClickHouse</strong><span class="tag">analytical tier · optional</span><span class="pill off" style="margin-left:auto">Not configured</span></div>
+<p style="margin:0;color:#C9D2D6">Not needed at this volume. Postgres and DuckDB are serving every query.</p>
+<p class="muted" style="margin:0">Consider it when DuckDB query times or Postgres growth become the bottleneck. It's switched on in deployment configuration, not from this page.</p>
+<a href="#">How to add the ClickHouse tier</a>
+</div>
+</div>
+</section>
+
+<div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start">
+<section aria-label="Retention and disk" class="panel" style="flex:1 1 560px;min-width:0;padding:14px 16px;display:flex;flex-direction:column;gap:12px">
+<h2 class="h">Retention</h2>
+<div style="overflow-x:auto"><div style="min-width:500px">
+<div class="rt h" style="border-top:0;padding-top:0"><span>Data</span><span>Keep</span><span class="num">Size</span><span class="num">Oldest</span><span class="num">Next purge</span></div>
+<div class="rt"><span>Spans</span><span>14 d</span><span class="num mono">1.1 GB</span><span class="num">14 d</span><span class="num mono">02:00</span></div>
+<div class="rt"><span>Logs</span><span>14 d</span><span class="num mono">620 MB</span><span class="num">14 d</span><span class="num mono">02:00</span></div>
+<div class="rt"><span>Session replay</span><span>30 d</span><span class="num mono">540 MB</span><span class="num">30 d</span><span class="num mono">02:00</span></div>
+<div class="rt"><span>Issues &amp; events</span><span>90 d</span><span class="num mono">96 MB</span><span class="num">61 d</span><span class="num muted">not due</span></div>
+<div class="rt"><span>Metrics</span><span>30 d</span><span class="num mono">48 MB</span><span class="num">30 d</span><span class="num mono">02:00</span></div>
+</div></div>
+<h2 class="h" style="margin-top:4px">Disk</h2>
+<div style="display:grid;grid-template-columns:minmax(120px,170px) minmax(0,1fr) 120px;gap:10px;align-items:center">
+<span>Postgres volume</span><div class="bar"><span style="width:12%;background:#80D8B0"></span></div><span class="mono" style="text-align:right">2.4 / 20 GB</span>
+<span>DuckDB files</span><div class="bar"><span style="width:18%;background:#80D8B0"></span></div><span class="mono" style="text-align:right">3.6 / 20 GB</span>
+<span>Valkey AOF</span><div class="bar"><span style="width:8%;background:#80D8B0"></span></div><span class="mono" style="text-align:right">410 MB / 5 GB</span>
+</div>
+<p class="muted" style="margin:0;font-size:12px">At current growth the Postgres volume fills in about 4 months.</p>
+</section>
+
+<section id="components" aria-label="Components" class="panel" style="flex:1 1 760px;min-width:0;overflow:hidden">
+<div style="padding:12px 14px"><h2 class="h">Components</h2></div>
+<div style="overflow-x:auto"><div style="min-width:740px">
+<div class="cmp th"><span>Component</span><span class="num">Running</span><span>Status</span><span class="num">CPU</span><span class="num">Memory</span><span class="num">Restarts</span><span class="num">Uptime</span></div>
+<sc-for list="{{comps}}" as="c" hint-placeholder-count="6">
+<div class="cmp">
+<span style="display:flex;flex-direction:column"><span>{{c.name}}</span><span class="mono muted" style="font-size:11px">{{c.sub}}</span></span>
+<span class="num mono">{{c.run}}</span>
+<span><span class="pill {{c.cls}}">{{c.st}}</span></span>
+<span class="num mono">{{c.cpu}}</span>
+<span class="num mono">{{c.mem}}</span>
+<span class="num mono" style="color:{{c.rc}}">{{c.rs}}</span>
+<span class="num mono">{{c.up}}</span>
+</div>
+</sc-for>
+</div></div>
+</section>
+</div>
+
+<section aria-label="Health events" class="panel" style="overflow:hidden">
+<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 14px;flex-wrap:wrap"><h2 class="h">Health events · last 24 h</h2><a href="Channels.dc.html">Send these to a channel</a></div>
+<sc-for list="{{events}}" as="e" hint-placeholder-count="6">
+<div class="evt">
+<span class="mono muted">{{e.t}}</span>
+<span><span class="pill {{e.cls}}">{{e.lv}}</span></span>
+<span style="color:#D5DCDF">{{e.m}}</span>
+</div>
+</sc-for>
+</section>
+</main>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":3100}}'>
+class Component extends DCLogic {
+  renderVals() {
+    function pts(vals, w, h, max) {
+      var n = vals.length;
+      return vals.map(function (v, i) { return (i / (n - 1) * w).toFixed(1) + ',' + (h - 1 - v / max * (h - 4)).toFixed(1); }).join(' ');
+    }
+    function series(base, amp, seed, n) {
+      var out = [];
+      for (var i = 0; i < n; i++) out.push(Math.max(0, base + amp * (Math.sin(i * 0.37 + seed) * 0.6 + Math.sin(i * 1.3 + seed * 2) * 0.4)));
+      return out;
+    }
+    var defs = [
+      ['Spans', 820, 160, 1, '820', '1,040'],
+      ['Logs', 310, 70, 2, '311', '402'],
+      ['Session replay', 96, 22, 3, '96', '131'],
+      ['Errors', 4, 3, 4, '4', '11'],
+      ['Metrics', 10, 2, 5, '10', '14']
+    ];
+    var signals = defs.map(function (d) {
+      var s = series(d[1], d[2], d[3], 60);
+      var mx = Math.max.apply(null, s) * 1.15;
+      return { name: d[0], now: d[4] + '/s', peak: d[5] + '/s', pts: pts(s, 160, 44, mx) };
+    });
+    var fr = series(4, 0.8, 7, 60);
+    var lag = [];
+    for (var i = 0; i < 60; i++) lag.push(i < 40 ? 0.4 + Math.abs(Math.sin(i)) * 0.6 : 0.4 + Math.pow((i - 40) / 19, 1.6) * 37.6);
+    return {
+      signals: signals,
+      fresh: pts(fr, 300, 110, 12.5),
+      lagPts: pts(lag, 600, 90, 50),
+      streams: [
+        { name: 'raw:spans', len: '41,203', pend: '212', inr: '820', outr: '818', lag: '0.4 s', old: '0.9 s', cons: '2', cls: 'ok', st: 'OK', pc: '#E4E9EB', bg: 'transparent' },
+        { name: 'raw:logs', len: '22,950', pend: '88', inr: '311', outr: '311', lag: '0.2 s', old: '0.5 s', cons: '2', cls: 'ok', st: 'OK', pc: '#E4E9EB', bg: 'transparent' },
+        { name: 'raw:replay', len: '96,440', pend: '18,021', inr: '96', outr: '61', lag: '38 s', old: '2m 41s', cons: '1 of 2', cls: 'warn', st: 'Lagging', pc: '#FFD27A', bg: '#1A160B' },
+        { name: 'raw:errors', len: '1,804', pend: '3', inr: '4', outr: '4', lag: '0.1 s', old: '0.2 s', cons: '2', cls: 'ok', st: 'OK', pc: '#E4E9EB', bg: 'transparent' },
+        { name: 'raw:metrics', len: '8,112', pend: '78', inr: '10', outr: '10', lag: '0.3 s', old: '0.6 s', cons: '2', cls: 'ok', st: 'OK', pc: '#E4E9EB', bg: 'transparent' },
+        { name: 'dlq:evaluator', len: '3', pend: '—', inr: '0', outr: '—', lag: '—', old: '5h 12m', cons: '—', cls: 'off', st: 'Review', pc: '#E4E9EB', bg: 'transparent' }
+      ],
+      comps: [
+        { name: 'API', sub: 'serves UI + DuckDB', run: '2 / 2', cls: 'ok', st: 'Healthy', cpu: '9%', mem: '1.1 GB', rs: '0', rc: '#E4E9EB', up: '6 d' },
+        { name: 'Collector', sub: 'Go OTel', run: '2 / 2', cls: 'ok', st: 'Healthy', cpu: '14%', mem: '220 MB', rs: '0', rc: '#E4E9EB', up: '6 d' },
+        { name: 'Evaluator', sub: '.NET workers', run: '2 / 2', cls: 'warn', st: '1 consumer idle', cpu: '41%', mem: '780 MB', rs: '1', rc: '#FFD27A', up: '19 min' },
+        { name: 'Valkey', sub: 'streams', run: '1 / 1', cls: 'ok', st: 'Healthy', cpu: '6%', mem: '312 MB', rs: '0', rc: '#E4E9EB', up: '12 d' },
+        { name: 'Postgres', sub: 'write store', run: '1 / 1', cls: 'ok', st: 'Healthy', cpu: '11%', mem: '1.6 GB', rs: '0', rc: '#E4E9EB', up: '12 d' },
+        { name: 'Dex', sub: 'OIDC broker', run: '1 / 1', cls: 'ok', st: 'Healthy', cpu: '1%', mem: '40 MB', rs: '0', rc: '#E4E9EB', up: '12 d' }
+      ],
+      events: [
+        { t: '14:02', cls: 'warn', lv: 'Warning', m: 'raw:replay lag passed 30 s. Still rising.' },
+        { t: '13:41', cls: 'warn', lv: 'Warning', m: 'evaluator-1 restarted; its replay consumer did not rejoin the group.' },
+        { t: '11:20', cls: 'ok', lv: 'Resolved', m: 'Postgres slow-query count back to normal (was 14 in 5 min).' },
+        { t: '09:05', cls: 'off', lv: 'Info', m: 'Collector config reloaded on both replicas.' },
+        { t: '02:00', cls: 'off', lv: 'Info', m: 'Retention purge removed 412,880 spans and 1,204 replay sessions.' },
+        { t: '02:00', cls: 'off', lv: 'Info', m: 'Valkey AOF rewrite completed (410 MB).' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

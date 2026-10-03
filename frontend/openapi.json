@@ -282,6 +282,29 @@
         }
       }
     },
+    "/api/health/overview": {
+      "get": {
+        "tags": [
+          "Tamp.Observer.Api"
+        ],
+        "operationId": "HealthOverview",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthView"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
     "/api/projects/{projectId}/latency": {
       "get": {
         "tags": [
@@ -1182,6 +1205,69 @@
           }
         }
       },
+      "ComponentHealth": {
+        "required": [
+          "name",
+          "subtitle",
+          "status",
+          "runningDesired",
+          "cpuPercent",
+          "memoryBytes",
+          "restarts",
+          "uptime"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "subtitle": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "runningDesired": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "cpuPercent": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
+          "memoryBytes": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "restarts": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "uptime": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
       "CorrelationView": {
         "required": [
           "issueId",
@@ -1268,6 +1354,21 @@
           }
         }
       },
+      "DuckTier": {
+        "required": [
+          "enabled",
+          "store"
+        ],
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "store": {
+            "type": "string"
+          }
+        }
+      },
       "EnforcementView": {
         "required": [
           "mode",
@@ -1280,6 +1381,142 @@
           },
           "locked": {
             "type": "boolean"
+          }
+        }
+      },
+      "HealthKpis": {
+        "required": [
+          "ingestRatePerSec",
+          "freshnessP95Sec",
+          "bufferedPending",
+          "dominantStream",
+          "dropped24h",
+          "rejected24h",
+          "deadLetters"
+        ],
+        "type": "object",
+        "properties": {
+          "ingestRatePerSec": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
+          "freshnessP95Sec": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
+          "bufferedPending": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "dominantStream": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "dropped24h": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "rejected24h": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "deadLetters": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          }
+        }
+      },
+      "HealthView": {
+        "required": [
+          "overallStatus",
+          "overallMessage",
+          "kpis",
+          "pipeline",
+          "valkey",
+          "postgres",
+          "duck",
+          "clickHouseConfigured",
+          "components"
+        ],
+        "type": "object",
+        "properties": {
+          "overallStatus": {
+            "type": "string"
+          },
+          "overallMessage": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "kpis": {
+            "$ref": "#/components/schemas/HealthKpis"
+          },
+          "pipeline": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PipelineStage"
+            }
+          },
+          "valkey": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ValkeyHealth"
+              }
+            ]
+          },
+          "postgres": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PgTier"
+              }
+            ]
+          },
+          "duck": {
+            "$ref": "#/components/schemas/DuckTier"
+          },
+          "clickHouseConfigured": {
+            "type": "boolean"
+          },
+          "components": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ComponentHealth"
+            }
           }
         }
       },
@@ -1752,6 +1989,89 @@
           }
         }
       },
+      "PgTier": {
+        "required": [
+          "connections",
+          "maxConnections",
+          "dbSizeBytes",
+          "cacheHitRatio",
+          "version",
+          "largestTables"
+        ],
+        "type": "object",
+        "properties": {
+          "connections": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "maxConnections": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "dbSizeBytes": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "cacheHitRatio": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
+          "version": {
+            "type": "string"
+          },
+          "largestTables": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TableSize"
+            }
+          }
+        }
+      },
+      "PipelineStage": {
+        "required": [
+          "name",
+          "status",
+          "facts",
+          "tag"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "facts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "tag": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
       "ProjectSummary": {
         "required": [
           "id",
@@ -1920,6 +2240,87 @@
           }
         }
       },
+      "StreamStat": {
+        "required": [
+          "name",
+          "length",
+          "pending",
+          "lagSeconds",
+          "consumers",
+          "consumersExpected",
+          "status"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "length": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "pending": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "lagSeconds": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
+          "consumers": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "consumersExpected": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "TableSize": {
+        "required": [
+          "name",
+          "bytes"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "bytes": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          }
+        }
+      },
       "TraceSummary": {
         "required": [
           "rootOperation",
@@ -2005,6 +2406,97 @@
           "createdAtUtc": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "ValkeyHealth": {
+        "required": [
+          "server",
+          "streams",
+          "laggingCount"
+        ],
+        "type": "object",
+        "properties": {
+          "server": {
+            "$ref": "#/components/schemas/ValkeyServer"
+          },
+          "streams": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StreamStat"
+            }
+          },
+          "laggingCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "ValkeyServer": {
+        "required": [
+          "usedMemoryBytes",
+          "maxMemoryBytes",
+          "evictionPolicy",
+          "persistence",
+          "opsPerSec",
+          "clients",
+          "version",
+          "uptimeDays"
+        ],
+        "type": "object",
+        "properties": {
+          "usedMemoryBytes": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "maxMemoryBytes": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "evictionPolicy": {
+            "type": "string"
+          },
+          "persistence": {
+            "type": "string"
+          },
+          "opsPerSec": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "clients": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "version": {
+            "type": "string"
+          },
+          "uptimeDays": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "format": "double"
           }
         }
       }

@@ -79,6 +79,9 @@ spec:
               value: {{ ternary "1" "0" .Values.api.oidc.allowHttp | quote }}
             - name: OBSERVER_REPLAY_BLOB
               value: /data/replay
+            # Read-only Valkey introspection for the Storage & health page (raw-bucket stream stats).
+            - name: OBSERVER_VALKEY
+              value: {{ printf "%s:6379" (include "tamp-observer.valkeyHost" .) | quote }}
             {{- if .Values.api.selfTelemetry.enabled }}
             - name: OBSERVER_SELF_OTLP
               value: {{ .Values.api.selfTelemetry.otlp | default (printf "http://%s:%v" (include "tamp-observer.collectorHost" .) .Values.collector.service.grpcPort) | quote }}

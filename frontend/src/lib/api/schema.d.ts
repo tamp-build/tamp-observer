@@ -196,6 +196,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/health/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["HealthOverview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects/{projectId}/latency": {
         parameters: {
             query?: never;
@@ -450,6 +466,19 @@ export interface components {
             userAgent: null | string;
             events: components["schemas"]["ClientEvent"][];
         };
+        ComponentHealth: {
+            name: string;
+            subtitle: string;
+            status: string;
+            runningDesired: null | string;
+            /** Format: double */
+            cpuPercent: null | number | string;
+            /** Format: int64 */
+            memoryBytes: null | number | string;
+            /** Format: int32 */
+            restarts: null | number | string;
+            uptime: null | string;
+        };
         CorrelationView: {
             /** Format: uuid */
             issueId: null | string;
@@ -463,9 +492,39 @@ export interface components {
             logs: null | components["schemas"]["LogsOnTrace"];
             replay: null | components["schemas"]["ReplayLink"];
         };
+        DuckTier: {
+            enabled: boolean;
+            store: string;
+        };
         EnforcementView: {
             mode: string;
             locked: boolean;
+        };
+        HealthKpis: {
+            /** Format: double */
+            ingestRatePerSec: null | number | string;
+            /** Format: double */
+            freshnessP95Sec: null | number | string;
+            /** Format: int64 */
+            bufferedPending: number | string;
+            dominantStream: null | string;
+            /** Format: int64 */
+            dropped24h: number | string;
+            /** Format: int64 */
+            rejected24h: number | string;
+            /** Format: int64 */
+            deadLetters: number | string;
+        };
+        HealthView: {
+            overallStatus: string;
+            overallMessage: null | string;
+            kpis: components["schemas"]["HealthKpis"];
+            pipeline: components["schemas"]["PipelineStage"][];
+            valkey: null | components["schemas"]["ValkeyHealth"];
+            postgres: null | components["schemas"]["PgTier"];
+            duck: components["schemas"]["DuckTier"];
+            clickHouseConfigured: boolean;
+            components: components["schemas"]["ComponentHealth"][];
         };
         IngestedLog: {
             /** Format: uuid */
@@ -595,6 +654,24 @@ export interface components {
             /** Format: int64 */
             errorCount: number | string;
         };
+        PgTier: {
+            /** Format: int32 */
+            connections: number | string;
+            /** Format: int32 */
+            maxConnections: number | string;
+            /** Format: int64 */
+            dbSizeBytes: number | string;
+            /** Format: double */
+            cacheHitRatio: number | string;
+            version: string;
+            largestTables: components["schemas"]["TableSize"][];
+        };
+        PipelineStage: {
+            name: string;
+            status: string;
+            facts: string[];
+            tag: null | string;
+        };
         ProjectSummary: {
             /** Format: uuid */
             id: string;
@@ -637,6 +714,25 @@ export interface components {
             readStore: string;
             clickHouseConfigured: boolean;
         };
+        StreamStat: {
+            name: string;
+            /** Format: int64 */
+            length: number | string;
+            /** Format: int64 */
+            pending: number | string;
+            /** Format: double */
+            lagSeconds: null | number | string;
+            /** Format: int32 */
+            consumers: number | string;
+            /** Format: int32 */
+            consumersExpected: number | string;
+            status: string;
+        };
+        TableSize: {
+            name: string;
+            /** Format: int64 */
+            bytes: number | string;
+        };
         TraceSummary: {
             rootOperation: string;
             /** Format: int64 */
@@ -657,6 +753,27 @@ export interface components {
             role: string;
             /** Format: date-time */
             createdAtUtc: string;
+        };
+        ValkeyHealth: {
+            server: components["schemas"]["ValkeyServer"];
+            streams: components["schemas"]["StreamStat"][];
+            /** Format: int32 */
+            laggingCount: number | string;
+        };
+        ValkeyServer: {
+            /** Format: int64 */
+            usedMemoryBytes: number | string;
+            /** Format: int64 */
+            maxMemoryBytes: number | string;
+            evictionPolicy: string;
+            persistence: string;
+            /** Format: int64 */
+            opsPerSec: number | string;
+            /** Format: int32 */
+            clients: number | string;
+            version: string;
+            /** Format: double */
+            uptimeDays: number | string;
         };
     };
     responses: never;
@@ -930,6 +1047,33 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StorageHealth"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    HealthOverview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HealthView"];
                 };
             };
             /** @description Forbidden */

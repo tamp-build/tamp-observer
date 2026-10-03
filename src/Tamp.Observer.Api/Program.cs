@@ -108,6 +108,9 @@ if (!string.IsNullOrWhiteSpace(selfOtlp))
 // HttpClient for the browser-telemetry relay (POST /ingest/client -> collector OTLP/HTTP).
 builder.Services.AddHttpClient();
 
+// Read-only Valkey address for the Storage & health page (raw-bucket introspection). Absent on the floor tier.
+var valkeyConn = Environment.GetEnvironmentVariable("OBSERVER_VALKEY");
+
 // OpenAPI document (ADR 0014): this is the contract the typed TS client is generated from.
 builder.Services.AddOpenApi();
 
@@ -366,6 +369,21 @@ api.MapGet("/health/storage", async (HttpContext http, IAllowedIdentityStore all
     })
     .WithName("StorageHealth")
     .Produces<StorageHealth>()
+    .Produces(StatusCodes.Status403Forbidden);
+
+// Full Storage & health aggregation (ADR 0014, README 7.8): live Valkey + Postgres + pipeline + components.
+// AdministerInstance only. Poll from the UI while the tab is visible.
+api.MapGet("/health/overview", async (HttpContext http, IAllowedIdentityStore allow, IDocumentStore docs, CancellationToken ct) =>
+    {
+        var denied = await HttpAuthorization.RequireAsync(http, allow, Capability.AdministerInstance, ct);
+        if (denied is not null)
+            return denied;
+        var clickHouse = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("OBSERVER_CLICKHOUSE"));
+        var view = await HealthReport.BuildAsync(connectionString, valkeyConn, storeTier, clickHouse, docs, ct);
+        return Results.Ok(view);
+    })
+    .WithName("HealthOverview")
+    .Produces<HealthView>()
     .Produces(StatusCodes.Status403Forbidden);
 
 // Latency percentiles for a project window (read interface, ADR 0006). Guarded by ViewTraces at the project

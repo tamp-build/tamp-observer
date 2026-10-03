@@ -22,6 +22,19 @@ export function int64(v: number | string | null | undefined): number {
   return typeof v === "string" ? Number(v) : v;
 }
 
+/** Human byte size, e.g. 2.4 GB. */
+export function bytes(v: number | string | null | undefined): string {
+  let n = int64(v);
+  if (n <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let i = 0;
+  while (n >= 1024 && i < units.length - 1) {
+    n /= 1024;
+    i++;
+  }
+  return `${n < 10 && i > 0 ? n.toFixed(1) : Math.round(n)} ${units[i]}`;
+}
+
 /** Compact relative time from an ISO timestamp, e.g. "2h ago", "3d ago". */
 export function timeAgo(iso: string | undefined): string {
   if (!iso) return "-";

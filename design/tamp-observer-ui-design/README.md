@@ -150,11 +150,30 @@ Not a single route; a sheet of four reusable states plus the demo banner. See se
 ### 7.7 Mobile triage: `static/Mobile.html`
 390 px. Project switcher + mode badge in the header; env segmented control; regression callout; issue cards (status, last seen, type, 2-line message, location, event count); bottom tab bar with 44 px+ targets. No fake status bar. Resolve/assign/mute from the card's detail view.
 
+### 7.8 Storage & health: `static/Health.html`
+Route `/admin/storage` (exists today as a 3-row tier list; this replaces it). Admin only (`AdministerInstance`). **API:** gap; needs a health endpoint that aggregates collector, Valkey, evaluator, Postgres, DuckDB and (optional) ClickHouse stats. Poll every 15 s while the tab is visible (auto-refresh toggle); chart window 1 h / 6 h / 24 h.
+
+The shell on this artboard matches the **live app** (Demo App project, Advisory badge, nav with icons, Traces "Soon"), not the earlier mockups.
+
+Sections, top to bottom:
+- **Overall status banner.** Hidden when everything is healthy (replace with a small green "All systems healthy" line). When degraded: status pill + one plain sentence naming the component, the number vs threshold, and what is and isn't affected ("ingest still accepting; nothing dropped"). Link to the section.
+- **KPI tiles:** ingest rate (events/s), **freshness p95** (received → queryable; the single best end-to-end health number), pending in Valkey (+ which stream dominates), dropped/rejected in 24 h, dead letters.
+- **Ingest pipeline strip:** Receivers (OTLP gRPC :4317, HTTP :4318, `POST /ingest/replay`) → Collector → Valkey streams → Evaluator → stores (Postgres write, DuckDB read, ClickHouse optional). Each stage: status pill + 1 to 3 facts. Arrow labels = events/s between stages; an arrow turns warning-colored when out/s < in/s. Unconfigured tiers are dashed, never hidden.
+- **Throughput by signal:** small multiples (spans, logs, replay, errors, metrics), one line each on its own scale. Do **not** combine into one multi-series or dual-axis chart. **Freshness p95** line with a dashed target line.
+- **Valkey:** server panel (memory used / maxmemory bar, eviction policy with a note that `noeviction` is correct for streams, persistence AOF/RDB, last rewrite, ops/s, clients, version/uptime). Streams table per stream: length, pending (PEL), in/s, out/s, lag (age of oldest unacked entry), oldest, consumers (`1 of 2` when a consumer dropped), status. Include the dead-letter stream (`dlq:*`) with a Review action. A lag chart for any lagging stream, with the threshold dashed and one sentence explaining the cause when known.
+  - Valkey commands that feed this: `INFO memory|persistence|stats|clients|server`, `XINFO STREAM`, `XINFO GROUPS`, `XINFO CONSUMERS`, `XPENDING` (summary form).
+- **Storage tiers:** Postgres (connections bar, DB size + daily growth, cache hit ratio, slow queries > 1 s, oldest open transaction, last autovacuum on the hottest table, version, largest tables bars). DuckDB (memory vs limit, how far behind Postgres, last refresh, query p95, file size, one copy per API instance). ClickHouse "Not configured" card: what it's for, when to consider it, link to docs; enabled from deploy config only.
+- **Retention:** per data type keep / size / oldest record / next purge. **Disk:** volume usage bars for Postgres, DuckDB files, Valkey AOF + a plain projection ("fills in about 4 months").
+- **Components:** each process with running/desired, status, CPU, memory, restarts (24 h), uptime.
+- **Health events (24 h):** warnings, resolutions and routine ops (config reloads, purges, AOF rewrites). Link to route these to a notification channel.
+
+Status colors here are the status palette only (green OK, yellow warning, red critical, gray off/info), always with a text label. Thresholds (lag 30 s, freshness 10 s, memory 80%, connections 80%, disk 80%) should come from config, not be hardcoded.
+
 ---
 
 ## 8. Suggested component inventory
 
-`AppShell`, `TopBar`, `ProjectSwitcher`, `CommandPalette`, `ModeBadge`, `UserMenu`, `SideNav`, `FilterBar` (`EnvSegmented`, `TimeWindowPicker`, `VersionPicker`), `StatusPill` (unresolved/regressed/resolved/muted), `Tag`, `Button` (default/primary/disabled), `Panel`, `SectionLabel`, `Sparkline`, `IssueTable`, `RegressionCallout`, `CorrelationWalk`, `OccurrenceChart`, `StackTrace` (+ `SymbolicationBadge`), `BreadcrumbList`, `VersionHistory`, `TraceWaterfall`, `SpanAttributes`, `LogList`, `ReplayPlayer` (wraps rrweb-player), `ReplayTimeline`, `ReplayEventList`, `MaskingPill`, `ChannelCard`, `RoutingMatrix`, `LockedReason`, `ScopeDenied`, `NotAdmitted`, `DemoBanner`, `EmptyState`, `LoadingState`, `ErrorState`.
+`AppShell`, `TopBar`, `ProjectSwitcher`, `CommandPalette`, `ModeBadge`, `UserMenu`, `SideNav`, `FilterBar` (`EnvSegmented`, `TimeWindowPicker`, `VersionPicker`), `StatusPill` (unresolved/regressed/resolved/muted), `Tag`, `Button` (default/primary/disabled), `Panel`, `SectionLabel`, `Sparkline`, `IssueTable`, `RegressionCallout`, `CorrelationWalk`, `OccurrenceChart`, `StackTrace` (+ `SymbolicationBadge`), `BreadcrumbList`, `VersionHistory`, `TraceWaterfall`, `SpanAttributes`, `LogList`, `ReplayPlayer` (wraps rrweb-player), `ReplayTimeline`, `ReplayEventList`, `MaskingPill`, `ChannelCard`, `RoutingMatrix`, `HealthBanner`, `StatTile`, `PipelineStrip`, `StreamTable`, `UsageBar`, `MiniLineChart`, `ComponentTable`, `HealthEventList`, `LockedReason`, `ScopeDenied`, `NotAdmitted`, `DemoBanner`, `EmptyState`, `LoadingState`, `ErrorState`.
 
 Every data surface needs four states: loading (skeleton rows matching the layout), empty (one line saying why plus the next action), error (message + retry), permission-denied (section 5).
 
@@ -162,7 +181,7 @@ Every data surface needs four states: loading (skeleton rows matching the layout
 
 ## 9. Not designed yet
 
-Overview dashboard, Logs explorer (+ live tail), Metrics dashboards, Session list (index of replayable sessions), Alerts (rule builder + feed), Project settings (services, environments, versions, areas, capture policy, symbols), Users & roles admin, Storage & health. Follow the same shell, tokens and patterns; the brief (sections 6.1 to 6.12) has the requirements.
+Overview dashboard, Logs explorer (+ live tail), Metrics dashboards, Session list (index of replayable sessions), Alerts (rule builder + feed), Project settings (services, environments, versions, areas, capture policy, symbols), Users & roles admin. Follow the same shell, tokens and patterns; the brief (sections 6.1 to 6.12) has the requirements.
 
 ## 10. Known simplifications in the mockups
 
