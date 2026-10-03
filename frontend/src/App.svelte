@@ -9,6 +9,7 @@
   import { session } from "./lib/stores/session.svelte";
   import { instance } from "./lib/stores/instance.svelte";
   import { router } from "./lib/router.svelte";
+  import { loadConfig } from "./lib/config";
 
   import AppShell from "./lib/components/shell/AppShell.svelte";
   import NotAdmitted from "./lib/components/access/NotAdmitted.svelte";
@@ -57,7 +58,8 @@
     await session.loadMe();
     if (!session.notAdmitted) {
       await instance.load();
-      recording = startRecording();
+      const cfg = await loadConfig();
+      recording = startRecording(cfg.clientProjectKey || "spa");
     }
     booting = false;
   });

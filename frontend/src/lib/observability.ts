@@ -39,6 +39,8 @@ function isSameOriginApi(url: string): boolean {
 function isExpected(url: string, status: number): boolean {
   if (status === 401) return true;
   if (status === 403 && url.includes("/api/me")) return true;
+  // Never capture the telemetry relays themselves: capturing a sink failure would feed the sink (a loop).
+  if (url.includes("/ingest/client") || url.includes("/ingest/replay")) return true;
   return false;
 }
 

@@ -45,10 +45,17 @@ function shouldSurface(kind: ErrorKind, status?: number): boolean {
 }
 
 class ErrorLog {
-  /** Recent captured errors (newest first); the basis for an error log view and future backend forwarding. */
+  /** Recent captured errors (newest first); the basis for an error log view and backend forwarding. */
   recent = $state<AppError[]>([]);
   /** The most recent surfaced error, shown by the toast. */
   last = $state<AppError | null>(null);
+  /** Optional pluggable forwarder (e.g. the backend sink). Kept transport-agnostic: the store never knows the
+      destination. */
+  private sink: ((e: AppError) => void) | null = null;
+
+  setSink(fn: ((e: AppError) => void) | null): void {
+    this.sink = fn;
+  }
 
   capture(entry: Omit<AppError, "at">, opts: { surface?: boolean; echo?: boolean } = {}): AppError {
     const full: AppError = { ...entry, at: new Date().toISOString() };
@@ -57,7 +64,14 @@ class ErrorLog {
     if (opts.echo ?? true) nativeError(`[tamp-observer] ${full.context}: ${full.message}`, full.status ?? "");
     const surface = opts.surface ?? shouldSurface(full.kind, full.status);
     if (surface && !this.isDuplicateOfLast(full)) this.last = full;
-    // Transport-agnostic: a pluggable sink can forward `recent` later; no backend coupling here.
+    // Forward to the sink if one is registered; it must never throw back into capture.
+    if (this.sink) {
+      try {
+        this.sink(full);
+      } catch {
+        /* a broken sink must not break capture */
+      }
+    }
     return full;
   }
 

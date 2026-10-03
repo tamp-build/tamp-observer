@@ -54,6 +54,29 @@
         }
       }
     },
+    "/ingest/client": {
+      "post": {
+        "tags": [
+          "Tamp.Observer.Api"
+        ],
+        "operationId": "IngestClient",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClientTelemetryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
     "/api/me": {
       "get": {
         "tags": [
@@ -939,6 +962,93 @@
           },
           "allowedUnderMode": {
             "type": "boolean"
+          }
+        }
+      },
+      "ClientEvent": {
+        "required": [
+          "kind",
+          "level",
+          "message",
+          "url",
+          "status",
+          "stack",
+          "atUnixMs"
+        ],
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "level": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "url": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "status": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "stack": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "atUnixMs": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          }
+        }
+      },
+      "ClientTelemetryRequest": {
+        "required": [
+          "sessionId",
+          "userAgent",
+          "events"
+        ],
+        "type": "object",
+        "properties": {
+          "sessionId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "userAgent": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ClientEvent"
+            }
           }
         }
       },

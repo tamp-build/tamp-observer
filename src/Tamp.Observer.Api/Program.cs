@@ -85,18 +85,28 @@ builder.Services.AddSingleton<IReplayBlobStore>(new FileReplayBlobStore(replayBl
 // Self-telemetry (ADR 0018, TOBS-21): dogfood the API's own runtime telemetry into tamp-observer via the .NET
 // connector. Off unless a collector endpoint is configured, so the floor is unaffected.
 var selfOtlp = Environment.GetEnvironmentVariable("OBSERVER_SELF_OTLP");
+var selfProject = Environment.GetEnvironmentVariable("OBSERVER_SELF_PROJECT") ?? "tamp-observer";
+var selfEnv = Environment.GetEnvironmentVariable("OBSERVER_SELF_ENV") ?? "dev";
+// OTLP/HTTP endpoint for relaying browser telemetry (ADR 0018): browsers cannot carry the Access-gated OTLP
+// endpoint, so the API relays client events to the collector's HTTP receiver. Default: the gRPC collector host
+// on the HTTP port (collectors expose both), overridable explicitly.
+var selfOtlpHttp = Environment.GetEnvironmentVariable("OBSERVER_SELF_OTLP_HTTP")
+    ?? (!string.IsNullOrWhiteSpace(selfOtlp) ? selfOtlp.Replace(":4317", ":4318") : null);
 if (!string.IsNullOrWhiteSpace(selfOtlp))
 {
     builder.Services.AddTampObserver(o =>
     {
-        o.ProjectKey = Environment.GetEnvironmentVariable("OBSERVER_SELF_PROJECT") ?? "tamp-observer";
+        o.ProjectKey = selfProject;
         o.ServiceName = "tamp-observer-api";
         o.ServiceNamespace = "backend";
         o.ServiceVersion = "0.1.0-alpha";
-        o.DeploymentEnvironment = Environment.GetEnvironmentVariable("OBSERVER_SELF_ENV") ?? "dev";
+        o.DeploymentEnvironment = selfEnv;
         o.CollectorEndpoint = selfOtlp;
     });
 }
+
+// HttpClient for the browser-telemetry relay (POST /ingest/client -> collector OTLP/HTTP).
+builder.Services.AddHttpClient();
 
 // OpenAPI document (ADR 0014): this is the contract the typed TS client is generated from.
 builder.Services.AddOpenApi();
@@ -134,7 +144,13 @@ app.MapGet("/health", () => Results.Ok(new { status = "ok" }))
 // build time, so one image works across deployments (dev Dex, GitHub-via-Dex, any in-enclave IdP). Anonymous;
 // none of these values are secret (they ride in redirects and tokens anyway).
 app.MapGet("/config.json", () =>
-        Results.Ok(new SpaConfig(authority ?? string.Empty, audience ?? string.Empty, oidcClientId)))
+        Results.Ok(new SpaConfig(
+            authority ?? string.Empty,
+            audience ?? string.Empty,
+            oidcClientId,
+            // The project the SPA reports its own errors/replay under; empty disables the client sink (no relay).
+            ClientProjectKey: selfOtlpHttp is not null ? selfProject : string.Empty,
+            Environment: selfEnv)))
     .AllowAnonymous()
     .WithName("SpaConfig");
 
@@ -189,6 +205,45 @@ app.MapPost("/ingest/replay", async (
     })
     .AllowAnonymous()
     .WithName("IngestReplay");
+
+// Browser telemetry relay (ADR 0018): the SPA captures its own errors and ships them here; browsers cannot hold
+// the Access-gated OTLP endpoint, so the API relays them to the collector as OTLP logs (service
+// tamp-observer-web) under the project key the browser carries. Correlates to replay by tamp.session.id.
+app.MapPost("/ingest/client", async (
+        ClientTelemetryRequest body,
+        HttpContext http,
+        IDocumentStore docs,
+        IHttpClientFactory httpFactory,
+        CancellationToken ct) =>
+    {
+        var key = http.Request.Headers["X-Tamp-Project-Key"].ToString();
+        if (string.IsNullOrEmpty(key))
+            return Results.Unauthorized();
+        if (body.Events is null || body.Events.Length == 0)
+            return Results.NoContent();
+        if (selfOtlpHttp is null)
+            return Results.Accepted(); // relay not configured; drop quietly so the floor is unaffected
+
+        await using var qs = docs.QuerySession();
+        var project = await qs.Query<Project>().Where(p => p.Key == key).FirstOrDefaultAsync(ct);
+        if (project is null)
+            return Results.Unauthorized();
+
+        var payload = ClientTelemetry.BuildOtlpLogs(key, "tamp-observer-web", selfEnv, body);
+        var client = httpFactory.CreateClient();
+        using var content = new StringContent(payload, Encoding.UTF8, "application/json");
+        try
+        {
+            var res = await client.PostAsync($"{selfOtlpHttp.TrimEnd('/')}/v1/logs", content, ct);
+            return res.IsSuccessStatusCode ? Results.Accepted() : Results.StatusCode(StatusCodes.Status502BadGateway);
+        }
+        catch
+        {
+            return Results.StatusCode(StatusCodes.Status502BadGateway);
+        }
+    })
+    .AllowAnonymous()
+    .WithName("IngestClient");
 
 var api = app.MapGroup("/api").RequireAuthorization(AllowlistedHandler.PolicyName);
 
@@ -553,7 +608,71 @@ public sealed record AlertEventView(string Kind, Guid IssueId, string Title, Dat
 public sealed record AlertsView(IReadOnlyList<AlertRuleView> Rules, IReadOnlyList<AlertEventView> History);
 
 /// <summary>Runtime OIDC settings the SPA fetches at startup (ADR 0014), so the image is deployment-portable.</summary>
-public sealed record SpaConfig(string OidcAuthority, string OidcAudience, string OidcClientId);
+public sealed record SpaConfig(
+    string OidcAuthority, string OidcAudience, string OidcClientId, string ClientProjectKey, string Environment);
+
+/// <summary>One browser-captured event the SPA ships to <c>/ingest/client</c>.</summary>
+public sealed record ClientEvent(
+    string? Kind, string? Level, string Message, string? Url, int? Status, string? Stack, long? AtUnixMs);
+
+/// <summary>A batch of browser events plus the session context used to correlate them (ADR 0010/0018).</summary>
+public sealed record ClientTelemetryRequest(string? SessionId, string? UserAgent, ClientEvent[] Events);
+
+/// <summary>Builds OTLP/JSON logs from a browser telemetry batch so the normal collector->evaluator->store path
+/// ingests them like any other logs. String-valued attributes keep the JSON robust across the int64 wire rules.</summary>
+public static class ClientTelemetry
+{
+    public static string BuildOtlpLogs(string projectKey, string service, string env, ClientTelemetryRequest body)
+    {
+        static object Attr(string k, string v) => new { key = k, value = new { stringValue = v } };
+        var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+        var records = (body.Events ?? []).Select(e =>
+        {
+            var attrs = new List<object>();
+            if (!string.IsNullOrEmpty(body.SessionId)) attrs.Add(Attr("tamp.session.id", body.SessionId!));
+            if (!string.IsNullOrEmpty(e.Kind)) attrs.Add(Attr("client.kind", e.Kind!));
+            if (!string.IsNullOrEmpty(e.Url)) attrs.Add(Attr("url.full", e.Url!));
+            if (e.Status is int s) attrs.Add(Attr("http.response.status_code", s.ToString()));
+            if (!string.IsNullOrEmpty(e.Stack)) attrs.Add(Attr("exception.stacktrace", e.Stack!));
+            if (!string.IsNullOrEmpty(body.UserAgent)) attrs.Add(Attr("user_agent.original", body.UserAgent!));
+
+            var warn = string.Equals(e.Level, "warn", StringComparison.OrdinalIgnoreCase);
+            return new
+            {
+                timeUnixNano = ((e.AtUnixMs ?? nowMs) * 1_000_000L).ToString(),
+                severityNumber = warn ? 13 : 17,
+                severityText = warn ? "WARN" : "ERROR",
+                body = new { stringValue = e.Message ?? string.Empty },
+                attributes = attrs,
+            };
+        }).ToList();
+
+        var doc = new
+        {
+            resourceLogs = new[]
+            {
+                new
+                {
+                    resource = new
+                    {
+                        attributes = new[]
+                        {
+                            Attr("tamp.project.key", projectKey),
+                            Attr("service.name", service),
+                            Attr("deployment.environment", env),
+                        },
+                    },
+                    scopeLogs = new[]
+                    {
+                        new { scope = new { name = "tamp-observer-web" }, logRecords = records },
+                    },
+                },
+            },
+        };
+        return JsonSerializer.Serialize(doc);
+    }
+}
 
 /// <summary>One delivered replay chunk from the browser SDK (ADR 0010): a batch of rrweb events plus the
 /// session identity and first-chunk context. <see cref="Events"/> is the raw rrweb events JSON array.</summary>

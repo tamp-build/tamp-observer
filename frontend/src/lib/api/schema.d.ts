@@ -52,6 +52,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/ingest/client": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["IngestClient"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/me": {
         parameters: {
             query?: never;
@@ -370,6 +386,22 @@ export interface components {
             reachback: boolean;
             allowedUnderMode: boolean;
         };
+        ClientEvent: {
+            kind: null | string;
+            level: null | string;
+            message: string;
+            url: null | string;
+            /** Format: int32 */
+            status: null | number | string;
+            stack: null | string;
+            /** Format: int64 */
+            atUnixMs: null | number | string;
+        };
+        ClientTelemetryRequest: {
+            sessionId: null | string;
+            userAgent: null | string;
+            events: components["schemas"]["ClientEvent"][];
+        };
         EnforcementView: {
             mode: string;
             locked: boolean;
@@ -592,6 +624,28 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["ReplayChunkRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    IngestClient: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClientTelemetryRequest"];
             };
         };
         responses: {

@@ -5,7 +5,6 @@ import { record } from "rrweb";
 // client-side at record time (section 5); this uses default masking (mask all inputs). Consent and
 // smart-capture (ADR 0011) are a separate concern and intentionally not here yet.
 
-const projectKey = import.meta.env.VITE_REPLAY_PROJECT_KEY ?? "spa-demo";
 const ingestUrl = (import.meta.env.VITE_API_BASE ?? "") + "/ingest/replay";
 const FLUSH_MS = 5000;
 
@@ -14,10 +13,18 @@ export interface Recording {
   stop: () => void;
 }
 
-/// Start recording the current page as one session. Returns the session id (useful as the correlation key on
-/// outbound API calls, ADR 0010 section 4) and a stop handle.
-export function startRecording(): Recording {
+// The active session id, shared so the client error sink can stamp tamp.session.id on captured errors and tie
+// them to this replay (ADR 0010 section 4).
+let activeSessionId: string | null = null;
+export function currentSessionId(): string | null {
+  return activeSessionId;
+}
+
+/// Start recording the current page as one session. The project key comes from runtime config so one build
+/// reports to the right project. Returns the session id (the correlation key) and a stop handle.
+export function startRecording(projectKey: string): Recording {
   const sessionId = crypto.randomUUID();
+  activeSessionId = sessionId;
   let buffer: unknown[] = [];
 
   async function flush(useBeacon = false): Promise<void> {
@@ -61,6 +68,7 @@ export function startRecording(): Recording {
       window.removeEventListener("beforeunload", onUnload);
       stopRecord?.();
       void flush(true);
+      activeSessionId = null;
     },
   };
 }
