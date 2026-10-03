@@ -58,6 +58,9 @@ public sealed class FakeObservabilityStore : IObservabilityStore
 
     public Task<IReadOnlyList<IngestedLog>> GetLogsAsync(LogQuery query, CancellationToken ct = default) =>
         Task.FromResult<IReadOnlyList<IngestedLog>>([]);
+
+    public Task<IssueOccurrence?> GetLatestOccurrenceAsync(Guid projectId, string fingerprint, CancellationToken ct = default) =>
+        Task.FromResult<IssueOccurrence?>(null);
 }
 
 /// <summary>A controllable admission list: the role drives the caller's capabilities, so allow/deny and

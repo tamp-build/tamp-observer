@@ -1,5 +1,6 @@
 import createClient, { type Middleware } from "openapi-fetch";
 import type { paths } from "./schema";
+import { currentSessionId } from "../replay/recorder";
 
 // The typed client the Svelte app talks to the backend through (ADR 0014). Types come from schema.d.ts,
 // generated from the backend's own OpenAPI document, so the frontend cannot drift from the API contract
@@ -20,6 +21,11 @@ const authMiddleware: Middleware = {
   onRequest({ request }) {
     if (bearerToken) {
       request.headers.set("Authorization", `Bearer ${bearerToken}`);
+    }
+    // Stamp the replay session id so the server span carries it and errors correlate to the session (ADR 0010).
+    const sid = currentSessionId();
+    if (sid) {
+      request.headers.set("X-Tamp-Session-Id", sid);
     }
     return request;
   },

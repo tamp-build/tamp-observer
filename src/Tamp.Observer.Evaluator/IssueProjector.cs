@@ -1,5 +1,3 @@
-using System.Security.Cryptography;
-using System.Text;
 using Marten;
 using Tamp.Observer.Alerting;
 using Tamp.Observer.Domain;
@@ -27,7 +25,7 @@ public sealed class IssueProjector(IQuerySession read)
         Guid projectId, Guid serviceId, long versionSequence,
         string? errorType, string title, string groupingKey, DateTimeOffset at, CancellationToken ct)
     {
-        var fingerprint = Fingerprint(serviceId, groupingKey);
+        var fingerprint = IssueFingerprint.Compute(serviceId, groupingKey);
 
         var created = false;
         if (!_touched.TryGetValue(fingerprint, out var issue))
@@ -81,10 +79,4 @@ public sealed class IssueProjector(IQuerySession read)
 
     private static AlertEvent Alert(AlertKind kind, Issue issue, long versionSequence) =>
         new(kind, issue.ProjectId, issue.ServiceId, issue.Id, issue.Fingerprint, issue.Title, issue.ErrorType, issue.Count, versionSequence);
-
-    private static string Fingerprint(Guid serviceId, string groupingKey)
-    {
-        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(serviceId.ToString("N") + "\n" + groupingKey));
-        return Convert.ToHexStringLower(hash.AsSpan(0, 16));
-    }
 }

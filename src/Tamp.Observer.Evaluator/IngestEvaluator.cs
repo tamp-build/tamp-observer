@@ -148,6 +148,14 @@ public sealed partial class IngestEvaluator(
 
             foreach (var s in res.Spans)
             {
+                // Stamp the Issue fingerprint onto error occurrences so an Issue links back to its latest span.
+                string? fingerprint = null;
+                if (s.StatusCode == 2)
+                {
+                    var et = s.Attributes.GetValueOrDefault(ResourceKeys.ExceptionType);
+                    fingerprint = IssueFingerprint.Compute(service.Id, et ?? $"{s.Name}|{s.StatusMessage}");
+                }
+
                 spans.Add(new IngestedSpan
                 {
                     ProjectId = project.Id,
@@ -166,6 +174,7 @@ public sealed partial class IngestEvaluator(
                     StatusMessage = s.StatusMessage,
                     InstanceId = instanceId,
                     Attributes = new Dictionary<string, string>(s.Attributes),
+                    Fingerprint = fingerprint,
                     ReceiptId = item.Envelope.ReceiptId,
                     ReceivedAt = item.Envelope.ReceivedAt,
                 });
@@ -173,6 +182,13 @@ public sealed partial class IngestEvaluator(
 
             foreach (var l in res.Logs)
             {
+                string? fingerprint = null;
+                if (l.SeverityNumber >= 17) // OTLP SEVERITY_NUMBER_ERROR
+                {
+                    var et = l.Attributes.GetValueOrDefault(ResourceKeys.ExceptionType);
+                    fingerprint = IssueFingerprint.Compute(service.Id, et ?? Normalize(l.Body) ?? "log-error");
+                }
+
                 logs.Add(new IngestedLog
                 {
                     ProjectId = project.Id,
@@ -187,6 +203,7 @@ public sealed partial class IngestEvaluator(
                     SpanId = l.SpanId,
                     InstanceId = instanceId,
                     Attributes = new Dictionary<string, string>(l.Attributes),
+                    Fingerprint = fingerprint,
                     ReceiptId = item.Envelope.ReceiptId,
                     ReceivedAt = item.Envelope.ReceivedAt,
                 });

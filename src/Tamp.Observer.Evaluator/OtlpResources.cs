@@ -16,6 +16,9 @@ public static class ResourceKeys
 
     /// <summary>OTLP exception attribute; the preferred Issue fingerprint source (ADR 0015).</summary>
     public const string ExceptionType = "exception.type";
+
+    /// <summary>The browser-minted session id, stamped on spans/logs for the correlation walk (ADR 0010/0014).</summary>
+    public const string SessionId = "tamp.session.id";
 }
 
 /// <summary>The resource attributes of one resource block within an OTLP payload.</summary>

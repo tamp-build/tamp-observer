@@ -195,6 +195,42 @@ ORDER BY time_nano DESC LIMIT {(query.Limit <= 0 ? 200 : query.Limit)}";
         return logs;
     }
 
+    public async Task<IssueOccurrence?> GetLatestOccurrenceAsync(Guid projectId, string fingerprint, CancellationToken ct = default)
+    {
+        await using var conn = await OpenAsync(ct);
+        var span = await LatestOccurrence(conn, _spans, "StartUnixNano", "span", projectId, fingerprint, ct);
+        var log = await LatestOccurrence(conn, _logs, "TimeUnixNano", "log", projectId, fingerprint, ct);
+        if (span is null) return log;
+        if (log is null) return span;
+        return span.AtUnixNano >= log.AtUnixNano ? span : log;
+    }
+
+    private async Task<IssueOccurrence?> LatestOccurrence(
+        DuckDBConnection conn, string table, string timeField, string source, Guid projectId, string fingerprint, CancellationToken ct)
+    {
+        var sql = $@"
+SELECT json_extract_string(data,'$.TraceId') AS trace_id,
+       json_extract_string(data,'$.SpanId') AS span_id,
+       json_extract_string(data,'$.Attributes.""tamp.session.id""') AS session_id,
+       json_extract_string(data,'$.ServiceId') AS service_id,
+       CAST(json_extract_string(data,'$.{timeField}') AS BIGINT) AS at_nano
+FROM {table}
+WHERE json_extract_string(data,'$.ProjectId') = $projectId
+  AND json_extract_string(data,'$.Fingerprint') = $fingerprint
+ORDER BY at_nano DESC LIMIT 1";
+        await using var cmd = Command(conn, sql, [("projectId", projectId.ToString()), ("fingerprint", fingerprint)]);
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        if (!await reader.ReadAsync(ct))
+            return null;
+        return new IssueOccurrence(
+            source,
+            Convert.ToInt64(reader["at_nano"]),
+            reader["trace_id"] as string,
+            reader["span_id"] as string,
+            reader["session_id"] as string,
+            Guid.Parse((string)reader["service_id"]));
+    }
+
     private (string Where, (string Name, object Value)[] Bind) SpanWhere(SpanQuery query)
     {
         var where = "json_extract_string(data,'$.ProjectId') = $projectId"

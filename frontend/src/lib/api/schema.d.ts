@@ -308,6 +308,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{projectId}/issues/{issueId}/correlation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["IssueCorrelation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects/{projectId}/issues/{issueId}/status": {
         parameters: {
             query?: never;
@@ -402,6 +418,18 @@ export interface components {
             userAgent: null | string;
             events: components["schemas"]["ClientEvent"][];
         };
+        CorrelationView: {
+            /** Format: uuid */
+            issueId: string;
+            /** Format: int64 */
+            atUnixNano: null | number | string;
+            traceId: null | string;
+            spanId: null | string;
+            sessionId: null | string;
+            trace: null | components["schemas"]["TraceSummary"];
+            logs: null | components["schemas"]["LogsOnTrace"];
+            replay: null | components["schemas"]["ReplayLink"];
+        };
         EnforcementView: {
             mode: string;
             locked: boolean;
@@ -429,6 +457,7 @@ export interface components {
             attributes?: {
                 [key: string]: string;
             };
+            fingerprint?: null | string;
             receiptId: string;
             /** Format: date-time */
             receivedAt?: string;
@@ -463,6 +492,7 @@ export interface components {
             attributes?: {
                 [key: string]: string;
             };
+            fingerprint?: null | string;
             receiptId: string;
             /** Format: date-time */
             receivedAt?: string;
@@ -509,6 +539,15 @@ export interface components {
             /** Format: double */
             p99: number | string;
         };
+        LogsOnTrace: {
+            /** Format: int32 */
+            total: number | string;
+            /** Format: int32 */
+            errorCount: number | string;
+            /** Format: int32 */
+            warnCount: number | string;
+            topMessage: null | string;
+        };
         MeResponse: {
             subjectId: string;
             email: string;
@@ -535,6 +574,12 @@ export interface components {
             userAgent: null | string;
             events: components["schemas"]["JsonElement"];
         };
+        ReplayLink: {
+            sessionId: string;
+            available: boolean;
+            /** Format: int32 */
+            eventCount: number | string;
+        };
         ReplaySessionSummary: {
             sessionId: string;
             /** Format: date-time */
@@ -558,6 +603,17 @@ export interface components {
             writeStore: string;
             readStore: string;
             clickHouseConfigured: boolean;
+        };
+        TraceSummary: {
+            rootOperation: string;
+            /** Format: int64 */
+            durationNano: number | string;
+            /** Format: int32 */
+            spanCount: number | string;
+            /** Format: int32 */
+            serviceCount: number | string;
+            /** Format: int32 */
+            errorSpanCount: number | string;
         };
         TraceView: {
             spans: components["schemas"]["IngestedSpan"][];
@@ -1088,6 +1144,43 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Issue"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    IssueCorrelation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+                issueId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CorrelationView"];
                 };
             };
             /** @description Forbidden */

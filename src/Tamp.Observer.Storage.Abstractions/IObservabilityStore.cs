@@ -21,6 +21,11 @@ public sealed record TraceView(IReadOnlyList<IngestedSpan> Spans, IReadOnlyList<
 public sealed record LogQuery(
     Guid ProjectId, TimeWindow Window, Guid? ServiceId = null, int? MinSeverityNumber = null, int Limit = 200);
 
+/// <summary>The latest occurrence of an Issue (by fingerprint): the span or log that most recently matched it,
+/// with the correlation keys needed for the walk (ADR 0014). TraceId/SessionId are null when not captured.</summary>
+public sealed record IssueOccurrence(
+    string Source, long AtUnixNano, string? TraceId, string? SpanId, string? SessionId, Guid ServiceId);
+
 /// <summary>
 /// The capability-based read interface over the tiered store (ADR 0006). Operations are expressed as
 /// INTENT, not SQL: each provider (Postgres/Marten today, DuckDB/ClickHouse later) translates intent to
@@ -40,4 +45,8 @@ public interface IObservabilityStore
 
     /// <summary>Recent logs for a Project over the window, newest first (the log explorer, ADR 0006).</summary>
     Task<IReadOnlyList<IngestedLog>> GetLogsAsync(LogQuery query, CancellationToken ct = default);
+
+    /// <summary>The latest error occurrence (span or log) stamped with the given Issue fingerprint, or null if
+    /// none is stored. Drives the correlation walk: from an Issue to its most recent trace and session.</summary>
+    Task<IssueOccurrence?> GetLatestOccurrenceAsync(Guid projectId, string fingerprint, CancellationToken ct = default);
 }

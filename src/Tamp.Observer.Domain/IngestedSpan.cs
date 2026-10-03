@@ -36,6 +36,10 @@ public class IngestedSpan
     // String-valued span attributes (kept flat for the superset write model).
     public Dictionary<string, string> Attributes { get; set; } = [];
 
+    /// <summary>The Issue fingerprint this span was projected into, when it is an error occurrence (ADR 0015).
+    /// Lets an Issue be linked back to its latest occurrence for the correlation walk (ADR 0014). Null otherwise.</summary>
+    public string? Fingerprint { get; set; }
+
     // Provenance from the raw envelope (ADR 0003).
     public required string ReceiptId { get; set; }
     public DateTimeOffset ReceivedAt { get; set; }

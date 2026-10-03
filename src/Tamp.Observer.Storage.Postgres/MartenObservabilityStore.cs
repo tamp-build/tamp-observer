@@ -73,6 +73,32 @@ public sealed class MartenObservabilityStore(IDocumentStore store) : IObservabil
         return await q.OrderByDescending(l => l.TimeUnixNano).Take(query.Limit <= 0 ? 200 : query.Limit).ToListAsync(ct);
     }
 
+    public async Task<IssueOccurrence?> GetLatestOccurrenceAsync(Guid projectId, string fingerprint, CancellationToken ct = default)
+    {
+        await using var session = _store.QuerySession();
+        var span = await session.Query<IngestedSpan>()
+            .Where(s => s.ProjectId == projectId && s.Fingerprint == fingerprint)
+            .OrderByDescending(s => s.StartUnixNano)
+            .FirstOrDefaultAsync(ct);
+        var log = await session.Query<IngestedLog>()
+            .Where(l => l.ProjectId == projectId && l.Fingerprint == fingerprint)
+            .OrderByDescending(l => l.TimeUnixNano)
+            .FirstOrDefaultAsync(ct);
+
+        var spanOcc = span is null ? null : new IssueOccurrence(
+            "span", span.StartUnixNano, span.TraceId, span.SpanId, Session(span.Attributes), span.ServiceId);
+        var logOcc = log is null ? null : new IssueOccurrence(
+            "log", log.TimeUnixNano, log.TraceId, log.SpanId, Session(log.Attributes), log.ServiceId);
+
+        if (spanOcc is null) return logOcc;
+        if (logOcc is null) return spanOcc;
+        return spanOcc.AtUnixNano >= logOcc.AtUnixNano ? spanOcc : logOcc;
+    }
+
+    // The browser-minted correlation key, when present on the occurrence.
+    private static string? Session(IReadOnlyDictionary<string, string> attrs) =>
+        attrs.TryGetValue("tamp.session.id", out var v) ? v : null;
+
     private static IQueryable<IngestedSpan> WindowedSpans(IQuerySession session, SpanQuery query)
     {
         var q = session.Query<IngestedSpan>()

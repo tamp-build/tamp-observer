@@ -11,6 +11,7 @@
   import ErrorState from "../components/ui/ErrorState.svelte";
   import Panel from "../components/ui/Panel.svelte";
   import Icon from "../components/ui/Icon.svelte";
+  import CorrelationWalk from "../components/CorrelationWalk.svelte";
   import { issueStatusLabel, int64, timeAgo } from "../format";
   import { guard, timeout } from "../net";
 
@@ -112,7 +113,7 @@
   </Panel>
 
   <Panel label="Correlation walk">
-    <p class="muted">Trace, logs and session replay correlation for the latest occurrence lands with the issue-occurrence endpoint (API gap).</p>
+    <CorrelationWalk {projectId} {issueId} errorType={issue.errorType ?? issue.title} />
   </Panel>
 {/if}
 

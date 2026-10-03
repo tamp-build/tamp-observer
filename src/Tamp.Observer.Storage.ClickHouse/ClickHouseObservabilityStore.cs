@@ -129,6 +129,11 @@ ORDER BY time_unix_nano DESC LIMIT {(query.Limit <= 0 ? 200 : query.Limit)}";
         return logs;
     }
 
+    public Task<IssueOccurrence?> GetLatestOccurrenceAsync(Guid projectId, string fingerprint, CancellationToken ct = default) =>
+        // The ClickHouse tier does not yet carry the Issue fingerprint column (that tier is disabled in the
+        // current deployment); the correlation-walk occurrence lookup is unavailable here until it is added.
+        Task.FromResult<IssueOccurrence?>(null);
+
     private static string SpanWhere(SpanQuery query, out bool hasService)
     {
         hasService = query.ServiceId is not null;

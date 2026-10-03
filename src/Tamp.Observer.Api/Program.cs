@@ -132,6 +132,17 @@ if (args.Length >= 1 && args[0] == "selftest-store")
 app.UseDefaultFiles();
 app.UseStaticFiles();
 
+// Stamp the browser-minted session id (ADR 0010/0014) onto the server span so a server error correlates back
+// to the user's session replay. Runs inside the ASP.NET Core instrumentation Activity, so it exports as a span
+// attribute and lands on the stored span.
+app.Use(async (ctx, next) =>
+{
+    var sid = ctx.Request.Headers["X-Tamp-Session-Id"].ToString();
+    if (!string.IsNullOrEmpty(sid))
+        System.Diagnostics.Activity.Current?.SetTag("tamp.session.id", sid);
+    await next();
+});
+
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -511,6 +522,67 @@ api.MapGet("/projects/{projectId:guid}/issues/{issueId:guid}", async (
     .Produces(StatusCodes.Status404NotFound)
     .Produces(StatusCodes.Status403Forbidden);
 
+// Correlation walk (ADR 0014): from an Issue to its latest occurrence's trace, logs-on-trace and session
+// replay. The product centerpiece; the occurrence is linked by the fingerprint stamped at ingest.
+api.MapGet("/projects/{projectId:guid}/issues/{issueId:guid}/correlation", async (
+        Guid projectId, Guid issueId,
+        HttpContext http, IAllowedIdentityStore allow,
+        IIssueStore issues, IObservabilityStore store, IReplaySessionStore replays, CancellationToken ct) =>
+    {
+        var denied = await HttpAuthorization.RequireAsync(http, allow, Capability.ViewErrors, ct);
+        if (denied is not null)
+            return denied;
+        var issue = await issues.GetAsync(projectId, issueId, ct);
+        if (issue is null)
+            return Results.NotFound();
+
+        var occ = await store.GetLatestOccurrenceAsync(projectId, issue.Fingerprint, ct);
+        if (occ is null)
+            return Results.Ok(new CorrelationView(issueId, null, null, null, null, null, null, null));
+
+        TraceSummary? trace = null;
+        LogsOnTrace? logsOnTrace = null;
+        if (!string.IsNullOrEmpty(occ.TraceId))
+        {
+            var view = await store.GetTraceAsync(projectId, occ.TraceId, ct);
+            if (view.Spans.Count > 0)
+            {
+                var minStart = view.Spans.Min(s => s.StartUnixNano);
+                var maxEnd = view.Spans.Max(s => s.EndUnixNano);
+                var root = view.Spans.FirstOrDefault(s => string.IsNullOrEmpty(s.ParentSpanId))
+                           ?? view.Spans.OrderBy(s => s.StartUnixNano).First();
+                trace = new TraceSummary(
+                    root.Name, maxEnd - minStart, view.Spans.Count,
+                    view.Spans.Select(s => s.ServiceId).Distinct().Count(),
+                    view.Spans.Count(s => s.StatusCode == 2));
+            }
+            if (view.Logs.Count > 0)
+            {
+                var top = view.Logs.Where(l => l.SeverityNumber >= 17).Select(l => l.Body).FirstOrDefault(b => !string.IsNullOrEmpty(b))
+                          ?? view.Logs.Select(l => l.Body).FirstOrDefault(b => !string.IsNullOrEmpty(b));
+                logsOnTrace = new LogsOnTrace(
+                    view.Logs.Count,
+                    view.Logs.Count(l => l.SeverityNumber >= 17),
+                    view.Logs.Count(l => l.SeverityNumber is >= 13 and < 17),
+                    top);
+            }
+        }
+
+        ReplayLink? replay = null;
+        if (!string.IsNullOrEmpty(occ.SessionId))
+        {
+            var session = await replays.FindAsync(projectId, occ.SessionId, ct);
+            replay = new ReplayLink(occ.SessionId, session is not null, session?.EventCount ?? 0);
+        }
+
+        return Results.Ok(new CorrelationView(
+            issueId, occ.AtUnixNano, occ.TraceId, occ.SpanId, occ.SessionId, trace, logsOnTrace, replay));
+    })
+    .WithName("IssueCorrelation")
+    .Produces<CorrelationView>()
+    .Produces(StatusCodes.Status404NotFound)
+    .Produces(StatusCodes.Status403Forbidden);
+
 // Issue triage (resolve / reopen / ignore). Editor+ (EditCapturePolicy is the Editor-tier verb today).
 api.MapPost("/projects/{projectId:guid}/issues/{issueId:guid}/status", async (
         Guid projectId, Guid issueId, IssueStatusRequest body,
@@ -579,6 +651,15 @@ public sealed record MeResponse(
 public sealed record ProjectSummary(Guid Id, string Key, string Name);
 
 public sealed record ServiceSummary(Guid Id, string ServiceName, string? Namespace);
+
+// Correlation walk (ADR 0014): the latest occurrence of an Issue and the thread it links to.
+public sealed record CorrelationView(
+    Guid IssueId, long? AtUnixNano, string? TraceId, string? SpanId, string? SessionId,
+    TraceSummary? Trace, LogsOnTrace? Logs, ReplayLink? Replay);
+public sealed record TraceSummary(
+    string RootOperation, long DurationNano, int SpanCount, int ServiceCount, int ErrorSpanCount);
+public sealed record LogsOnTrace(int Total, int ErrorCount, int WarnCount, string? TopMessage);
+public sealed record ReplayLink(string SessionId, bool Available, int EventCount);
 
 /// <summary>The instance enforcement posture (ADR 0002).</summary>
 public sealed record EnforcementView(string Mode, bool Locked);

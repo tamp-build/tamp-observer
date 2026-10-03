@@ -682,6 +682,52 @@
         }
       }
     },
+    "/api/projects/{projectId}/issues/{issueId}/correlation": {
+      "get": {
+        "tags": [
+          "Tamp.Observer.Api"
+        ],
+        "operationId": "IssueCorrelation",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "issueId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CorrelationView"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
     "/api/projects/{projectId}/issues/{issueId}/status": {
       "post": {
         "tags": [
@@ -1052,6 +1098,82 @@
           }
         }
       },
+      "CorrelationView": {
+        "required": [
+          "issueId",
+          "atUnixNano",
+          "traceId",
+          "spanId",
+          "sessionId",
+          "trace",
+          "logs",
+          "replay"
+        ],
+        "type": "object",
+        "properties": {
+          "issueId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "atUnixNano": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "traceId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "spanId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "sessionId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "trace": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/TraceSummary"
+              }
+            ]
+          },
+          "logs": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LogsOnTrace"
+              }
+            ]
+          },
+          "replay": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ReplayLink"
+              }
+            ]
+          }
+        }
+      },
       "EnforcementView": {
         "required": [
           "mode",
@@ -1144,6 +1266,12 @@
             "additionalProperties": {
               "type": "string"
             }
+          },
+          "fingerprint": {
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "receiptId": {
             "type": "string"
@@ -1255,6 +1383,12 @@
             "additionalProperties": {
               "type": "string"
             }
+          },
+          "fingerprint": {
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "receiptId": {
             "type": "string"
@@ -1421,6 +1555,47 @@
           }
         }
       },
+      "LogsOnTrace": {
+        "required": [
+          "total",
+          "errorCount",
+          "warnCount",
+          "topMessage"
+        ],
+        "type": "object",
+        "properties": {
+          "total": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "errorCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "warnCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "topMessage": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
       "MeResponse": {
         "required": [
           "subjectId",
@@ -1532,6 +1707,30 @@
           }
         }
       },
+      "ReplayLink": {
+        "required": [
+          "sessionId",
+          "available",
+          "eventCount"
+        ],
+        "type": "object",
+        "properties": {
+          "sessionId": {
+            "type": "string"
+          },
+          "available": {
+            "type": "boolean"
+          },
+          "eventCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
       "ReplaySessionSummary": {
         "required": [
           "sessionId",
@@ -1624,6 +1823,53 @@
           },
           "clickHouseConfigured": {
             "type": "boolean"
+          }
+        }
+      },
+      "TraceSummary": {
+        "required": [
+          "rootOperation",
+          "durationNano",
+          "spanCount",
+          "serviceCount",
+          "errorSpanCount"
+        ],
+        "type": "object",
+        "properties": {
+          "rootOperation": {
+            "type": "string"
+          },
+          "durationNano": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "spanCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "serviceCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "errorSpanCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
           }
         }
       },
