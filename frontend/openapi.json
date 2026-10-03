@@ -97,6 +97,40 @@
         }
       }
     },
+    "/api/projects/{projectId}/services": {
+      "get": {
+        "tags": [
+          "Tamp.Observer.Api"
+        ],
+        "operationId": "ListServices",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ServiceSummary"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/enforcement": {
       "get": {
         "tags": [
@@ -1434,6 +1468,29 @@
             ]
           },
           "userAgent": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "ServiceSummary": {
+        "required": [
+          "id",
+          "serviceName",
+          "namespace"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "serviceName": {
+            "type": "string"
+          },
+          "namespace": {
             "type": [
               "null",
               "string"

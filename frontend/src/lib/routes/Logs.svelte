@@ -10,6 +10,7 @@
   import ErrorState from "../components/ui/ErrorState.svelte";
   import { nanosToTime, severityLabel, severityClass } from "../format";
   import { guard, timeout } from "../net";
+  import { services } from "../stores/services.svelte";
 
   interface Props {
     projectId: string;
@@ -43,6 +44,7 @@
     void projectId;
     void filters.window;
     void errorsOnly;
+    services.loadFor(projectId);
     load();
   });
 </script>
@@ -71,6 +73,7 @@
         <div class="log-row" class:err={severityClass(log.severityNumber) === 'lvl-err'}>
           <span class="mono muted time">{nanosToTime(log.timeUnixNano)}</span>
           <span class="lvl {severityClass(log.severityNumber)}">{severityLabel(log.severityNumber)}</span>
+          <span class="svc muted" title={services.name(projectId, log.serviceId)}>{services.name(projectId, log.serviceId)}</span>
           <span class="mono body">{log.body ?? ''}</span>
         </div>
       {/each}
@@ -98,12 +101,18 @@
   }
   .log-row {
     display: grid;
-    grid-template-columns: 96px 60px minmax(0, 1fr);
+    grid-template-columns: 96px 60px 140px minmax(0, 1fr);
     gap: var(--gap-3);
     align-items: baseline;
     padding: 5px var(--gap-4);
     border-top: 1px solid var(--divider);
-    min-width: 560px;
+    min-width: 680px;
+  }
+  .svc {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--fs-label);
   }
   .log-row.err {
     background: var(--err-bg);

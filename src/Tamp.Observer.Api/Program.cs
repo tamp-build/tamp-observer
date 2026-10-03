@@ -218,6 +218,20 @@ api.MapGet("/projects", async (IDocumentStore docs, CancellationToken ct) =>
     .WithName("ListProjects")
     .Produces<IReadOnlyList<ProjectSummary>>();
 
+// Services discovered within a project (ADR 0007). Reference data the UI resolves ServiceId -> name against
+// for logs, traces and operations. Admission is enough; no extra capability beyond seeing the project.
+api.MapGet("/projects/{projectId:guid}/services", async (Guid projectId, IDocumentStore docs, CancellationToken ct) =>
+    {
+        await using var session = docs.QuerySession();
+        var services = await session.Query<Service>()
+            .Where(s => s.ProjectId == projectId)
+            .OrderBy(s => s.ServiceName)
+            .ToListAsync(ct);
+        return services.Select(s => new ServiceSummary(s.Id, s.ServiceName, s.Namespace)).ToList();
+    })
+    .WithName("ListServices")
+    .Produces<IReadOnlyList<ServiceSummary>>();
+
 // Enforcement posture (the mode badge + explainer, ADR 0002).
 api.MapGet("/enforcement", async (IDocumentStore docs, CancellationToken ct) =>
     {
@@ -508,6 +522,8 @@ public sealed record MeResponse(
 
 /// <summary>A project in the switcher.</summary>
 public sealed record ProjectSummary(Guid Id, string Key, string Name);
+
+public sealed record ServiceSummary(Guid Id, string ServiceName, string? Namespace);
 
 /// <summary>The instance enforcement posture (ADR 0002).</summary>
 public sealed record EnforcementView(string Mode, bool Locked);

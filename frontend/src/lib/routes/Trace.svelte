@@ -10,6 +10,7 @@
   import Panel from "../components/ui/Panel.svelte";
   import { int64, nanosToTime, severityLabel, severityClass } from "../format";
   import { guard, timeout } from "../net";
+  import { services } from "../stores/services.svelte";
 
   interface Props {
     projectId: string;
@@ -58,6 +59,7 @@
 
   $effect(() => {
     void traceId;
+    services.loadFor(projectId);
     load();
   });
 </script>
@@ -80,7 +82,10 @@
     {:else}
       {#each trace.spans as span (span.spanId)}
         <div class="span-row" class:err={int64(span.statusCode) === 2}>
-          <span class="name mono" title={span.name}>{span.name}</span>
+          <span class="name-cell">
+            <span class="svc muted">{services.name(projectId, span.serviceId)}</span>
+            <span class="name mono" title={span.name}>{span.name}</span>
+          </span>
           <span class="track">
             <span class="bar" class:err={int64(span.statusCode) === 2} style="left:{left(span)}%;width:{width(span)}%"></span>
           </span>
@@ -115,6 +120,19 @@
     gap: var(--gap-3);
     align-items: center;
     padding: 4px 0;
+  }
+  .name-cell {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  .svc {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .name {
     overflow: hidden;

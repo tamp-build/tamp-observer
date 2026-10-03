@@ -41,7 +41,15 @@ public static class ServiceCollectionExtensions
                 // tamp ADR 0018: the single build Meter.
                 .AddMeter("Tamp.Build")
                 .AddOtlpExporter(e => e.Endpoint = endpoint))
-            .WithLogging(l => l.AddOtlpExporter(e => e.Endpoint = endpoint));
+            // IncludeFormattedMessage renders the message template into the log body (otherwise the body is the
+            // raw template, e.g. "Request finished {Method} {Path}"); scopes carry request context.
+            .WithLogging(
+                l => l.AddOtlpExporter(e => e.Endpoint = endpoint),
+                o =>
+                {
+                    o.IncludeFormattedMessage = true;
+                    o.IncludeScopes = true;
+                });
 
         return services;
     }
