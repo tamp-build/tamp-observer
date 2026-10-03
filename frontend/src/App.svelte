@@ -13,6 +13,8 @@
   import AppShell from "./lib/components/shell/AppShell.svelte";
   import NotAdmitted from "./lib/components/access/NotAdmitted.svelte";
   import EmptyState from "./lib/components/ui/EmptyState.svelte";
+  import ErrorBoundary from "./lib/components/ui/ErrorBoundary.svelte";
+  import ErrorToast from "./lib/components/ui/ErrorToast.svelte";
 
   import Overview from "./lib/routes/Overview.svelte";
   import Issues from "./lib/routes/Issues.svelte";
@@ -90,6 +92,8 @@
   <NotAdmitted onswitch={signOut} />
 {:else}
   <AppShell {projectId} onsignout={signOut}>
+    {#key route.path}
+    <ErrorBoundary>
     {#if !projectId && route.name !== "not-admitted"}
       <EmptyState message="You do not have access to any projects yet. Ask an admin to grant access." />
     {:else if route.name === "overview"}
@@ -121,8 +125,12 @@
     {:else}
       <EmptyState message="Page not found." />
     {/if}
+    </ErrorBoundary>
+    {/key}
   </AppShell>
 {/if}
+
+<ErrorToast />
 
 <style>
   .boot {
