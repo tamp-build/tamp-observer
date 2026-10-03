@@ -240,6 +240,39 @@ h1 {
   font-weight: 700;
 }
 
+/* Project sidebar. */
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: var(--gap-3) var(--gap-2);
+  border-right: 1px solid var(--divider);
+  background: var(--bg-nav);
+  height: 100%;
+}
+.nav a {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gap-2);
+  min-height: var(--ctl-h);
+  padding: 0 10px;
+  border-radius: var(--r-ctl);
+  color: var(--text-nav);
+}
+.nav a:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+.nav a.on {
+  background: var(--surface-sel);
+  color: var(--text);
+  font-weight: 600;
+}
+.nav .h {
+  padding: var(--gap-4) 10px var(--gap-1);
+}
+
 /* Underline tabs. */
 .tab {
   min-height: 36px;

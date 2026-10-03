@@ -26,7 +26,7 @@
   const base = $derived(router.projectHref(projectId));
 
   const items = $derived<NavItem[]>([
-    { name: "overview", label: "Overview", icon: "activity", href: base, built: false },
+    { name: "overview", label: "Overview", icon: "activity", href: base, built: true },
     { name: "issues", label: "Issues", icon: "alert", href: `${base}/issues`, cap: "ViewErrors", built: true, count: issueCount },
     { name: "trace", label: "Traces", icon: "layers", href: `${base}/traces`, cap: "ViewTraces", built: false },
     { name: "logs", label: "Logs", icon: "list", href: `${base}/logs`, cap: "ViewLogs", built: true },
