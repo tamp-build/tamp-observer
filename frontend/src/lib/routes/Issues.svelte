@@ -11,6 +11,7 @@
   import EmptyState from "../components/ui/EmptyState.svelte";
   import ErrorState from "../components/ui/ErrorState.svelte";
   import { issueStatusLabel, int64, timeAgo } from "../format";
+  import { guard, timeout } from "../net";
 
   interface Props {
     projectId: string;
@@ -48,14 +49,14 @@
     loading = true;
     error = null;
     const status = TABS.find((t) => t.label === activeTab)?.status;
-    const { data, response } = await api.GET("/api/projects/{projectId}/issues", {
-      params: { path: { projectId }, query: { status, limit: 100 } },
+    error = await guard("load issues", async () => {
+      const { data, response } = await api.GET("/api/projects/{projectId}/issues", {
+        params: { path: { projectId }, query: { status, limit: 100 } },
+        ...timeout(),
+      });
+      if (data) issues = data;
+      return response;
     });
-    if (data) {
-      issues = data;
-    } else {
-      error = `${response.status} ${response.statusText}`;
-    }
     loading = false;
   }
 

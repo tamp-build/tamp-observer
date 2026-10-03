@@ -9,7 +9,9 @@
   import Panel from "../components/ui/Panel.svelte";
   import LoadingState from "../components/ui/LoadingState.svelte";
   import EmptyState from "../components/ui/EmptyState.svelte";
+  import ErrorState from "../components/ui/ErrorState.svelte";
   import { int64 } from "../format";
+  import { guard, timeout } from "../net";
 
   interface Props {
     projectId: string;
@@ -22,6 +24,7 @@
   let latency = $state<Latency | null>(null);
   let ops = $state<Op[]>([]);
   let loading = $state(true);
+  let error = $state<string | null>(null);
 
   const projectName = $derived(instance.project(projectId)?.name ?? "Project");
 
@@ -31,13 +34,18 @@
 
   async function load() {
     loading = true;
+    error = null;
     const { start, end } = filters.rangeNanos;
-    const [lat, op] = await Promise.all([
-      api.GET("/api/projects/{projectId}/latency", { params: { path: { projectId }, query: { start, end } } }),
-      api.GET("/api/projects/{projectId}/operations", { params: { path: { projectId }, query: { start, end, limit: 10 } } }),
-    ]);
-    latency = lat.data ?? null;
-    ops = op.data ?? [];
+    error = await guard("load overview", async () => {
+      const [lat, op] = await Promise.all([
+        api.GET("/api/projects/{projectId}/latency", { params: { path: { projectId }, query: { start, end } }, ...timeout() }),
+        api.GET("/api/projects/{projectId}/operations", { params: { path: { projectId }, query: { start, end, limit: 10 } }, ...timeout() }),
+      ]);
+      latency = lat.data ?? null;
+      ops = op.data ?? [];
+      // Surface the first failing response, if any.
+      return lat.response.ok ? op.response : lat.response;
+    });
     loading = false;
   }
 
@@ -58,6 +66,8 @@
 
 {#if loading}
   <LoadingState rows={4} />
+{:else if error}
+  <ErrorState message={`Could not load overview (${error}).`} onretry={load} />
 {:else}
   <Panel label="Latency">
     {#if latency && int64(latency.count) > 0}

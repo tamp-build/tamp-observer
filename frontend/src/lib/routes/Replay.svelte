@@ -11,6 +11,7 @@
   import ErrorState from "../components/ui/ErrorState.svelte";
   import Icon from "../components/ui/Icon.svelte";
   import { int64, timeAgo } from "../format";
+  import { guard, timeout } from "../net";
 
   interface Props {
     projectId: string;
@@ -28,9 +29,14 @@
   async function loadList() {
     loading = true;
     error = null;
-    const { data, response } = await api.GET("/api/projects/{projectId}/sessions", { params: { path: { projectId } } });
-    if (data) sessions = data;
-    else error = `${response.status} ${response.statusText}`;
+    error = await guard("load sessions", async () => {
+      const { data, response } = await api.GET("/api/projects/{projectId}/sessions", {
+        params: { path: { projectId } },
+        ...timeout(),
+      });
+      if (data) sessions = data;
+      return response;
+    });
     loading = false;
   }
 
@@ -38,12 +44,15 @@
     loading = true;
     error = null;
     events = null;
-    const { data, response } = await api.GET("/api/projects/{projectId}/sessions/{sessionId}/events", {
-      params: { path: { projectId, sessionId: id } },
-      parseAs: "json",
+    error = await guard("load session events", async () => {
+      const { data, response } = await api.GET("/api/projects/{projectId}/sessions/{sessionId}/events", {
+        params: { path: { projectId, sessionId: id } },
+        parseAs: "json",
+        ...timeout(),
+      });
+      if (response.ok) events = (data as unknown as unknown[]) ?? [];
+      return response;
     });
-    if (response.ok) events = (data as unknown as unknown[]) ?? [];
-    else error = `${response.status} ${response.statusText}`;
     loading = false;
   }
 

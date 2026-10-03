@@ -9,6 +9,7 @@
   import ErrorState from "../components/ui/ErrorState.svelte";
   import Panel from "../components/ui/Panel.svelte";
   import { timeAgo } from "../format";
+  import { guard, timeout } from "../net";
 
   interface Props {
     projectId: string;
@@ -24,9 +25,11 @@
   async function load() {
     loading = true;
     error = null;
-    const res = await api.GET("/api/projects/{projectId}/alerts", { params: { path: { projectId } } });
-    if (res.data) data = res.data;
-    else error = `${res.response.status} ${res.response.statusText}`;
+    error = await guard("load alerts", async () => {
+      const res = await api.GET("/api/projects/{projectId}/alerts", { params: { path: { projectId } }, ...timeout() });
+      if (res.data) data = res.data;
+      return res.response;
+    });
     loading = false;
   }
 

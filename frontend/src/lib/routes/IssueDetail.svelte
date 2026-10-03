@@ -12,6 +12,7 @@
   import Panel from "../components/ui/Panel.svelte";
   import Icon from "../components/ui/Icon.svelte";
   import { issueStatusLabel, int64, timeAgo } from "../format";
+  import { guard, timeout } from "../net";
 
   interface Props {
     projectId: string;
@@ -32,23 +33,30 @@
   async function load() {
     loading = true;
     error = null;
-    const { data, response } = await api.GET("/api/projects/{projectId}/issues/{issueId}", {
-      params: { path: { projectId, issueId } },
+    error = await guard("load issue", async () => {
+      const { data, response } = await api.GET("/api/projects/{projectId}/issues/{issueId}", {
+        params: { path: { projectId, issueId } },
+        ...timeout(),
+      });
+      if (data) issue = data;
+      return response;
     });
-    if (data) issue = data;
-    else error = `${response.status} ${response.statusText}`;
     loading = false;
   }
 
   async function setStatus(status: string) {
     if (!canEdit) return;
     busy = true;
-    const { response } = await api.POST("/api/projects/{projectId}/issues/{issueId}/status", {
-      params: { path: { projectId, issueId } },
-      body: { status, resolvedInVersionSequence: null },
+    const failure = await guard("update issue status", async () => {
+      const { response } = await api.POST("/api/projects/{projectId}/issues/{issueId}/status", {
+        params: { path: { projectId, issueId } },
+        body: { status, resolvedInVersionSequence: null },
+        ...timeout(),
+      });
+      return response;
     });
     busy = false;
-    if (response.ok) await load();
+    if (!failure) await load();
   }
 
   $effect(() => {

@@ -9,6 +9,7 @@
   import EmptyState from "../components/ui/EmptyState.svelte";
   import ErrorState from "../components/ui/ErrorState.svelte";
   import { nanosToTime, severityLabel, severityClass } from "../format";
+  import { guard, timeout } from "../net";
 
   interface Props {
     projectId: string;
@@ -25,12 +26,16 @@
   async function load() {
     loading = true;
     error = null;
+    logs = [];
     const { start, end } = filters.rangeNanos;
-    const { data, response } = await api.GET("/api/projects/{projectId}/logs", {
-      params: { path: { projectId }, query: { start, end, minSeverity: errorsOnly ? 17 : undefined, limit: 200 } },
+    error = await guard("load logs", async () => {
+      const { data, response } = await api.GET("/api/projects/{projectId}/logs", {
+        params: { path: { projectId }, query: { start, end, minSeverity: errorsOnly ? 17 : undefined, limit: 200 } },
+        ...timeout(),
+      });
+      if (data) logs = data;
+      return response;
     });
-    if (data) logs = data;
-    else error = `${response.status} ${response.statusText}`;
     loading = false;
   }
 
@@ -62,7 +67,7 @@
     <EmptyState message="No logs in this window." />
   {:else}
     <div class="scroll-x">
-      {#each logs as log (log.id ?? log.receiptId)}
+      {#each logs as log, i (i)}
         <div class="log-row" class:err={severityClass(log.severityNumber) === 'lvl-err'}>
           <span class="mono muted time">{nanosToTime(log.timeUnixNano)}</span>
           <span class="lvl {severityClass(log.severityNumber)}">{severityLabel(log.severityNumber)}</span>

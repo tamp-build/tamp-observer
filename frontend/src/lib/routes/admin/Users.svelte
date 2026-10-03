@@ -8,6 +8,7 @@
   import ErrorState from "../../components/ui/ErrorState.svelte";
   import Panel from "../../components/ui/Panel.svelte";
   import { timeAgo } from "../../format";
+  import { guard, timeout } from "../../net";
 
   type User = components["schemas"]["UserView"];
 
@@ -23,9 +24,11 @@
   async function load() {
     loading = true;
     error = null;
-    const { data, response } = await api.GET("/api/users");
-    if (data) users = data;
-    else error = `${response.status} ${response.statusText}`;
+    error = await guard("load users", async () => {
+      const { data, response } = await api.GET("/api/users", { ...timeout() });
+      if (data) users = data;
+      return response;
+    });
     loading = false;
   }
 
@@ -34,13 +37,14 @@
     if (!email.trim()) return;
     adding = true;
     addError = null;
-    const { response } = await api.POST("/api/users/allow", { body: { email: email.trim(), role } });
+    addError = await guard("add user", async () => {
+      const { response } = await api.POST("/api/users/allow", { body: { email: email.trim(), role }, ...timeout() });
+      return response;
+    });
     adding = false;
-    if (response.ok) {
+    if (!addError) {
       email = "";
       await load();
-    } else {
-      addError = `${response.status} ${response.statusText}`;
     }
   }
 

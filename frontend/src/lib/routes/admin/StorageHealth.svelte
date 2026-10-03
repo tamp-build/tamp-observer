@@ -6,6 +6,7 @@
   import LoadingState from "../../components/ui/LoadingState.svelte";
   import ErrorState from "../../components/ui/ErrorState.svelte";
   import Panel from "../../components/ui/Panel.svelte";
+  import { guard, timeout } from "../../net";
 
   type Health = components["schemas"]["StorageHealth"];
 
@@ -16,9 +17,11 @@
   async function load() {
     loading = true;
     error = null;
-    const { data, response } = await api.GET("/api/health/storage");
-    if (data) health = data;
-    else error = `${response.status} ${response.statusText}`;
+    error = await guard("load storage health", async () => {
+      const { data, response } = await api.GET("/api/health/storage", { ...timeout() });
+      if (data) health = data;
+      return response;
+    });
     loading = false;
   }
 

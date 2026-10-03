@@ -8,6 +8,7 @@
   import LoadingState from "../../components/ui/LoadingState.svelte";
   import ErrorState from "../../components/ui/ErrorState.svelte";
   import LockedReason from "../../components/access/LockedReason.svelte";
+  import { guard, timeout } from "../../net";
 
   type Channel = components["schemas"]["ChannelView"];
 
@@ -20,9 +21,11 @@
   async function load() {
     loading = true;
     error = null;
-    const { data, response } = await api.GET("/api/channels");
-    if (data) channels = data;
-    else error = `${response.status} ${response.statusText}`;
+    error = await guard("load channels", async () => {
+      const { data, response } = await api.GET("/api/channels", { ...timeout() });
+      if (data) channels = data;
+      return response;
+    });
     loading = false;
   }
 

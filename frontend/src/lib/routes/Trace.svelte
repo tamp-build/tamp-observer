@@ -9,6 +9,7 @@
   import ErrorState from "../components/ui/ErrorState.svelte";
   import Panel from "../components/ui/Panel.svelte";
   import { int64, nanosToTime, severityLabel, severityClass } from "../format";
+  import { guard, timeout } from "../net";
 
   interface Props {
     projectId: string;
@@ -44,11 +45,14 @@
   async function load() {
     loading = true;
     error = null;
-    const { data, response } = await api.GET("/api/projects/{projectId}/traces/{traceId}", {
-      params: { path: { projectId, traceId } },
+    error = await guard("load trace", async () => {
+      const { data, response } = await api.GET("/api/projects/{projectId}/traces/{traceId}", {
+        params: { path: { projectId, traceId } },
+        ...timeout(),
+      });
+      if (data) trace = data;
+      return response;
     });
-    if (data) trace = data;
-    else error = `${response.status} ${response.statusText}`;
     loading = false;
   }
 
@@ -90,7 +94,7 @@
     {#if trace.logs.length === 0}
       <EmptyState message="No logs on this trace." />
     {:else}
-      {#each trace.logs as log (log.id ?? log.receiptId)}
+      {#each trace.logs as log, i (i)}
         <div class="log" class:err={severityClass(log.severityNumber) === 'lvl-err'}>
           <span class="mono muted">{nanosToTime(log.timeUnixNano)}</span>
           <span class="lvl {severityClass(log.severityNumber)}">{severityLabel(log.severityNumber)}</span>
