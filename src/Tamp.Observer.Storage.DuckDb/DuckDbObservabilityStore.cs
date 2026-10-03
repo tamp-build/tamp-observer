@@ -219,6 +219,103 @@ ORDER BY time_nano DESC LIMIT {(query.Limit <= 0 ? 200 : query.Limit)}";
         return span.AtUnixNano >= log.AtUnixNano ? span : log;
     }
 
+    public async Task<IReadOnlyList<SeriesBucket>> GetSpanSeriesAsync(SpanQuery query, int buckets, CancellationToken ct = default)
+    {
+        buckets = Math.Clamp(buckets, 1, 500);
+        var width = Math.Max(1, (query.Window.EndUnixNano - query.Window.StartUnixNano) / buckets);
+        var where = "json_extract_string(data,'$.ProjectId') = $projectId"
+                  + " AND CAST(json_extract_string(data,'$.StartUnixNano') AS BIGINT) >= $start"
+                  + " AND CAST(json_extract_string(data,'$.StartUnixNano') AS BIGINT) < $end";
+        var bind = new List<(string, object)>
+        {
+            ("projectId", query.ProjectId.ToString()), ("start", query.Window.StartUnixNano),
+            ("end", query.Window.EndUnixNano), ("width", width),
+        };
+        if (query.ServiceId is Guid svc)
+        {
+            where += " AND json_extract_string(data,'$.ServiceId') = $serviceId";
+            bind.Add(("serviceId", svc.ToString()));
+        }
+        var sql = $@"
+SELECT CAST((CAST(json_extract_string(data,'$.StartUnixNano') AS BIGINT) - $start) / $width AS INTEGER) AS b,
+       count(*) AS c,
+       count(*) FILTER (WHERE CAST(json_extract_string(data,'$.StatusCode') AS INTEGER) = 2) AS e
+FROM {_spans} WHERE {where} GROUP BY b";
+        var counts = new long[buckets];
+        var errors = new long[buckets];
+        await using var conn = await OpenAsync(ct);
+        await using var cmd = Command(conn, sql, bind.ToArray());
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            var b = Math.Clamp(Convert.ToInt32(reader["b"]), 0, buckets - 1);
+            counts[b] = Convert.ToInt64(reader["c"]);
+            errors[b] = Convert.ToInt64(reader["e"]);
+        }
+        var list = new List<SeriesBucket>(buckets);
+        for (var i = 0; i < buckets; i++)
+            list.Add(new SeriesBucket(query.Window.StartUnixNano + (long)i * width, counts[i], errors[i]));
+        return list;
+    }
+
+    public async Task<IReadOnlyList<IssueSeries>> GetIssueSeriesAsync(Guid projectId, TimeWindow window, int buckets, CancellationToken ct = default)
+    {
+        buckets = Math.Clamp(buckets, 1, 500);
+        var width = Math.Max(1, (window.EndUnixNano - window.StartUnixNano) / buckets);
+        var byFp = new Dictionary<string, long[]>();
+        var sessions = new Dictionary<string, HashSet<string>>();
+        await using var conn = await OpenAsync(ct);
+
+        async Task Bucketize(string table, string timeField)
+        {
+            var sql = $@"
+SELECT json_extract_string(data,'$.Fingerprint') AS fp,
+       CAST((CAST(json_extract_string(data,'$.{timeField}') AS BIGINT) - $start) / $width AS INTEGER) AS b,
+       count(*) AS c
+FROM {table}
+WHERE json_extract_string(data,'$.ProjectId') = $projectId
+  AND json_extract_string(data,'$.Fingerprint') IS NOT NULL
+  AND CAST(json_extract_string(data,'$.{timeField}') AS BIGINT) >= $start
+  AND CAST(json_extract_string(data,'$.{timeField}') AS BIGINT) < $end
+GROUP BY fp, b";
+            await using var cmd = Command(conn, sql,
+                [("projectId", projectId.ToString()), ("start", window.StartUnixNano), ("end", window.EndUnixNano), ("width", width)]);
+            await using var r = await cmd.ExecuteReaderAsync(ct);
+            while (await r.ReadAsync(ct))
+            {
+                var fp = (string)r["fp"];
+                if (!byFp.TryGetValue(fp, out var arr)) byFp[fp] = arr = new long[buckets];
+                arr[Math.Clamp(Convert.ToInt32(r["b"]), 0, buckets - 1)] += Convert.ToInt64(r["c"]);
+            }
+        }
+
+        async Task Sessions(string table)
+        {
+            var sql = $@"
+SELECT DISTINCT json_extract_string(data,'$.Fingerprint') AS fp,
+       json_extract_string(data,'$.Attributes.""tamp.session.id""') AS sid
+FROM {table}
+WHERE json_extract_string(data,'$.ProjectId') = $projectId
+  AND json_extract_string(data,'$.Fingerprint') IS NOT NULL
+  AND json_extract_string(data,'$.Attributes.""tamp.session.id""') IS NOT NULL";
+            await using var cmd = Command(conn, sql, [("projectId", projectId.ToString())]);
+            await using var r = await cmd.ExecuteReaderAsync(ct);
+            while (await r.ReadAsync(ct))
+            {
+                var fp = (string)r["fp"];
+                if (!sessions.TryGetValue(fp, out var set)) sessions[fp] = set = new HashSet<string>(StringComparer.Ordinal);
+                set.Add((string)r["sid"]);
+            }
+        }
+
+        await Bucketize(_spans, "StartUnixNano");
+        await Bucketize(_logs, "TimeUnixNano");
+        await Sessions(_spans);
+        await Sessions(_logs);
+
+        return byFp.Select(kv => new IssueSeries(kv.Key, kv.Value, sessions.TryGetValue(kv.Key, out var s) ? s.Count : 0)).ToList();
+    }
+
     public async Task<IssueOccurrence?> GetLatestOccurrenceByTraceAsync(Guid projectId, string traceId, CancellationToken ct = default)
     {
         const string match = "json_extract_string(data,'$.TraceId') = $match"

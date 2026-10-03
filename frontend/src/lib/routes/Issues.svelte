@@ -11,10 +11,12 @@
   import { session } from "../stores/session.svelte";
   import FilterBar from "../components/shell/FilterBar.svelte";
   import StatusPill from "../components/ui/StatusPill.svelte";
+  import Sparkline from "../components/ui/Sparkline.svelte";
   import LoadingState from "../components/ui/LoadingState.svelte";
   import EmptyState from "../components/ui/EmptyState.svelte";
   import ErrorState from "../components/ui/ErrorState.svelte";
   import Icon from "../components/ui/Icon.svelte";
+  import { filters } from "../stores/filters.svelte";
   import { issueStatusLabel, int64, timeAgo } from "../format";
 
   interface Props {
@@ -32,9 +34,12 @@
     { label: "Muted", status: "Ignored" },
   ];
 
+  type Series = components["schemas"]["IssueSeries"];
+
   let activeTab = $state("Unresolved");
   let issues = $state<Issue[]>([]);
   let counts = $state<Counts | null>(null);
+  let seriesMap = $state<Record<string, Series>>({});
   let loading = $state(true);
   let error = $state<string | null>(null);
   const canEdit = $derived(session.can("EditCapturePolicy", { project: projectId }));
@@ -58,13 +63,18 @@
     loading = true;
     error = null;
     const status = TABS.find((t) => t.label === activeTab)?.status;
-    const [list, c] = await Promise.all([
+    const { start, end } = filters.rangeNanos;
+    const [list, c, series] = await Promise.all([
       api.GET("/api/projects/{projectId}/issues", { params: { path: { projectId }, query: { status, limit: 100 } } }),
       api.GET("/api/projects/{projectId}/issues/counts", { params: { path: { projectId } } }),
+      api.GET("/api/projects/{projectId}/issues/series", { params: { path: { projectId }, query: { start, end, buckets: 24 } } }),
     ]);
     if (list.data) issues = list.data;
     else error = `${list.response.status} ${list.response.statusText}`;
     if (c.data) counts = c.data;
+    const map: Record<string, Series> = {};
+    for (const s of series.data ?? []) map[s.fingerprint] = s;
+    seriesMap = map;
     loading = false;
   }
 
@@ -150,9 +160,9 @@
               {#if label === "Resolved" && issue.resolvedInVersionSequence != null}<span class="n-res">resolved in v{int64(issue.resolvedInVersionSequence)}</span>{/if}
             </div>
           </div>
-          <svg class="spark" width="120" height="28" viewBox="0 0 120 28" aria-hidden="true"><line x1="0" y1="24" x2="120" y2="24" stroke={sparkColor[label]} stroke-width="1.5" opacity="0.35" /></svg>
+          <span class="spark"><Sparkline values={seriesMap[issue.fingerprint]?.buckets?.map((n) => int64(n)) ?? []} color={sparkColor[label]} /></span>
           <span class="num mono">{int64(issue.count).toLocaleString()}</span>
-          <span class="num mono muted">—</span>
+          <span class="num mono" class:muted={!seriesMap[issue.fingerprint]?.sessions}>{seriesMap[issue.fingerprint]?.sessions ?? "—"}</span>
           <span class="seen"><span>{timeAgo(issue.lastSeenAtUtc)}</span><span class="muted tiny">{timeAgo(issue.firstSeenAtUtc)}</span></span>
           <span class="mono vers">{int64(issue.firstSeenVersionSequence)} → {int64(issue.lastSeenVersionSequence)}</span>
         </a>

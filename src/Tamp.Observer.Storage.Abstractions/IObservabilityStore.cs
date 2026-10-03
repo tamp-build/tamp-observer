@@ -14,6 +14,12 @@ public sealed record LatencyPercentiles(long Count, double P50, double P95, doub
 /// <summary>Per-operation frequency and error count.</summary>
 public sealed record OperationStat(string Operation, long Count, long ErrorCount);
 
+/// <summary>One bucket of a time series: the bucket's start (Unix nanos) and the volume + errors in it (TOBS-25).</summary>
+public sealed record SeriesBucket(long StartUnixNano, long Count, long ErrorCount);
+
+/// <summary>An Issue's occurrence series over a window: dense per-bucket counts and distinct session count (TOBS-25).</summary>
+public sealed record IssueSeries(string Fingerprint, IReadOnlyList<long> Buckets, int Sessions);
+
 /// <summary>The spans and logs sharing a trace id (the correlation walk, ADR 0010).</summary>
 public sealed record TraceView(IReadOnlyList<IngestedSpan> Spans, IReadOnlyList<IngestedLog> Logs);
 
@@ -50,6 +56,14 @@ public interface IObservabilityStore
     /// <summary>The latest error occurrence (span or log) stamped with the given Issue fingerprint, or null if
     /// none is stored. Drives the correlation walk: from an Issue to its most recent trace and session.</summary>
     Task<IssueOccurrence?> GetLatestOccurrenceAsync(Guid projectId, string fingerprint, CancellationToken ct = default);
+
+    /// <summary>A dense time series of span volume + error count over the window, split into <paramref name="buckets"/>
+    /// equal buckets (TOBS-25). Drives the overview error-rate chart and request/error sparklines.</summary>
+    Task<IReadOnlyList<SeriesBucket>> GetSpanSeriesAsync(SpanQuery query, int buckets, CancellationToken ct = default);
+
+    /// <summary>Per-Issue occurrence series over the window: for each fingerprint, a dense bucket count plus the
+    /// number of distinct sessions that hit it (TOBS-25). Drives the per-issue sparkline and session counts.</summary>
+    Task<IReadOnlyList<IssueSeries>> GetIssueSeriesAsync(Guid projectId, TimeWindow window, int buckets, CancellationToken ct = default);
 
     /// <summary>The latest error occurrence tied to a session id, or null. Anchors the correlation walk on a
     /// session (the replay page) and resolves back to its Issue via the occurrence fingerprint.</summary>

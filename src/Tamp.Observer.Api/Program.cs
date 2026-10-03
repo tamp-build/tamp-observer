@@ -411,6 +411,39 @@ api.MapGet("/projects/{projectId:guid}/latency", async (
     .Produces(StatusCodes.Status401Unauthorized)
     .Produces(StatusCodes.Status403Forbidden);
 
+// Span volume + error time series over the window, bucketed (TOBS-25). Drives the overview error-rate chart
+// and request/error sparklines. ViewTraces.
+api.MapGet("/projects/{projectId:guid}/series", async (
+        Guid projectId, long start, long end, Guid? service, int? buckets,
+        HttpContext http, IAllowedIdentityStore allow, IObservabilityStore store, CancellationToken ct) =>
+    {
+        var denied = await HttpAuthorization.RequireAsync(http, allow, Capability.ViewTraces, ct);
+        if (denied is not null)
+            return denied;
+        var series = await store.GetSpanSeriesAsync(
+            new SpanQuery(projectId, new TimeWindow(start, end), service), buckets ?? 48, ct);
+        return Results.Ok(series);
+    })
+    .WithName("ProjectSeries")
+    .Produces<IReadOnlyList<SeriesBucket>>()
+    .Produces(StatusCodes.Status403Forbidden);
+
+// Per-Issue occurrence series + session counts over the window (TOBS-25). Drives per-issue sparklines and
+// session counts on the Issues list and Overview. ViewErrors.
+api.MapGet("/projects/{projectId:guid}/issues/series", async (
+        Guid projectId, long start, long end, int? buckets,
+        HttpContext http, IAllowedIdentityStore allow, IObservabilityStore store, CancellationToken ct) =>
+    {
+        var denied = await HttpAuthorization.RequireAsync(http, allow, Capability.ViewErrors, ct);
+        if (denied is not null)
+            return denied;
+        var series = await store.GetIssueSeriesAsync(projectId, new TimeWindow(start, end), buckets ?? 24, ct);
+        return Results.Ok(series);
+    })
+    .WithName("IssueSeries")
+    .Produces<IReadOnlyList<IssueSeries>>()
+    .Produces(StatusCodes.Status403Forbidden);
+
 // Top operations by frequency with error counts over the window (read interface, ADR 0006).
 api.MapGet("/projects/{projectId:guid}/operations", async (
         Guid projectId,

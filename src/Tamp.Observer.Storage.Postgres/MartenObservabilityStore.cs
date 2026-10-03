@@ -112,6 +112,63 @@ public sealed class MartenObservabilityStore(IDocumentStore store) : IObservabil
         return spanOcc.AtUnixNano >= logOcc.AtUnixNano ? spanOcc : logOcc;
     }
 
+    public async Task<IReadOnlyList<SeriesBucket>> GetSpanSeriesAsync(SpanQuery query, int buckets, CancellationToken ct = default)
+    {
+        buckets = Math.Clamp(buckets, 1, 500);
+        await using var session = _store.QuerySession();
+        var spans = await WindowedSpans(session, query).ToListAsync(ct);
+        var width = BucketWidth(query.Window, buckets);
+        var counts = new long[buckets];
+        var errors = new long[buckets];
+        foreach (var s in spans)
+        {
+            var b = BucketIndex(s.StartUnixNano, query.Window.StartUnixNano, width, buckets);
+            counts[b]++;
+            if (s.StatusCode == 2) errors[b]++;
+        }
+        return BuildSeries(query.Window.StartUnixNano, width, counts, errors);
+    }
+
+    public async Task<IReadOnlyList<IssueSeries>> GetIssueSeriesAsync(Guid projectId, TimeWindow window, int buckets, CancellationToken ct = default)
+    {
+        buckets = Math.Clamp(buckets, 1, 500);
+        await using var session = _store.QuerySession();
+        var spans = await session.Query<IngestedSpan>()
+            .Where(s => s.ProjectId == projectId && s.Fingerprint != null
+                && s.StartUnixNano >= window.StartUnixNano && s.StartUnixNano < window.EndUnixNano)
+            .ToListAsync(ct);
+        var logs = await session.Query<IngestedLog>()
+            .Where(l => l.ProjectId == projectId && l.Fingerprint != null
+                && l.TimeUnixNano >= window.StartUnixNano && l.TimeUnixNano < window.EndUnixNano)
+            .ToListAsync(ct);
+
+        var width = BucketWidth(window, buckets);
+        var byFp = new Dictionary<string, (long[] Counts, HashSet<string> Sessions)>();
+        void Add(string? fp, long t, IReadOnlyDictionary<string, string> attrs)
+        {
+            if (fp is null) return;
+            if (!byFp.TryGetValue(fp, out var agg))
+                byFp[fp] = agg = (new long[buckets], new HashSet<string>(StringComparer.Ordinal));
+            agg.Counts[BucketIndex(t, window.StartUnixNano, width, buckets)]++;
+            if (attrs.TryGetValue("tamp.session.id", out var sid) && !string.IsNullOrEmpty(sid)) agg.Sessions.Add(sid);
+        }
+        foreach (var s in spans) Add(s.Fingerprint, s.StartUnixNano, s.Attributes);
+        foreach (var l in logs) Add(l.Fingerprint, l.TimeUnixNano, l.Attributes);
+
+        return byFp.Select(kv => new IssueSeries(kv.Key, kv.Value.Counts, kv.Value.Sessions.Count)).ToList();
+    }
+
+    internal static long BucketWidth(TimeWindow w, int buckets) => Math.Max(1, (w.EndUnixNano - w.StartUnixNano) / buckets);
+    internal static int BucketIndex(long t, long start, long width, int buckets) =>
+        (int)Math.Clamp((t - start) / width, 0, buckets - 1);
+    internal static IReadOnlyList<SeriesBucket> BuildSeries(long start, long width, long[] counts, long[] errors)
+    {
+        var list = new List<SeriesBucket>(counts.Length);
+        for (var i = 0; i < counts.Length; i++)
+            list.Add(new SeriesBucket(start + (long)i * width, counts[i], errors[i]));
+        return list;
+    }
+
     public async Task<IssueOccurrence?> GetLatestOccurrenceByTraceAsync(Guid projectId, string traceId, CancellationToken ct = default)
     {
         await using var session = _store.QuerySession();

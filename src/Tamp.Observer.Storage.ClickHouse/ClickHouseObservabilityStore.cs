@@ -140,6 +140,12 @@ ORDER BY time_unix_nano DESC LIMIT {(query.Limit <= 0 ? 200 : query.Limit)}";
     public Task<IssueOccurrence?> GetLatestOccurrenceByTraceAsync(Guid projectId, string traceId, CancellationToken ct = default) =>
         Task.FromResult<IssueOccurrence?>(null);
 
+    public Task<IReadOnlyList<SeriesBucket>> GetSpanSeriesAsync(SpanQuery query, int buckets, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<SeriesBucket>>([]);
+
+    public Task<IReadOnlyList<IssueSeries>> GetIssueSeriesAsync(Guid projectId, TimeWindow window, int buckets, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<IssueSeries>>([]);
+
     private static string SpanWhere(SpanQuery query, out bool hasService)
     {
         hasService = query.ServiceId is not null;

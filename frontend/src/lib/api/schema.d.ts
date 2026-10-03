@@ -228,6 +228,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{projectId}/series": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ProjectSeries"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{projectId}/issues/series": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["IssueSeries"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects/{projectId}/operations": {
         parameters: {
             query?: never;
@@ -642,6 +674,12 @@ export interface components {
             /** Format: int32 */
             total: number | string;
         };
+        IssueSeries: {
+            fingerprint: string;
+            buckets: (number | string)[];
+            /** Format: int32 */
+            sessions: number | string;
+        };
         IssueStatus: number;
         IssueStatusRequest: {
             status: string;
@@ -730,6 +768,14 @@ export interface components {
             payloadBytes: number | string;
             startUrl: null | string;
             userAgent: null | string;
+        };
+        SeriesBucket: {
+            /** Format: int64 */
+            startUnixNano: number | string;
+            /** Format: int64 */
+            count: number | string;
+            /** Format: int64 */
+            errorCount: number | string;
         };
         ServiceSummary: {
             /** Format: uuid */
@@ -1143,6 +1189,73 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ProjectSeries: {
+        parameters: {
+            query: {
+                start: number | string;
+                end: number | string;
+                service?: string;
+                buckets?: number | string;
+            };
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeriesBucket"][];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    IssueSeries: {
+        parameters: {
+            query: {
+                start: number | string;
+                end: number | string;
+                buckets?: number | string;
+            };
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueSeries"][];
+                };
             };
             /** @description Forbidden */
             403: {

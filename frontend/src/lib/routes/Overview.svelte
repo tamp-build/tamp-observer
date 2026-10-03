@@ -11,6 +11,7 @@
   import { filters } from "../stores/filters.svelte";
   import FilterBar from "../components/shell/FilterBar.svelte";
   import StatusPill from "../components/ui/StatusPill.svelte";
+  import Sparkline from "../components/ui/Sparkline.svelte";
   import LoadingState from "../components/ui/LoadingState.svelte";
   import EmptyState from "../components/ui/EmptyState.svelte";
   import Icon from "../components/ui/Icon.svelte";
@@ -27,6 +28,8 @@
   type Counts = components["schemas"]["IssueCounts"];
   type Alerts = components["schemas"]["AlertsView"];
   type Session = components["schemas"]["ReplaySessionSummary"];
+  type Series = components["schemas"]["IssueSeries"];
+  type Bucket = components["schemas"]["SeriesBucket"];
 
   let latency = $state<Latency | null>(null);
   let ops = $state<Op[]>([]);
@@ -34,6 +37,8 @@
   let counts = $state<Counts | null>(null);
   let alerts = $state<Alerts | null>(null);
   let sessions = $state<Session[]>([]);
+  let spanSeries = $state<Bucket[]>([]);
+  let issueSeriesMap = $state<Record<string, Series>>({});
   let loading = $state(true);
 
   const projectName = $derived(instance.project(projectId)?.name ?? "Project");
@@ -41,6 +46,9 @@
   const totalErrors = $derived(ops.reduce((a, o) => a + int64(o.errorCount), 0));
   const errorRate = $derived(totalCalls > 0 ? (totalErrors / totalCalls) * 100 : 0);
   const openIssues = $derived(counts ? int64(counts.unresolved) + int64(counts.regressed) : 0);
+  const reqSeries = $derived(spanSeries.map((b) => int64(b.count)));
+  const rateSeries = $derived(spanSeries.map((b) => (int64(b.count) > 0 ? (int64(b.errorCount) / int64(b.count)) * 100 : 0)));
+  const sessionsHit = $derived(Object.values(issueSeriesMap).reduce((a, s) => a + int64(s.sessions), 0));
 
   function ms(v: number | string | undefined): string {
     return (int64(v) / 1_000_000).toFixed(0) + " ms";
@@ -53,13 +61,15 @@
   async function load() {
     loading = true;
     const { start, end } = filters.rangeNanos;
-    const [lat, op, iss, c, al, se] = await Promise.all([
+    const [lat, op, iss, c, al, se, sr, isr] = await Promise.all([
       api.GET("/api/projects/{projectId}/latency", { params: { path: { projectId }, query: { start, end } } }),
       api.GET("/api/projects/{projectId}/operations", { params: { path: { projectId }, query: { start, end, limit: 10 } } }),
       api.GET("/api/projects/{projectId}/issues", { params: { path: { projectId }, query: { limit: 5 } } }),
       api.GET("/api/projects/{projectId}/issues/counts", { params: { path: { projectId } } }),
       api.GET("/api/projects/{projectId}/alerts", { params: { path: { projectId } } }),
       api.GET("/api/projects/{projectId}/sessions", { params: { path: { projectId } } }),
+      api.GET("/api/projects/{projectId}/series", { params: { path: { projectId }, query: { start, end, buckets: 48 } } }),
+      api.GET("/api/projects/{projectId}/issues/series", { params: { path: { projectId }, query: { start, end, buckets: 24 } } }),
     ]);
     latency = lat.data ?? null;
     ops = op.data ?? [];
@@ -67,6 +77,10 @@
     counts = c.data ?? null;
     alerts = al.data ?? null;
     sessions = (se.data ?? []).slice(0, 4);
+    spanSeries = sr.data ?? [];
+    const map: Record<string, Series> = {};
+    for (const s of isr.data ?? []) map[s.fingerprint] = s;
+    issueSeriesMap = map;
     loading = false;
   }
 
@@ -96,12 +110,13 @@
 
   <!-- KPI tiles -->
   <div class="tiles">
-    <div class="tile"><span class="h">Requests</span><span class="big">{int64(latency?.count).toLocaleString()}</span><span class="muted small">spans in window</span></div>
-    <div class="tile"><span class="h">Error rate</span><span class="big" class:up={errorRate >= 5}>{errorRate.toFixed(1)}%</span><span class="muted small">{totalErrors.toLocaleString()} failed of {totalCalls.toLocaleString()}</span></div>
+    <div class="tile"><span class="h">Requests</span><span class="big">{int64(latency?.count).toLocaleString()}</span><Sparkline values={reqSeries} /><span class="muted small">spans in window</span></div>
+    <div class="tile"><span class="h">Error rate</span><span class="big" class:up={errorRate >= 5}>{errorRate.toFixed(1)}%</span><Sparkline values={rateSeries} color="var(--err)" /><span class="muted small">{totalErrors.toLocaleString()} failed of {totalCalls.toLocaleString()}</span></div>
     <div class="tile"><span class="h">Latency p95</span><span class="big">{ms(latency?.p95)}</span><span class="muted small">p50 {ms(latency?.p50)} · p99 {ms(latency?.p99)}</span></div>
     <a class="tile linked" href={router.projectHref(projectId, "/issues")} use:link data-keep-filters="true">
       <span class="h">Open issues</span><span class="big">{openIssues}</span>
       <span class="pills">{#if counts && int64(counts.regressed) > 0}<span class="pill regr">{counts.regressed} regressed</span>{/if}<span class="pill unres">{counts?.unresolved ?? 0} unresolved</span></span>
+      <span class="muted small">{sessionsHit} session{sessionsHit === 1 ? "" : "s"} hit an error</span>
     </a>
   </div>
 
@@ -121,18 +136,23 @@
                 <span class="att-line"><StatusPill status={lbl} /><strong>{issue.errorType ?? "Error"}</strong><span class="muted msg">{issue.title}</span></span>
                 <span class="mono muted att-meta">{services.name(projectId, issue.serviceId)} · since v{int64(issue.firstSeenVersionSequence)}</span>
               </span>
-              <svg class="spark" width="90" height="24" viewBox="0 0 90 24"><line x1="0" y1="20" x2="90" y2="20" stroke="var(--divider)" stroke-width="1.5" /></svg>
+              <span class="spark"><Sparkline values={issueSeriesMap[issue.fingerprint]?.buckets?.map((n) => int64(n)) ?? []} color={lbl === "Regressed" ? "var(--regr-fg)" : lbl === "Resolved" ? "var(--res-fg)" : "var(--unres-fg)"} width={90} height={24} /></span>
               <span class="num mono">{int64(issue.count).toLocaleString()}</span>
-              <span class="num mono muted">—</span>
+              <span class="num mono" class:muted={!issueSeriesMap[issue.fingerprint]?.sessions}>{issueSeriesMap[issue.fingerprint]?.sessions ?? "—"}</span>
             </a>
           {/each}
         {/if}
       </section>
 
-      <!-- Error rate chart (gap) -->
+      <!-- Error rate chart (TOBS-25) -->
       <section class="panel pad">
-        <div class="panel-head" style="padding:0 0 8px"><h2 class="h">Error rate · last 24h</h2></div>
-        <p class="muted small">A per-bucket error-rate time series with deploy markers needs a metrics history store (not collected yet).</p>
+        <div class="panel-head" style="padding:0 0 8px"><h2 class="h">Error rate · window</h2><span class="muted small">failed ÷ all requests per bucket</span></div>
+        {#if spanSeries.length > 1}
+          <div class="chart"><Sparkline values={rateSeries} color="var(--err)" fill width={600} height={120} /></div>
+          <div class="axis mono muted"><span>start</span><span>now</span></div>
+        {:else}
+          <p class="muted small">No request data in this window.</p>
+        {/if}
       </section>
 
       <!-- Operations -->
@@ -235,6 +255,8 @@
   .srow { display: flex; flex-direction: column; gap: 2px; padding: 10px 16px; border-top: 1px solid var(--divider); color: var(--text); }
   .srow:first-of-type { border-top: 0; }
   .srow:hover { background: var(--surface-hover); }
+  .chart :global(svg) { width: 100%; height: 120px; }
+  .axis { display: flex; justify-content: space-between; font-size: 11px; margin-top: 4px; }
   .sid { color: var(--text); }
   .atitle { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 </style>
