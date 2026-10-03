@@ -17,6 +17,14 @@
       "x": 0,
       "y": 3120
     },
+    "Health.dc.html": {
+      "expand": "fill",
+      "h": 3100,
+      "title": "Storage & health dashboard",
+      "w": 1440,
+      "x": 0,
+      "y": 4680
+    },
     "IssueDetail.dc.html": {
       "expand": "fill",
       "h": 1300,
@@ -56,12 +64,12 @@
       "x": 0,
       "y": 1680
     },
-    "Health.dc.html": {
-      "x": 0,
+    "Overview.dc.html": {
+      "x": 1520,
       "y": 4680,
       "w": 1440,
-      "h": 3100,
-      "title": "Storage & health dashboard",
+      "h": 1520,
+      "title": "Project overview (landing)",
       "expand": "fill"
     }
   },
@@ -80,7 +88,7 @@
       "text": "Issues and the correlation walk",
       "w": 240,
       "x": 0,
-      "y": -300
+      "y": -298
     },
     "t2": {
       "kind": "title1",
@@ -100,8 +108,9 @@
     },
     "t4": {
       "kind": "title1",
-      "maxW": 1440,
-      "text": "System health",
+      "maxW": 2960,
+      "text": "System health and project overview",
+      "w": 240,
       "x": 0,
       "y": 4380
     }
@@ -114,7 +123,8 @@
     "Channels.dc.html",
     "Access.dc.html",
     "Mobile.dc.html",
-    "Health.dc.html"
+    "Health.dc.html",
+    "Overview.dc.html"
   ],
   "pages": [],
   "title": "tamp-observer UI"

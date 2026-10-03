@@ -169,11 +169,24 @@ Sections, top to bottom:
 
 Status colors here are the status palette only (green OK, yellow warning, red critical, gray off/info), always with a text label. Thresholds (lag 30 s, freshness 10 s, memory 80%, connections 80%, disk 80%) should come from config, not be hardcoded.
 
+### 7.9 Project overview (landing page): `static/Overview.html`
+Route `/p/:projectId` (replaces today's Overview, which shows only latency numbers + a top-operations table). This is the default page after picking a project. Its job: **answer "is this project OK, and if not, what do I click?" in one screen.** It merges the operations data with issues and releases.
+**API:** latency + operations are built; the rest needs issue counts by status, issue list filtered to new/regressed/spiking, error rate time series, releases (versions with deploy time), sessions-with-errors, recent alerts. Honors the env / time window / version filters.
+
+Sections:
+- **Change banner** (only when something got worse): ties the change to a release when possible ("Error rate 11% → 30% after 2.3.1 shipped 6 h ago; mostly POST /checkout and charge card; 2 issues came back, 1 new"). Button goes to Issues filtered to that version. Hidden when nothing changed.
+- **4 tiles with sparklines:** Requests (+ delta vs previous window), Error rate (failed count + previous value), Latency p95 (p50/p99 as small text; don't draw three lines), Open issues (count + new / regressed / spiking pills + "N sessions hit an error"). The Open issues tile links to Issues.
+- **Needs attention** (left, top 5): issues that are new, regressed, or spiking (rate well above their usual), ranked by impact (users affected, then events). Each row: why-pill, type, message, `service · operation · context` ("since 2.3.1", "4× usual rate"), 24 h sparkline, events, users. Link "All N issues".
+- **Error rate over time** (left, under it): single line, deploy markers as dashed vertical lines labeled with the version.
+- **Right column:** Releases (version, when, new/regressed/resolved counts, error rate 6 h before → after, latest highlighted when it made things worse), Sessions worth replaying (sessions with errors/rage clicks), recent Alerts with ack state.
+- **Operations** (full width, the old table, enriched): calls, errors, error-rate bar + %, p95, calls sparkline, and the **top issue on that operation** with its status pill. Sorted by failed calls. Clicking an operation opens Issues (and later Traces) filtered to it. This is where hits/errors meet issues.
+- Empty project (no data yet): replace everything below the header with setup steps (project key, OTLP endpoint, replay snippet) and a "waiting for first event" indicator.
+
 ---
 
 ## 8. Suggested component inventory
 
-`AppShell`, `TopBar`, `ProjectSwitcher`, `CommandPalette`, `ModeBadge`, `UserMenu`, `SideNav`, `FilterBar` (`EnvSegmented`, `TimeWindowPicker`, `VersionPicker`), `StatusPill` (unresolved/regressed/resolved/muted), `Tag`, `Button` (default/primary/disabled), `Panel`, `SectionLabel`, `Sparkline`, `IssueTable`, `RegressionCallout`, `CorrelationWalk`, `OccurrenceChart`, `StackTrace` (+ `SymbolicationBadge`), `BreadcrumbList`, `VersionHistory`, `TraceWaterfall`, `SpanAttributes`, `LogList`, `ReplayPlayer` (wraps rrweb-player), `ReplayTimeline`, `ReplayEventList`, `MaskingPill`, `ChannelCard`, `RoutingMatrix`, `HealthBanner`, `StatTile`, `PipelineStrip`, `StreamTable`, `UsageBar`, `MiniLineChart`, `ComponentTable`, `HealthEventList`, `LockedReason`, `ScopeDenied`, `NotAdmitted`, `DemoBanner`, `EmptyState`, `LoadingState`, `ErrorState`.
+`AppShell`, `TopBar`, `ProjectSwitcher`, `CommandPalette`, `ModeBadge`, `UserMenu`, `SideNav`, `FilterBar` (`EnvSegmented`, `TimeWindowPicker`, `VersionPicker`), `StatusPill` (unresolved/regressed/resolved/muted), `Tag`, `Button` (default/primary/disabled), `Panel`, `SectionLabel`, `Sparkline`, `IssueTable`, `RegressionCallout`, `CorrelationWalk`, `OccurrenceChart`, `StackTrace` (+ `SymbolicationBadge`), `BreadcrumbList`, `VersionHistory`, `TraceWaterfall`, `SpanAttributes`, `LogList`, `ReplayPlayer` (wraps rrweb-player), `ReplayTimeline`, `ReplayEventList`, `MaskingPill`, `ChannelCard`, `RoutingMatrix`, `HealthBanner`, `ChangeBanner`, `NeedsAttentionList`, `ReleaseList`, `OperationsTable`, `StatTile`, `PipelineStrip`, `StreamTable`, `UsageBar`, `MiniLineChart`, `ComponentTable`, `HealthEventList`, `LockedReason`, `ScopeDenied`, `NotAdmitted`, `DemoBanner`, `EmptyState`, `LoadingState`, `ErrorState`.
 
 Every data surface needs four states: loading (skeleton rows matching the layout), empty (one line saying why plus the next action), error (message + retry), permission-denied (section 5).
 
@@ -181,7 +194,7 @@ Every data surface needs four states: loading (skeleton rows matching the layout
 
 ## 9. Not designed yet
 
-Overview dashboard, Logs explorer (+ live tail), Metrics dashboards, Session list (index of replayable sessions), Alerts (rule builder + feed), Project settings (services, environments, versions, areas, capture policy, symbols), Users & roles admin. Follow the same shell, tokens and patterns; the brief (sections 6.1 to 6.12) has the requirements.
+Logs explorer (+ live tail), Metrics dashboards, Session list (index of replayable sessions), Alerts (rule builder + feed), Project settings (services, environments, versions, areas, capture policy, symbols), Users & roles admin. Follow the same shell, tokens and patterns; the brief (sections 6.1 to 6.12) has the requirements.
 
 ## 10. Known simplifications in the mockups
 

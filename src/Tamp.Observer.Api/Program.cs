@@ -540,6 +540,26 @@ api.MapGet("/projects/{projectId:guid}/issues/{issueId:guid}", async (
     .Produces(StatusCodes.Status404NotFound)
     .Produces(StatusCodes.Status403Forbidden);
 
+// Issue counts by status (the Issues tab badges + Overview open-issue tile). ViewErrors.
+api.MapGet("/projects/{projectId:guid}/issues/counts", async (
+        Guid projectId, HttpContext http, IAllowedIdentityStore allow, IDocumentStore docs, CancellationToken ct) =>
+    {
+        var denied = await HttpAuthorization.RequireAsync(http, allow, Capability.ViewErrors, ct);
+        if (denied is not null)
+            return denied;
+        await using var s = docs.QuerySession();
+        var statuses = await s.Query<Issue>().Where(i => i.ProjectId == projectId).Select(i => i.Status).ToListAsync(ct);
+        return Results.Ok(new IssueCounts(
+            statuses.Count(x => x == IssueStatus.Unresolved),
+            statuses.Count(x => x == IssueStatus.Regressed),
+            statuses.Count(x => x == IssueStatus.Resolved),
+            statuses.Count(x => x == IssueStatus.Ignored),
+            statuses.Count));
+    })
+    .WithName("IssueCounts")
+    .Produces<IssueCounts>()
+    .Produces(StatusCodes.Status403Forbidden);
+
 // Correlation walk (ADR 0014): from an Issue to its latest occurrence's trace, logs-on-trace and session
 // replay. The product centerpiece; the occurrence is linked by the fingerprint stamped at ingest.
 api.MapGet("/projects/{projectId:guid}/issues/{issueId:guid}/correlation", async (
@@ -679,6 +699,8 @@ public sealed record MeResponse(
 public sealed record ProjectSummary(Guid Id, string Key, string Name);
 
 public sealed record ServiceSummary(Guid Id, string ServiceName, string? Namespace);
+
+public sealed record IssueCounts(int Unresolved, int Regressed, int Resolved, int Muted, int Total);
 
 // Correlation walk (ADR 0014): the thread linking an error occurrence to its trace, logs and session. Resolvable
 // from any anchor (issue, trace or session), so the same view drives the walk on every surface. Fields are

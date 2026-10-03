@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Project overview</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0;background:#0D1012}
+a{color:#6FD3E0;text-decoration:none}a:hover{color:#A6E9F2}
+.app{font-family:ui-sans-serif,-apple-system,"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;color:#E4E9EB;background:#0D1012;font-size:13px;line-height:1.45;-webkit-font-smoothing:antialiased}
+.mono{font-family:ui-monospace,"Cascadia Mono","SF Mono",Menlo,Consolas,"Liberation Mono",monospace;font-size:12px}
+.muted{color:#93A0A7}
+.h{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#93A0A7;font-weight:600;margin:0}
+.btn{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:0 12px;border:1px solid #2C363C;border-radius:6px;background:#161C20;color:#E4E9EB;font:inherit;cursor:pointer;white-space:nowrap}
+.btn:hover{background:#1C2429;color:#E4E9EB}
+.pill{display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600;white-space:nowrap}
+.regr{background:#3B2311;color:#FFAD60}
+.new{background:#15253B;color:#93BDFF}
+.spike{background:#3A1A1C;color:#FF9A9A}
+.ok{background:#13291F;color:#80D8B0}
+.warn{background:#33290F;color:#FFD27A}
+.off{background:#1B2328;color:#B4BFC5}
+.adv{background:#271E3A;color:#D2B8FF;border:1px solid #47366B}
+.tag{display:inline-flex;align-items:center;gap:4px;padding:1px 6px;border:1px solid #29333A;border-radius:4px;background:#151B1F;color:#B4BFC5;font-size:11px;white-space:nowrap}
+.panel{background:#12171A;border:1px solid #222A2F;border-radius:8px}
+.top{display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:8px 16px;background:#090B0D;border-bottom:1px solid #20282D}
+.nav{display:flex;flex-direction:column;gap:1px;padding:12px 8px;border-right:1px solid #1D2529;background:#0B0E10}
+.nav a{display:flex;align-items:center;gap:10px;min-height:32px;padding:0 10px;border-radius:6px;color:#AEB9BF}
+.nav a:hover{background:#141A1E;color:#E4E9EB}
+.nav a.on{background:#17252A;color:#E4E9EB;font-weight:600}
+.nav a.soon{color:#748087}
+.nav .h{padding:16px 10px 6px}
+.kbd{border:1px solid #2C363C;border-bottom-width:2px;border-radius:4px;padding:0 5px;font-size:11px;color:#93A0A7}
+.field{display:flex;align-items:center;gap:8px;min-height:32px;padding:0 10px;border:1px solid #2C363C;border-radius:6px;background:#12171A;color:#93A0A7}
+.field input{flex:1;min-width:0;background:transparent;border:0;outline:0;color:#E4E9EB;font:inherit}
+.av{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;background:#2B3A40;color:#E4E9EB;font-size:10px;font-weight:700}
+.seg{display:inline-flex;border:1px solid #2C363C;border-radius:6px;overflow:hidden}
+.seg button{min-height:32px;padding:0 12px;border:0;background:#12171A;color:#AEB9BF;font:inherit;cursor:pointer}
+.seg button+button{border-left:1px solid #2C363C}
+.seg button.on{background:#20303A;color:#E4E9EB;font-weight:600}
+.tile{display:flex;flex-direction:column;gap:6px;padding:14px 16px;background:#12171A;border:1px solid #222A2F;border-radius:8px;min-width:0}
+.big{font-size:26px;font-weight:650;letter-spacing:-0.01em;font-variant-numeric:tabular-nums;line-height:1.1}
+.up{color:#FF9A9A}.down{color:#80D8B0}
+.att{display:grid;grid-template-columns:minmax(0,1fr) 100px 64px 72px;gap:14px;align-items:center;padding:11px 16px;border-top:1px solid #1C2428;color:#E4E9EB}
+.att:hover{background:#141A1E;color:#E4E9EB}
+.op{display:grid;grid-template-columns:minmax(160px,1.1fr) 64px 64px minmax(120px,1fr) 76px 92px minmax(150px,1.2fr);gap:14px;align-items:center;padding:9px 16px;border-top:1px solid #1C2428}
+.op.th{border-top:0;padding:8px 16px;font-size:11px;color:#93A0A7;text-transform:uppercase;letter-spacing:.06em;font-weight:600}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+.bar{height:6px;border-radius:3px;background:#1E262A;overflow:hidden;flex:1}
+.bar span{display:block;height:6px;border-radius:3px;background:#FF9A9A}
+.rel{display:grid;grid-template-columns:64px minmax(0,1fr) auto;gap:10px;align-items:baseline;padding:10px 16px;border-top:1px solid #1C2428}
+.row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;padding:10px 16px;border-top:1px solid #1C2428;color:#E4E9EB}
+.row:hover{background:#141A1E;color:#E4E9EB}
+</style>
+</helmet>
+<div class="app" style="min-height:100vh;display:flex;flex-direction:column">
+<header class="top">
+<a href="Overview.dc.html" style="display:flex;align-items:center;gap:8px;color:#E4E9EB;font-weight:700"><span class="mono" style="font-size:13px;font-weight:700">tamp<span style="color:#6FD3E0">/</span>observer</span></a>
+<button class="btn" aria-label="Switch project">Demo App<svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="m4 6 4 4 4-4"></path></svg></button>
+<label class="field" style="flex:1 1 260px;max-width:420px"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="7" cy="7" r="4.5"></circle><path d="m10.5 10.5 3.5 3.5"></path></svg><input type="text" placeholder="Jump to issue, trace, session…" aria-label="Search everything"><span class="kbd">Ctrl K</span></label>
+<div style="flex:1 1 0"></div>
+<button class="pill adv" style="min-height:24px;cursor:pointer" aria-label="Instance enforcement mode: advisory"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 1.5 2.5 3.5v4c0 3.2 2.3 5.8 5.5 7 3.2-1.2 5.5-3.8 5.5-7v-4z"></path></svg>Advisory</button>
+<button class="btn" style="border:0;background:none;padding:0 4px" aria-label="Account menu"><span class="av">S</span><svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="m4 6 4 4 4-4"></path></svg></button>
+</header>
+<div style="flex:1 1 auto;display:flex;flex-wrap:wrap;align-items:stretch">
+<nav class="nav" aria-label="Main" style="flex:1 1 190px;max-width:210px">
+<a class="on" href="Overview.dc.html"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1.5 8h3l2-5 3 10 2-5h3"></path></svg>Overview</a>
+<a href="Main.dc.html"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 2 14.5 13.5h-13z"></path></svg>Issues<span style="margin-left:auto;padding:0 6px;border-radius:999px;background:#3B2311;color:#FFAD60;font-size:11px">5</span></a>
+<a class="soon" href="Trace.dc.html"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 2 14 5 8 8 2 5zM2 8l6 3 6-3M2 11l6 3 6-3"></path></svg>Traces<span class="h" style="margin-left:auto;font-size:10px">Soon</span></a>
+<a href="#"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 4h9M5 8h9M5 12h9M2 4h.5M2 8h.5M2 12h.5"></path></svg>Logs</a>
+<a href="Replay.dc.html"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4.5 2.5v11l9-5.5z"></path></svg>Session replay</a>
+<a href="#"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 11V7a4 4 0 0 1 8 0v4l1.5 1.5h-11zM6.5 14h3"></path></svg>Alerts</a>
+<p class="h">Admin</p>
+<a href="#"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="6" cy="5.5" r="2.5"></circle><path d="M1.5 14c0-2.5 2-4 4.5-4s4.5 1.5 4.5 4M11 3.2a2.4 2.4 0 0 1 0 4.6M12.5 10.3c1.3.6 2 1.8 2 3.7"></path></svg>Users &amp; roles</a>
+<a href="Channels.dc.html"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 11V7a4 4 0 0 1 8 0v4l1.5 1.5h-11zM6.5 14h3"></path></svg>Notification channels</a>
+<a href="Access.dc.html"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1.5 2.5 3.5v4c0 3.2 2.3 5.8 5.5 7 3.2-1.2 5.5-3.8 5.5-7v-4z"></path></svg>Enforcement</a>
+<a href="Health.dc.html"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><ellipse cx="8" cy="3.5" rx="5.5" ry="2"></ellipse><path d="M2.5 3.5v9c0 1.1 2.5 2 5.5 2s5.5-.9 5.5-2v-9M2.5 8c0 1.1 2.5 2 5.5 2s5.5-.9 5.5-2"></path></svg>Storage &amp; health</a>
+</nav>
+
+<main style="flex:999 1 560px;min-width:0;display:flex;flex-direction:column;gap:18px;padding:18px 24px 40px">
+<div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:12px">
+<div style="display:flex;flex-direction:column;gap:2px">
+<p class="h">Demo App</p>
+<h1 style="margin:0;font-size:22px;font-weight:650;letter-spacing:-0.01em">Overview</h1>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+<div class="seg" role="group" aria-label="Environment"><button class="on">prod</button><button>staging</button><button>qa</button><button>dev</button></div>
+<div class="seg" role="group" aria-label="Time window"><button>1h</button><button class="on">24h</button><button>7d</button><button>30d</button></div>
+<label class="field" style="width:140px"><input type="text" placeholder="version" aria-label="Filter by version"></label>
+</div>
+</div>
+
+<section aria-label="Summary" style="display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;padding:12px 16px;border:1px solid #5A3416;border-radius:8px;background:#1C130B">
+<span class="pill regr"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 9a5 5 0 1 0 1.5-3.6"></path><path d="M3 2.5v3.5h3.5"></path></svg>Got worse after 2.3.1</span>
+<p style="margin:0;flex:1 1 420px;color:#F1DCC8">Error rate went from <strong>11%</strong> to <strong>30%</strong> after version <span class="mono">2.3.1</span> shipped 6 h ago. Most of it is <span class="mono">POST /checkout</span> and <span class="mono">charge card</span>. 2 issues came back and 1 is new.</p>
+<a class="btn" href="Main.dc.html">See what changed</a>
+</section>
+
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(220px,100%),1fr));gap:12px">
+<div class="tile">
+<span class="h">Requests</span>
+<span class="big">555</span>
+<span style="font-size:12px"><span class="muted">vs previous 24 h</span> <span class="mono">+12%</span></span>
+<svg viewBox="0 0 160 32" preserveAspectRatio="none" style="width:100%;height:32px" aria-hidden="true"><polyline points="{{reqPts}}" fill="none" stroke="#6FD3E0" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"></polyline></svg>
+</div>
+<div class="tile">
+<span class="h">Error rate</span>
+<span class="big">29.7%</span>
+<span style="font-size:12px"><span class="muted">165 failed ·</span> <span class="up mono">▲ from 11.2%</span></span>
+<svg viewBox="0 0 160 32" preserveAspectRatio="none" style="width:100%;height:32px" aria-hidden="true"><polyline points="{{errPts}}" fill="none" stroke="#FF9A9A" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"></polyline></svg>
+</div>
+<div class="tile">
+<span class="h">Latency p95</span>
+<span class="big">725<span class="muted" style="font-size:14px;font-weight:500"> ms</span></span>
+<span class="mono muted" style="font-size:12px">p50 208 · p99 865</span>
+<svg viewBox="0 0 160 32" preserveAspectRatio="none" style="width:100%;height:32px" aria-hidden="true"><polyline points="{{latPts}}" fill="none" stroke="#6FD3E0" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"></polyline></svg>
+</div>
+<a class="tile" href="Main.dc.html" style="color:#E4E9EB">
+<span class="h">Open issues</span>
+<span class="big">14</span>
+<span style="display:flex;gap:6px;flex-wrap:wrap"><span class="pill new">1 new</span><span class="pill regr">2 regressed</span><span class="pill spike">2 spiking</span></span>
+<span class="muted" style="font-size:12px;margin-top:auto">38 sessions hit an error</span>
+</a>
+</div>
+
+<div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start">
+<div style="flex:999 1 620px;min-width:0;display:flex;flex-direction:column;gap:16px">
+<section aria-label="Needs attention" class="panel" style="overflow:hidden">
+<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 16px;flex-wrap:wrap"><h2 class="h">Needs attention</h2><a href="Main.dc.html">All 14 issues</a></div>
+<div class="att" style="padding:6px 16px;border-top:0"><span class="h" style="font-size:10px">Issue</span><span class="h" style="font-size:10px">24 h</span><span class="h num" style="font-size:10px">Events</span><span class="h num" style="font-size:10px">Users</span></div>
+<sc-for list="{{attention}}" as="a" hint-placeholder-count="5">
+<a class="att" href="IssueDetail.dc.html">
+<span style="min-width:0;display:flex;flex-direction:column;gap:4px">
+<span style="display:flex;gap:8px;align-items:center;min-width:0"><span class="pill {{a.cls}}">{{a.why}}</span><strong style="white-space:nowrap">{{a.type}}</strong><span class="muted" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0">{{a.msg}}</span></span>
+<span class="mono muted" style="font-size:11px">{{a.where}}</span>
+</span>
+<svg viewBox="0 0 100 24" preserveAspectRatio="none" style="width:100px;height:24px" aria-hidden="true"><polyline points="{{a.spark}}" fill="none" stroke="{{a.sc}}" stroke-width="1.5" vector-effect="non-scaling-stroke" stroke-linejoin="round"></polyline></svg>
+<span class="num mono">{{a.ev}}</span>
+<span class="num mono">{{a.us}}</span>
+</a>
+</sc-for>
+</section>
+<section aria-label="Error rate over time" class="panel" style="padding:14px 16px;display:flex;flex-direction:column;gap:10px">
+<div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap"><h2 class="h">Error rate · last 24 h</h2><span class="muted" style="font-size:12px">failed requests ÷ all requests, 30-min buckets · dashed lines are deploys</span></div>
+<div style="position:relative">
+<svg viewBox="0 0 1000 140" preserveAspectRatio="none" style="width:100%;height:140px" role="img" aria-label="Error rate near 11 percent for 18 hours, then rising to about 30 percent after the 2.3.1 deploy 6 hours ago">
+<line x1="0" y1="35" x2="1000" y2="35" stroke="#1C2428" stroke-width="1" vector-effect="non-scaling-stroke"></line>
+<line x1="0" y1="87" x2="1000" y2="87" stroke="#1C2428" stroke-width="1" vector-effect="non-scaling-stroke"></line>
+<line x1="0" y1="139" x2="1000" y2="139" stroke="#2A3338" stroke-width="1" vector-effect="non-scaling-stroke"></line>
+<line x1="750" y1="0" x2="750" y2="140" stroke="#FFAD60" stroke-width="1" stroke-dasharray="4 4" vector-effect="non-scaling-stroke"></line>
+<polyline points="{{ratePts}}" fill="none" stroke="#FF9A9A" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke"></polyline>
+</svg>
+<span class="mono" style="position:absolute;left:calc(75% + 6px);top:0;font-size:11px;color:#FFAD60">2.3.1</span>
+<span class="mono muted" style="position:absolute;left:0;top:24px;font-size:11px">40%</span>
+<span class="mono muted" style="position:absolute;left:0;top:76px;font-size:11px">20%</span>
+</div>
+<div class="mono muted" style="display:flex;justify-content:space-between;font-size:11px"><span>24 h ago</span><span>18 h</span><span>12 h</span><span>6 h</span><span>now</span></div>
+</section>
+</div>
+
+<aside style="flex:1 1 320px;min-width:0;display:flex;flex-direction:column;gap:16px">
+<section aria-label="Recent releases" class="panel" style="overflow:hidden">
+<div style="padding:12px 16px"><h2 class="h">Releases</h2></div>
+<div class="rel" style="background:#1C130B"><span class="mono" style="color:#FFAD60;font-weight:600">2.3.1</span><span style="display:flex;flex-direction:column;gap:2px"><span>6 h ago · prod</span><span style="font-size:12px;color:#F1DCC8">1 new · 2 regressed issues</span></span><span class="mono up">11% → 30%</span></div>
+<div class="rel"><span class="mono">2.3.0</span><span style="display:flex;flex-direction:column;gap:2px"><span>3 d ago · prod</span><span class="muted" style="font-size:12px">0 new · 3 resolved</span></span><span class="mono down">14% → 11%</span></div>
+<div class="rel"><span class="mono">2.2.4</span><span style="display:flex;flex-direction:column;gap:2px"><span>9 d ago · prod</span><span class="muted" style="font-size:12px">2 new</span></span><span class="mono muted">12% → 14%</span></div>
+<p class="muted" style="margin:0;padding:8px 16px 12px;font-size:12px">Error rate 6 h before → 6 h after each deploy.</p>
+</section>
+<section aria-label="Sessions worth replaying" class="panel" style="overflow:hidden">
+<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px"><h2 class="h">Sessions worth replaying</h2><a href="Replay.dc.html">All</a></div>
+<a class="row" href="Replay.dc.html"><span style="display:flex;flex-direction:column;gap:2px;min-width:0"><span class="mono">s_9Kd2P · 4:12</span><span class="muted" style="font-size:12px">3 errors · checkout failed twice</span></span><span class="pill spike">3 errors</span></a>
+<a class="row" href="Replay.dc.html"><span style="display:flex;flex-direction:column;gap:2px;min-width:0"><span class="mono">s_2Hx7Q · 1:48</span><span class="muted" style="font-size:12px">rage clicks on Place order</span></span><span class="pill spike">2 errors</span></a>
+<a class="row" href="Replay.dc.html"><span style="display:flex;flex-direction:column;gap:2px;min-width:0"><span class="mono">s_7Lm0A · 6:03</span><span class="muted" style="font-size:12px">first-seen TypeError on /orders</span></span><span class="pill new">new issue</span></a>
+</section>
+<section aria-label="Recent alerts" class="panel" style="overflow:hidden">
+<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px"><h2 class="h">Alerts</h2><a href="#">All</a></div>
+<div class="row"><span style="display:flex;flex-direction:column;gap:2px"><span>Regressed: PaymentDeclinedException</span><span class="muted" style="font-size:12px">5 h ago · email</span></span><span class="pill warn">Open</span></div>
+<div class="row"><span style="display:flex;flex-direction:column;gap:2px"><span>New issue: TypeError on /orders</span><span class="muted" style="font-size:12px">4 h ago · email</span></span><span class="pill off">Acked</span></div>
+</section>
+</aside>
+</div>
+
+
+
+<section aria-label="Operations" class="panel" style="overflow:hidden">
+<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 16px;flex-wrap:wrap"><h2 class="h">Operations</h2><span class="muted" style="font-size:12px">sorted by failed calls · click an operation to filter issues and traces</span></div>
+<div style="overflow-x:auto"><div style="min-width:900px">
+<div class="op th"><span>Operation</span><span class="num">Calls</span><span class="num">Errors</span><span>Error rate</span><span class="num">p95</span><span>Calls, 24 h</span><span>Top issue</span></div>
+<sc-for list="{{ops}}" as="o" hint-placeholder-count="7">
+<div class="op">
+<a class="mono" href="Main.dc.html" style="color:#E4E9EB;font-weight:600">{{o.name}}</a>
+<span class="num mono">{{o.calls}}</span>
+<span class="num mono" style="color:{{o.ec}}">{{o.err}}</span>
+<span style="display:flex;align-items:center;gap:8px"><span class="bar"><span style="width:{{o.rate}}%"></span></span><span class="mono" style="width:34px;text-align:right">{{o.rate}}%</span></span>
+<span class="num mono">{{o.p95}}</span>
+<svg viewBox="0 0 92 22" preserveAspectRatio="none" style="width:92px;height:22px" aria-hidden="true"><polyline points="{{o.spark}}" fill="none" stroke="#6FD3E0" stroke-width="1.5" vector-effect="non-scaling-stroke" stroke-linejoin="round"></polyline></svg>
+<span style="display:flex;gap:6px;align-items:center;min-width:0"><sc-if value="{{o.hasIssue}}" hint-placeholder-val="{{true}}"><span class="pill {{o.icls}}" style="padding:1px 6px">{{o.ilabel}}</span><a href="IssueDetail.dc.html" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0">{{o.issue}}</a></sc-if><sc-if value="{{o.noIssue}}" hint-placeholder-val="{{false}}"><span class="muted">none</span></sc-if></span>
+</div>
+</sc-for>
+</div></div>
+</section>
+</main>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1520}}'>
+class Component extends DCLogic {
+  renderVals() {
+    function pts(vals, w, h, max) {
+      var n = vals.length;
+      return vals.map(function (v, i) { return (i / (n - 1) * w).toFixed(1) + ',' + (h - 1 - v / max * (h - 4)).toFixed(1); }).join(' ');
+    }
+    function wave(base, amp, seed, n, stepAt, stepTo) {
+      var o = [];
+      for (var i = 0; i < n; i++) {
+        var b = (stepAt != null && i >= stepAt) ? stepTo : base;
+        o.push(Math.max(0, b + amp * (Math.sin(i * 0.9 + seed) * 0.6 + Math.sin(i * 2.1 + seed) * 0.4)));
+      }
+      return o;
+    }
+    var rate = wave(11, 2, 1, 48, 36, 30);
+    var ops = [
+      ['GET /catalog/items', 106, 33, 488, 'spike', 'Spiking', 'KeyNotFoundException: SKU not found'],
+      ['POST /checkout', 129, 32, 912, 'regr', 'Regressed', 'PaymentDeclinedException'],
+      ['POST /orders', 92, 30, 1040, 'regr', 'Regressed', 'NpgsqlException 40P01 deadlock'],
+      ['GET /orders', 91, 29, 402, 'new', 'New', "TypeError: reading 'total'"],
+      ['GET /payments/status', 107, 26, 5012, 'spike', 'Spiking', 'TimeoutException: gateway 5000 ms'],
+      ['charge card', 15, 15, 690, 'regr', 'Regressed', 'PaymentDeclinedException'],
+      ['SELECT orders', 15, 0, 38, '', '', '']
+    ].map(function (r, i) {
+      return {
+        name: r[0], calls: r[1], err: r[2], ec: r[2] > 0 ? '#FF9A9A' : '#93A0A7',
+        rate: Math.round(r[2] / r[1] * 100), p95: r[3] >= 1000 ? (r[3] / 1000).toFixed(1) + ' s' : r[3] + ' ms',
+        spark: pts(wave(r[1] / 24, r[1] / 60, i + 1, 24), 92, 22, r[1] / 12),
+        hasIssue: !!r[6], noIssue: !r[6], icls: r[4], ilabel: r[5], issue: r[6]
+      };
+    });
+    return {
+      reqPts: pts(wave(22, 5, 2, 48), 160, 32, 32),
+      errPts: pts(rate, 160, 32, 40),
+      latPts: pts(wave(600, 90, 3, 48, 36, 760), 160, 32, 950),
+      ratePts: pts(rate, 1000, 140, 50),
+      ops: ops,
+      attention: [
+        { cls: 'regr', why: 'Regressed', type: 'PaymentDeclinedException', msg: 'card_declined: insufficient_funds', where: 'api · POST /checkout → charge card · since 2.3.1', spark: '0,22 10,22 20,21 30,22 40,22 50,22 60,22 70,14 80,8 90,6 100,4', sc: '#FFAD60', ev: '47', us: '19' },
+        { cls: 'spike', why: 'Spiking', type: 'KeyNotFoundException', msg: "SKU 'sku_4471' not found in catalog", where: 'api · GET /catalog/items · 4× usual rate', spark: '0,20 10,19 20,20 30,21 40,19 50,20 60,18 70,12 80,6 90,5 100,3', sc: '#FF9A9A', ev: '33', us: '27' },
+        { cls: 'regr', why: 'Regressed', type: 'NpgsqlException', msg: '40P01: deadlock detected', where: 'api · POST /orders · since 2.3.1', spark: '0,22 10,22 20,22 30,22 40,22 50,22 60,22 70,16 80,12 90,10 100,9', sc: '#FFAD60', ev: '30', us: '22' },
+        { cls: 'new', why: 'New', type: 'TypeError', msg: "Cannot read properties of null (reading 'total')", where: 'web · /orders · first seen in 2.3.1', spark: '0,22 10,22 20,22 30,22 40,22 50,22 60,22 70,18 80,12 90,10 100,11', sc: '#93BDFF', ev: '29', us: '24' },
+        { cls: 'spike', why: 'Spiking', type: 'TimeoutException', msg: 'payments-gateway did not respond in 5000 ms', where: 'api · GET /payments/status · 3× usual rate', spark: '0,18 10,17 20,19 30,18 40,16 50,17 60,15 70,10 80,8 90,9 100,7', sc: '#FF9A9A', ev: '26', us: '21' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>
