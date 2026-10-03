@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Notification channels</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0;background:#0D1012}
+a{color:#6FD3E0;text-decoration:none}a:hover{color:#A6E9F2}
+.app{font-family:ui-sans-serif,-apple-system,"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;color:#E4E9EB;background:#0D1012;font-size:13px;line-height:1.45;-webkit-font-smoothing:antialiased}
+.mono{font-family:ui-monospace,"Cascadia Mono","SF Mono",Menlo,Consolas,"Liberation Mono",monospace;font-size:12px}
+.muted{color:#93A0A7}
+.h{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#93A0A7;font-weight:600;margin:0}
+.btn{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:0 12px;border:1px solid #2C363C;border-radius:6px;background:#161C20;color:#E4E9EB;font:inherit;cursor:pointer;white-space:nowrap}
+.btn:hover{background:#1C2429;color:#E4E9EB}
+.btn.pri{background:#6FD3E0;border-color:#6FD3E0;color:#061316;font-weight:600}
+.btn:disabled{color:#748087;border-style:dashed;background:transparent;cursor:not-allowed}
+.pill{display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600;white-space:nowrap}
+.res{background:#13291F;color:#80D8B0}
+.enf{background:#271E3A;color:#D2B8FF;border:1px solid #47366B}
+.lockd{background:#271E3A;color:#D2B8FF}
+.tag{display:inline-flex;align-items:center;gap:4px;padding:1px 6px;border:1px solid #29333A;border-radius:4px;background:#151B1F;color:#B4BFC5;font-size:11px;white-space:nowrap}
+.panel{background:#12171A;border:1px solid #222A2F;border-radius:8px}
+.top{display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:8px 16px;background:#090B0D;border-bottom:1px solid #20282D}
+.nav{display:flex;flex-direction:column;gap:1px;padding:12px 8px;border-right:1px solid #1D2529;background:#0B0E10}
+.nav a{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:32px;padding:0 10px;border-radius:6px;color:#AEB9BF}
+.nav a:hover{background:#141A1E;color:#E4E9EB}
+.nav a.on{background:#17252A;color:#E4E9EB;font-weight:600}
+.nav .h{padding:16px 10px 6px}
+.ct{padding:0 6px;border-radius:999px;background:#1B2328;font-size:11px;color:#B4BFC5;font-weight:500}
+.kbd{border:1px solid #2C363C;border-bottom-width:2px;border-radius:4px;padding:0 5px;font-size:11px;color:#93A0A7}
+.field{display:flex;align-items:center;gap:8px;min-height:32px;padding:0 10px;border:1px solid #2C363C;border-radius:6px;background:#12171A;color:#93A0A7}
+.field input{flex:1;min-width:0;background:transparent;border:0;outline:0;color:#E4E9EB;font:inherit}
+.av{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;background:#2B3A40;color:#E4E9EB;font-size:10px;font-weight:700}
+.fl{display:flex;flex-direction:column;gap:4px}
+.fl label{font-size:12px;color:#93A0A7}
+.in{min-height:32px;padding:0 10px;border:1px solid #2C363C;border-radius:6px;background:#0D1113;color:#E4E9EB;font:inherit}
+.in:disabled{color:#6E7A81;border-style:dashed;background:transparent}
+.mx{display:grid;grid-template-columns:minmax(160px,1fr) repeat(3,120px);gap:8px;align-items:center;padding:9px 14px;border-top:1px solid #1C2428}
+.cell{display:flex;justify-content:center}
+.cell input{width:18px;height:18px;accent-color:#6FD3E0}
+</style>
+</helmet>
+<div class="app" style="min-height:100vh;display:flex;flex-direction:column">
+<header class="top">
+<a href="Main.dc.html" style="display:flex;align-items:center;gap:8px;color:#E4E9EB;font-weight:700"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#6FD3E0" stroke-width="1.6"><rect x="2" y="2" width="14" height="14" rx="3"></rect><path d="M5 6.5h8M9 6.5v7"></path></svg><span class="mono" style="font-size:13px">tamp<span style="color:#6FD3E0">/</span>observer</span></a>
+<button class="btn" aria-label="Switch project"><span class="muted">project</span><strong>commonhall</strong><svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="m4 6 4 4 4-4"></path></svg></button>
+<label class="field" style="flex:1 1 260px;max-width:520px"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="7" cy="7" r="4.5"></circle><path d="m10.5 10.5 3.5 3.5"></path></svg><input type="text" placeholder="Jump to project, issue, trace id or session id" aria-label="Search everything"><span class="kbd">Ctrl K</span></label>
+<div style="flex:1 1 0"></div>
+<button class="pill enf" style="min-height:28px;cursor:pointer" aria-label="Instance enforcement mode: enforcing"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 1.5 2.5 3.5v4c0 3.2 2.3 5.8 5.5 7 3.2-1.2 5.5-3.8 5.5-7v-4z"></path></svg>Enforcing</button>
+<button class="btn" aria-label="Account menu"><span class="av">SS</span>Scott S.<span class="muted">Admin</span></button>
+</header>
+<div style="flex:1 1 auto;display:flex;flex-wrap:wrap;align-items:stretch">
+<nav class="nav" aria-label="Project" style="flex:1 1 200px;max-width:220px">
+<p class="h" style="padding:4px 10px 6px">Project</p>
+<a href="#">Overview</a>
+<a href="Main.dc.html">Issues <span class="ct">42</span></a>
+<a href="Trace.dc.html">Traces</a>
+<a href="#">Logs</a>
+<a href="#">Metrics</a>
+<a href="Replay.dc.html">Session replay</a>
+<a href="#">Alerts <span class="ct" style="background:#3B2311;color:#FFAD60">3</span></a>
+<a href="#">Project settings</a>
+<p class="h">Admin</p>
+<a href="#">Users &amp; roles</a>
+<a class="on" href="Channels.dc.html">Notification channels</a>
+<a href="Access.dc.html">Enforcement</a>
+<a href="#">Storage &amp; health</a>
+</nav>
+<main style="flex:999 1 560px;min-width:0;display:flex;flex-direction:column;gap:18px;padding:20px 24px 40px;max-width:1120px">
+<div style="display:flex;flex-direction:column;gap:2px">
+<p class="h">Admin · instance</p>
+<h1 style="margin:0;font-size:22px;font-weight:650">Notification channels</h1>
+</div>
+
+<section aria-label="Posture" style="display:flex;flex-wrap:wrap;gap:12px 16px;align-items:center;padding:12px 16px;border:1px solid #47366B;border-radius:8px;background:#17132A">
+<span class="pill enf"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 1.5 2.5 3.5v4c0 3.2 2.3 5.8 5.5 7 3.2-1.2 5.5-3.8 5.5-7v-4z"></path></svg>Enforcing · no reachback</span>
+<p style="margin:0;flex:1 1 360px;color:#E2D6F7">This instance may not send data outside its network. Channels that post to an outside service are unavailable. Email through an in-enclave relay is allowed.</p>
+<a class="btn" href="Access.dc.html">About enforcement</a>
+</section>
+
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),1fr));gap:14px">
+<section class="panel" aria-label="Email (SMTP)" style="padding:16px;display:flex;flex-direction:column;gap:12px">
+<div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><h2 style="margin:0;font-size:15px">Email (SMTP)</h2><span class="pill res">Enabled</span></div>
+<div class="fl"><label for="smtp-host">Relay host</label><input id="smtp-host" class="in mono" value="smtp.enclave.internal:25"></div>
+<div class="fl"><label for="smtp-from">From</label><input id="smtp-from" class="in mono" value="observer@enclave.internal"></div>
+<div class="fl"><label for="smtp-to">To</label><input id="smtp-to" class="in mono" value="oncall@enclave.internal"></div>
+<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:auto"><button class="btn">Send test</button><span class="muted" style="font-size:12px">Last test delivered 11:58 · 240 ms</span></div>
+</section>
+
+<section class="panel" aria-label="Slack" style="padding:16px;display:flex;flex-direction:column;gap:12px;background:#101417">
+<div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><h2 style="margin:0;font-size:15px;color:#B4BFC5">Slack</h2><span class="pill lockd"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="7" width="10" height="7" rx="1.5"></rect><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"></path></svg>Unavailable</span></div>
+<p style="margin:0;color:#C9BEE0">Refused under enforcing mode. Slack webhooks post to <span class="mono">hooks.slack.com</span>, outside this network.</p>
+<div class="fl"><label for="slack-url">Webhook URL</label><input id="slack-url" class="in mono" disabled placeholder="https://hooks.slack.com/services/…"></div>
+<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:auto"><button class="btn" disabled>Send test</button><span class="muted" style="font-size:12px">Becomes available in advisory mode</span></div>
+</section>
+
+<section class="panel" aria-label="Telegram" style="padding:16px;display:flex;flex-direction:column;gap:12px;background:#101417">
+<div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><h2 style="margin:0;font-size:15px;color:#B4BFC5">Telegram</h2><span class="pill lockd"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="7" width="10" height="7" rx="1.5"></rect><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"></path></svg>Unavailable</span></div>
+<p style="margin:0;color:#C9BEE0">Refused under enforcing mode. The Telegram Bot API lives at <span class="mono">api.telegram.org</span>, outside this network.</p>
+<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px">
+<div class="fl"><label for="tg-token">Bot token</label><input id="tg-token" class="in mono" disabled placeholder="123456:ABC…"></div>
+<div class="fl"><label for="tg-chat">Chat id</label><input id="tg-chat" class="in mono" disabled placeholder="-100…"></div>
+</div>
+<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:auto"><button class="btn" disabled>Send test</button><span class="muted" style="font-size:12px">Becomes available in advisory mode</span></div>
+</section>
+</div>
+
+<section class="panel" aria-label="Routing" style="overflow:hidden">
+<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 14px;flex-wrap:wrap"><h2 class="h">Routing · which alerts go where</h2><span class="muted" style="font-size:12px">applies to every project unless a project overrides it</span></div>
+<div style="overflow-x:auto"><div style="min-width:560px">
+<div class="mx h" style="border-top:0;padding-top:4px"><span>Alert kind</span><span style="text-align:center">Email</span><span style="text-align:center">Slack</span><span style="text-align:center">Telegram</span></div>
+<sc-for list="{{kinds}}" as="k" hint-placeholder-count="5">
+<div class="mx">
+<span style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">{{k.name}}<sc-if value="{{k.planned}}" hint-placeholder-val="{{false}}"><span class="tag">planned</span></sc-if></span>
+<span class="cell"><input type="checkbox" checked="{{k.email}}" aria-label="Send {{k.name}} by email"></span>
+<span class="cell"><input type="checkbox" disabled aria-label="Slack unavailable under enforcing mode"></span>
+<span class="cell"><input type="checkbox" disabled aria-label="Telegram unavailable under enforcing mode"></span>
+</div>
+</sc-for>
+</div></div>
+</section>
+</main>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1080}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      kinds: [
+        { name: 'New issue', email: true, planned: false },
+        { name: 'Regressed issue', email: true, planned: false },
+        { name: 'Spike (errors/min over baseline)', email: true, planned: true },
+        { name: 'Threshold', email: false, planned: true },
+        { name: 'Heartbeat (telemetry stopped)', email: true, planned: true }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

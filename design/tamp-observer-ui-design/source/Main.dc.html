@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Issues</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0;background:#0D1012}
+a{color:#6FD3E0;text-decoration:none}a:hover{color:#A6E9F2}
+.app{font-family:ui-sans-serif,-apple-system,"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;color:#E4E9EB;background:#0D1012;font-size:13px;line-height:1.45;-webkit-font-smoothing:antialiased}
+.mono{font-family:ui-monospace,"Cascadia Mono","SF Mono",Menlo,Consolas,"Liberation Mono",monospace;font-size:12px}
+.muted{color:#93A0A7}
+.h{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#93A0A7;font-weight:600;margin:0}
+.btn{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:0 12px;border:1px solid #2C363C;border-radius:6px;background:#161C20;color:#E4E9EB;font:inherit;cursor:pointer;white-space:nowrap}
+.btn:hover{background:#1C2429;color:#E4E9EB}
+.btn.pri{background:#6FD3E0;border-color:#6FD3E0;color:#061316;font-weight:600}
+.btn:disabled{color:#748087;border-style:dashed;background:transparent;cursor:not-allowed}
+.pill{display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600;white-space:nowrap}
+.regr{background:#3B2311;color:#FFAD60}
+.unres{background:#15253B;color:#93BDFF}
+.res{background:#13291F;color:#80D8B0}
+.enf{background:#271E3A;color:#D2B8FF;border:1px solid #47366B}
+.n-regr{color:#FFAD60}.n-unres{color:#93BDFF}.n-res{color:#80D8B0}
+.tag{display:inline-flex;align-items:center;gap:4px;padding:1px 6px;border:1px solid #29333A;border-radius:4px;background:#151B1F;color:#B4BFC5;font-size:11px;white-space:nowrap}
+.top{display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:8px 16px;background:#090B0D;border-bottom:1px solid #20282D}
+.nav{display:flex;flex-direction:column;gap:1px;padding:12px 8px;border-right:1px solid #1D2529;background:#0B0E10}
+.nav a{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:32px;padding:0 10px;border-radius:6px;color:#AEB9BF}
+.nav a:hover{background:#141A1E;color:#E4E9EB}
+.nav a.on{background:#17252A;color:#E4E9EB;font-weight:600}
+.nav .h{padding:16px 10px 6px}
+.ct{padding:0 6px;border-radius:999px;background:#1B2328;font-size:11px;color:#B4BFC5;font-weight:500}
+.seg{display:inline-flex;border:1px solid #2C363C;border-radius:6px;overflow:hidden}
+.seg button{min-height:30px;padding:0 12px;border:0;background:#12171A;color:#AEB9BF;font:inherit;cursor:pointer}
+.seg button+button{border-left:1px solid #2C363C}
+.seg button.on{background:#20303A;color:#E4E9EB;font-weight:600}
+.kbd{border:1px solid #2C363C;border-bottom-width:2px;border-radius:4px;padding:0 5px;font-size:11px;color:#93A0A7}
+.field{display:flex;align-items:center;gap:8px;min-height:32px;padding:0 10px;border:1px solid #2C363C;border-radius:6px;background:#12171A;color:#93A0A7}
+.field input{flex:1;min-width:0;background:transparent;border:0;outline:0;color:#E4E9EB;font:inherit}
+.av{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;background:#2B3A40;color:#E4E9EB;font-size:10px;font-weight:700}
+.tab{min-height:36px;padding:0 12px;border:0;border-bottom:2px solid transparent;margin-bottom:-1px;background:none;color:#93A0A7;font:inherit;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.tab.on{color:#E4E9EB;border-bottom-color:#6FD3E0;font-weight:600}
+.tr{display:grid;grid-template-columns:20px minmax(0,1fr) 124px 72px 72px 104px 116px;gap:14px;align-items:center;padding:10px 14px;border-top:1px solid #1C2428}
+.tr:hover{background:#141A1E}
+.th{border-top:0;padding:8px 14px;font-size:11px;color:#93A0A7;text-transform:uppercase;letter-spacing:.06em;font-weight:600}
+.th:hover{background:none}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+</style>
+</helmet>
+<div class="app" style="min-height:100vh;display:flex;flex-direction:column">
+<header class="top">
+<a href="Main.dc.html" style="display:flex;align-items:center;gap:8px;color:#E4E9EB;font-weight:700"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#6FD3E0" stroke-width="1.6"><rect x="2" y="2" width="14" height="14" rx="3"></rect><path d="M5 6.5h8M9 6.5v7"></path></svg><span class="mono" style="font-size:13px">tamp<span style="color:#6FD3E0">/</span>observer</span></a>
+<button class="btn" aria-label="Switch project"><span class="muted">project</span><strong>commonhall</strong><svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="m4 6 4 4 4-4"></path></svg></button>
+<label class="field" style="flex:1 1 260px;max-width:520px"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="7" cy="7" r="4.5"></circle><path d="m10.5 10.5 3.5 3.5"></path></svg><input type="text" placeholder="Jump to project, issue, trace id or session id" aria-label="Search everything"><span class="kbd">Ctrl K</span></label>
+<div style="flex:1 1 0"></div>
+<button class="pill enf" style="min-height:28px;cursor:pointer" aria-label="Instance enforcement mode: enforcing. Show what it restricts"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 1.5 2.5 3.5v4c0 3.2 2.3 5.8 5.5 7 3.2-1.2 5.5-3.8 5.5-7v-4z"></path></svg>Enforcing</button>
+<button class="btn" aria-label="Account menu"><span class="av">SS</span>Scott S.<span class="muted">Admin</span></button>
+</header>
+<div style="flex:1 1 auto;display:flex;flex-wrap:wrap;align-items:stretch">
+<nav class="nav" aria-label="Project" style="flex:1 1 200px;max-width:220px">
+<p class="h" style="padding:4px 10px 6px">Project</p>
+<a href="#">Overview</a>
+<a class="on" href="Main.dc.html">Issues <span class="ct">42</span></a>
+<a href="Trace.dc.html">Traces</a>
+<a href="#">Logs</a>
+<a href="#">Metrics</a>
+<a href="Replay.dc.html">Session replay</a>
+<a href="#">Alerts <span class="ct" style="background:#3B2311;color:#FFAD60">3</span></a>
+<a href="#">Project settings</a>
+<p class="h">Admin</p>
+<a href="#">Users &amp; roles</a>
+<a href="Channels.dc.html">Notification channels</a>
+<a href="Access.dc.html">Enforcement</a>
+<a href="#">Storage &amp; health</a>
+</nav>
+<main style="flex:999 1 560px;min-width:0;display:flex;flex-direction:column;gap:16px;padding:20px 24px 32px">
+<div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px">
+<div style="display:flex;flex-direction:column;gap:2px">
+<p class="h">commonhall</p>
+<h1 style="margin:0;font-size:22px;font-weight:650;letter-spacing:-0.01em">Issues</h1>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+<div class="seg" role="group" aria-label="Environment"><button class="on">prod</button><button>staging</button><button>qa</button><button>dev</button></div>
+<button class="btn">Last 24 hours<svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="m4 6 4 4 4-4"></path></svg></button>
+<button class="btn">All versions<svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="m4 6 4 4 4-4"></path></svg></button>
+</div>
+</div>
+<section aria-label="Regressions" style="display:flex;flex-wrap:wrap;align-items:center;gap:12px 16px;padding:12px 16px;border:1px solid #5A3416;border-radius:8px;background:#1C130B">
+<span class="pill regr"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 9a5 5 0 1 0 1.5-3.6"></path><path d="M3 2.5v3.5h3.5"></path></svg>3 regressed</span>
+<p style="margin:0;flex:1 1 320px;color:#F1DCC8">Version <span class="mono">1.8.2</span> reached prod 2h 14m ago. Three issues you resolved in 1.8.0 or 1.8.1 have come back.</p>
+<a class="btn" href="IssueDetail.dc.html">Review regressions</a>
+</section>
+<div style="display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:8px 16px;border-bottom:1px solid #1E262A">
+<div role="tablist" aria-label="Issue status" style="display:flex;flex-wrap:wrap;gap:2px">
+<button class="tab on" role="tab" aria-selected="true">Unresolved <span class="ct">39</span></button>
+<button class="tab" role="tab" aria-selected="false">Regressed <span class="ct" style="background:#3B2311;color:#FFAD60">3</span></button>
+<button class="tab" role="tab" aria-selected="false">Resolved <span class="ct">118</span></button>
+<button class="tab" role="tab" aria-selected="false">Muted <span class="ct">6</span></button>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:8px;padding-bottom:8px">
+<label class="field" style="width:300px;max-width:100%"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="7" cy="7" r="4.5"></circle><path d="m10.5 10.5 3.5 3.5"></path></svg><input class="mono" type="text" value="is:unresolved service:any" aria-label="Filter issues"></label>
+<button class="btn">Service</button>
+<button class="btn">Area</button>
+<button class="btn">Sort: last seen</button>
+</div>
+</div>
+<div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px">
+<span class="muted" style="margin-right:4px">0 selected</span>
+<button class="btn" disabled>Resolve</button>
+<button class="btn" disabled>Assign</button>
+<button class="btn" disabled>Tag area</button>
+<button class="btn" disabled>Mute</button>
+</div>
+<div style="overflow-x:auto;border:1px solid #222A2F;border-radius:8px;background:#101417">
+<div style="min-width:960px">
+<div class="tr th"><input type="checkbox" aria-label="Select all issues"><span>Issue</span><span>Last 24h</span><span class="num">Events</span><span class="num">Sessions</span><span>Last / first seen</span><span>Versions</span></div>
+<sc-for list="{{rows}}" as="r" hint-placeholder-count="7">
+<div class="tr">
+<input type="checkbox" aria-label="Select issue">
+<div style="min-width:0;display:flex;flex-direction:column;gap:5px">
+<div style="display:flex;gap:8px;align-items:center;min-width:0">
+<span class="pill {{r.cls}}">{{r.label}}</span>
+<a href="IssueDetail.dc.html" style="color:#E4E9EB;font-weight:600;white-space:nowrap">{{r.type}}</a>
+<span class="muted" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0">{{r.msg}}</span>
+</div>
+<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+<span class="mono muted">{{r.id}}</span>
+<span class="mono" style="color:#B4BFC5">{{r.where}}</span>
+<span class="tag">{{r.area}}</span>
+<sc-if value="{{r.nosym}}" hint-placeholder-val="{{false}}"><span class="tag" style="color:#FFC98A;border-color:#4A3420">minified frames, no source map</span></sc-if>
+<span class="n-{{r.cls}}" style="font-size:12px">{{r.note}}</span>
+</div>
+</div>
+<svg width="120" height="28" viewBox="0 0 120 28" aria-hidden="true"><polyline points="{{r.spark}}" fill="none" stroke="{{r.sc}}" stroke-width="1.5" stroke-linejoin="round"></polyline></svg>
+<span class="num mono">{{r.ev}}</span>
+<span class="num mono">{{r.ss}}</span>
+<span style="display:flex;flex-direction:column"><span>{{r.last}}</span><span class="muted" style="font-size:12px">{{r.first}}</span></span>
+<span class="mono" style="color:#B4BFC5">{{r.ver}}</span>
+</div>
+</sc-for>
+</div>
+</div>
+<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+<span class="muted">Showing 7 of 42 · grouped from 2,104 events by fingerprint</span>
+<button class="btn">Load more</button>
+</div>
+</main>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1000}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var R = '#FFAD60', U = '#93BDFF', G = '#80D8B0';
+    return {
+      rows: [
+        { cls: 'regr', label: 'Regressed', type: 'NullReferenceException', msg: 'Object reference not set to an instance of an object.', id: 'ISS-1042', where: 'api · AssessmentService.BuildLines', area: 'billing', nosym: false, note: 'regressed in 1.8.2 · resolved in 1.8.0', spark: '0,26 10,26 20,26 30,25 40,26 50,26 60,25 70,26 80,14 90,6 100,4 110,3', sc: R, ev: '1,284', ss: '212', last: '2m ago', first: '19d ago', ver: '1.7.9 → 1.8.2' },
+        { cls: 'regr', label: 'Regressed', type: 'NpgsqlException', msg: '57014: canceling statement due to statement timeout', id: 'ISS-1038', where: 'api · LedgerRepository.GetBalances', area: 'ledger', nosym: false, note: 'regressed in 1.8.2 · resolved in 1.8.1', spark: '0,26 10,26 20,26 30,26 40,26 50,26 60,26 70,26 80,20 90,16 100,18 110,15', sc: R, ev: '318', ss: '41', last: '9m ago', first: '31d ago', ver: '1.7.4 → 1.8.2' },
+        { cls: 'regr', label: 'Regressed', type: 'HttpRequestException', msg: 'Response status code does not indicate success: 502 (Bad Gateway).', id: 'ISS-0997', where: 'worker · DuesReminderJob.SendAsync', area: 'notifications', nosym: false, note: 'regressed in 1.8.2 · resolved in 1.8.0', spark: '0,26 10,26 20,26 30,26 40,26 50,26 60,26 70,24 80,22 90,23 100,20 110,21', sc: R, ev: '77', ss: '—', last: '26m ago', first: '44d ago', ver: '1.6.0 → 1.8.2' },
+        { cls: 'unres', label: 'Unresolved', type: 'TypeError', msg: "Cannot read properties of undefined (reading 'unitId')", id: 'ISS-1051', where: 'web · app.min.js:1:48213', area: 'billing', nosym: true, note: 'new in 1.8.2', spark: '0,26 10,26 20,26 30,26 40,26 50,26 60,26 70,26 80,12 90,9 100,10 110,8', sc: U, ev: '512', ss: '96', last: '4m ago', first: '2h ago', ver: '1.8.2' },
+        { cls: 'unres', label: 'Unresolved', type: 'InvalidOperationException', msg: 'Sequence contains no elements', id: 'ISS-1012', where: 'api · ViolationsController.Get', area: 'violations', nosym: false, note: '', spark: '0,24 10,22 20,25 30,23 40,21 50,24 60,22 70,23 80,24 90,22 100,23 110,22', sc: U, ev: '64', ss: '18', last: '1h ago', first: '12d ago', ver: '1.8.0 → 1.8.2' },
+        { cls: 'unres', label: 'Unresolved', type: 'ChunkLoadError', msg: 'Loading chunk 412 failed.', id: 'ISS-0921', where: 'web · router.ts:88', area: 'platform', nosym: false, note: '', spark: '0,18 10,20 20,16 30,19 40,17 50,15 60,18 70,16 80,19 90,17 100,18 110,16', sc: U, ev: '39', ss: '31', last: '3h ago', first: '63d ago', ver: '1.5.2 → 1.8.2' },
+        { cls: 'res', label: 'Resolved', type: 'DbUpdateConcurrencyException', msg: 'The database operation was expected to affect 1 row(s), but actually affected 0 row(s).', id: 'ISS-1029', where: 'api · UnitRepository.SaveAsync', area: 'units', nosym: false, note: 'resolved in 1.8.1 · watching for recurrence', spark: '0,10 10,12 20,16 30,22 40,26 50,26 60,26 70,26 80,26 90,26 100,26 110,26', sc: G, ev: '212', ss: '7', last: '3d ago', first: '22d ago', ver: '1.7.9 → 1.8.0' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

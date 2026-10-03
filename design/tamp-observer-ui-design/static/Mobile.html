@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mobile triage</title>
+<style>
+body{margin:0;background:#0D1012}
+a{color:#6FD3E0;text-decoration:none}
+.app{font-family:ui-sans-serif,-apple-system,"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;color:#E4E9EB;background:#0D1012;font-size:14px;line-height:1.4;-webkit-font-smoothing:antialiased}
+.mono{font-family:ui-monospace,"Cascadia Mono","SF Mono",Menlo,Consolas,"Liberation Mono",monospace;font-size:12px}
+.muted{color:#93A0A7}
+.pill{display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600;white-space:nowrap}
+.regr{background:#3B2311;color:#FFAD60}
+.unres{background:#15253B;color:#93BDFF}
+.enf{background:#271E3A;color:#D2B8FF;border:1px solid #47366B}
+.seg{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border:1px solid #2C363C;border-radius:8px;overflow:hidden}
+.seg button{min-height:40px;border:0;background:#12171A;color:#AEB9BF;font:inherit;font-size:13px}
+.seg button+button{border-left:1px solid #2C363C}
+.seg button.on{background:#20303A;color:#E4E9EB;font-weight:600}
+.card{display:flex;flex-direction:column;gap:6px;padding:12px 14px;border-radius:10px;background:#12171A;border:1px solid #222A2F;color:#E4E9EB}
+.tb{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-height:56px;border:0;background:none;color:#93A0A7;font:inherit;font-size:11px}
+.tb.on{color:#6FD3E0}
+</style>
+</head>
+<body>
+
+<div class="app" style="width:390px;height:844px;display:flex;flex-direction:column;overflow:hidden">
+<header style="display:flex;align-items:center;gap:10px;padding:16px 16px 10px">
+<svg width="20" height="20" viewBox="0 0 18 18" fill="none" stroke="#6FD3E0" stroke-width="1.6"><rect x="2" y="2" width="14" height="14" rx="3"></rect><path d="M5 6.5h8M9 6.5v7"></path></svg>
+<button style="display:flex;align-items:center;gap:6px;min-height:44px;padding:0 4px;border:0;background:none;color:#E4E9EB;font:inherit;font-size:16px;font-weight:650">commonhall<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="m4 6 4 4 4-4"></path></svg></button>
+<span class="pill enf" style="margin-left:auto"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 1.5 2.5 3.5v4c0 3.2 2.3 5.8 5.5 7 3.2-1.2 5.5-3.8 5.5-7v-4z"></path></svg>Enforcing</span>
+</header>
+<div style="padding:0 16px 12px;display:flex;flex-direction:column;gap:10px">
+<div class="seg" role="group" aria-label="Environment"><button class="on">prod</button><button>staging</button><button>qa</button><button>dev</button></div>
+<div style="display:flex;justify-content:space-between;align-items:center" class="muted"><span>Issues · last 24 h</span><button style="min-height:36px;border:0;background:none;color:#6FD3E0;font:inherit">Filter</button></div>
+</div>
+<div style="flex:1;min-height:0;overflow:auto;padding:0 16px 12px;display:flex;flex-direction:column;gap:10px">
+<a href="IssueDetail.html" style="display:flex;gap:10px;align-items:center;padding:12px 14px;border-radius:10px;background:#1C130B;border:1px solid #5A3416;color:#F1DCC8">
+<span class="pill regr">3 regressed</span><span style="flex:1">in 1.8.2, deployed 2h ago</span><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m6 3 5 5-5 5"></path></svg>
+</a>
+
+<a class="card" href="IssueDetail.html">
+<div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span class="pill regr">Regressed</span><span class="muted" style="font-size:12px">2m ago</span></div>
+<strong style="font-size:15px">NullReferenceException</strong>
+<span class="muted" style="font-size:13px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">Object reference not set to an instance of an object.</span>
+<div style="display:flex;justify-content:space-between;gap:8px;font-size:12px"><span class="mono" style="color:#B4BFC5">api · BuildLines</span><span class="mono">1,284 ev</span></div>
+</a>
+
+
+<a class="card" href="IssueDetail.html">
+<div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span class="pill regr">Regressed</span><span class="muted" style="font-size:12px">9m ago</span></div>
+<strong style="font-size:15px">NpgsqlException</strong>
+<span class="muted" style="font-size:13px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">57014: canceling statement due to statement timeout</span>
+<div style="display:flex;justify-content:space-between;gap:8px;font-size:12px"><span class="mono" style="color:#B4BFC5">api · GetBalances</span><span class="mono">318 ev</span></div>
+</a>
+
+
+<a class="card" href="IssueDetail.html">
+<div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span class="pill unres">New in 1.8.2</span><span class="muted" style="font-size:12px">4m ago</span></div>
+<strong style="font-size:15px">TypeError</strong>
+<span class="muted" style="font-size:13px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">Cannot read properties of undefined (reading 'unitId')</span>
+<div style="display:flex;justify-content:space-between;gap:8px;font-size:12px"><span class="mono" style="color:#B4BFC5">web · app.min.js</span><span class="mono">512 ev</span></div>
+</a>
+
+
+<a class="card" href="IssueDetail.html">
+<div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span class="pill regr">Regressed</span><span class="muted" style="font-size:12px">26m ago</span></div>
+<strong style="font-size:15px">HttpRequestException</strong>
+<span class="muted" style="font-size:13px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">Response status code does not indicate success: 502 (Bad Gateway).</span>
+<div style="display:flex;justify-content:space-between;gap:8px;font-size:12px"><span class="mono" style="color:#B4BFC5">worker · DuesReminderJob</span><span class="mono">77 ev</span></div>
+</a>
+
+
+<a class="card" href="IssueDetail.html">
+<div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span class="pill unres">Unresolved</span><span class="muted" style="font-size:12px">1h ago</span></div>
+<strong style="font-size:15px">InvalidOperationException</strong>
+<span class="muted" style="font-size:13px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">Sequence contains no elements</span>
+<div style="display:flex;justify-content:space-between;gap:8px;font-size:12px"><span class="mono" style="color:#B4BFC5">api · ViolationsController</span><span class="mono">64 ev</span></div>
+</a>
+
+<p class="muted" style="margin:4px 0 0;font-size:12px;text-align:center">Session replay opens on a larger screen. From here you can resolve, assign or mute.</p>
+</div>
+<nav aria-label="Main" style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border-top:1px solid #1E262A;background:#090B0D;padding-bottom:12px">
+<button class="tb on"><svg width="20" height="20" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6"></circle><path d="M8 5v3.5M8 11v.3"></path></svg>Issues</button>
+<button class="tb"><svg width="20" height="20" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 11V7a4 4 0 0 1 8 0v4l1.5 1.5h-11zM6.5 14h3"></path></svg>Alerts</button>
+<button class="tb"><svg width="20" height="20" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 13h12M4 11V7M8 11V3M12 11V8"></path></svg>Overview</button>
+<button class="tb"><svg width="20" height="20" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="4.5"></circle><path d="m10.5 10.5 3.5 3.5"></path></svg>Search</button>
+</nav>
+</div>
+</body>
+</html>

@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Access and trust states</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0;background:#0D1012}
+a{color:#6FD3E0;text-decoration:none}a:hover{color:#A6E9F2}
+.app{font-family:ui-sans-serif,-apple-system,"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;color:#E4E9EB;background:#0D1012;font-size:13px;line-height:1.45;-webkit-font-smoothing:antialiased}
+.mono{font-family:ui-monospace,"Cascadia Mono","SF Mono",Menlo,Consolas,"Liberation Mono",monospace;font-size:12px}
+.muted{color:#93A0A7}
+.h{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#93A0A7;font-weight:600;margin:0}
+.btn{display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:0 14px;border:1px solid #2C363C;border-radius:6px;background:#161C20;color:#E4E9EB;font:inherit;cursor:pointer;white-space:nowrap}
+.btn:hover{background:#1C2429;color:#E4E9EB}
+.btn.pri{background:#6FD3E0;border-color:#6FD3E0;color:#061316;font-weight:600}
+.pill{display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600;white-space:nowrap}
+.enf{background:#271E3A;color:#D2B8FF;border:1px solid #47366B}
+.panel{background:#12171A;border:1px solid #222A2F;border-radius:10px}
+.cap{font-size:12px;color:#93A0A7;margin:0}
+.opt{display:flex;align-items:center;gap:8px;min-height:36px;padding:0 12px;border:1px solid #2C363C;border-radius:6px;background:#0D1113}
+.opt.on{border-color:#6FD3E0;background:#0F1D20}
+.opt.off{border-style:dashed;color:#76838A;background:transparent}
+.why{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:6px;background:#17132A;border:1px solid #3A2D5C;color:#E2D6F7}
+.lv{flex:1 1 0;display:flex;flex-direction:column;gap:6px;padding:12px;border:1px solid #2C363C;border-radius:8px}
+</style>
+</helmet>
+<div class="app" style="width:1440px;height:1180px;box-sizing:border-box;padding:40px 48px;display:flex;flex-direction:column;gap:24px">
+
+<div role="status" style="display:flex;align-items:center;gap:12px;padding:8px 14px;border-radius:6px;background:#3A3110;color:#FFE59A;border:1px solid #6A5A1C">
+<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 1.8 15 14H1z"></path><path d="M8 6v4M8 11.8v.4"></path></svg>
+<strong>Development / demo mode</strong><span>Signed in through the bundled identity provider. This banner never appears in a real deployment.</span>
+</div>
+
+<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px;flex:1 1 auto">
+
+<section style="display:flex;flex-direction:column;gap:10px">
+<p class="h">A · Authenticated but not admitted</p>
+<div class="panel" style="flex:1;display:flex;align-items:center;justify-content:center;padding:32px;background:#0A0D0F">
+<div style="width:440px;display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;align-items:center;gap:8px"><svg width="20" height="20" viewBox="0 0 18 18" fill="none" stroke="#6FD3E0" stroke-width="1.6"><rect x="2" y="2" width="14" height="14" rx="3"></rect><path d="M5 6.5h8M9 6.5v7"></path></svg><span class="mono" style="font-size:14px">tamp<span style="color:#6FD3E0">/</span>observer</span></div>
+<h2 style="margin:0;font-size:22px;font-weight:650;letter-spacing:-0.01em;text-wrap:balance">You're signed in, but this instance doesn't have you on its list yet.</h2>
+<p style="margin:0;color:#C9D2D6">GitHub confirmed who you are. This instance only admits email addresses an admin has added, and yours isn't one of them.</p>
+<div style="display:flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid #2C363C;border-radius:6px;background:#12171A"><span class="mono" style="flex:1;font-size:13px">scott@example.dev</span><button class="btn" style="min-height:30px">Copy</button></div>
+<p class="cap">Send that address to an instance admin. Nothing else is needed from you; reload once they've added it.</p>
+<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn pri">Reload</button><button class="btn">Use a different account</button></div>
+<p class="cap mono">observer.enclave.internal · OIDC via Dex → GitHub</p>
+</div>
+</div>
+</section>
+
+<section style="display:flex;flex-direction:column;gap:10px">
+<p class="h">B · Scoped access, explained in place</p>
+<div class="panel" style="flex:1;display:flex;flex-direction:column;gap:16px;padding:24px">
+<div style="display:flex;justify-content:space-between;align-items:center"><h2 style="margin:0;font-size:17px">Session replay</h2><span class="muted">commonhall · prod</span></div>
+<div style="flex:1;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:12px;padding:24px;border:1px dashed #2C363C;border-radius:8px">
+<svg width="28" height="28" viewBox="0 0 16 16" fill="none" stroke="#93A0A7" stroke-width="1.3"><rect x="3" y="7" width="10" height="7" rx="1.5"></rect><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"></path></svg>
+<h3 style="margin:0;font-size:16px">Replays in prod aren't part of your access</h3>
+<p style="margin:0;color:#C9D2D6;max-width:460px">Recorded sessions need the <span class="mono">ViewReplay</span> capability at this scope. Here's what you do have:</p>
+<div style="display:flex;flex-direction:column;gap:6px;width:100%">
+<div style="display:grid;grid-template-columns:90px 1fr;gap:8px;padding:8px 10px;border-radius:6px;background:#0D1113"><span class="mono">Viewer</span><span>commonhall / <strong>qa</strong></span></div>
+<div style="display:grid;grid-template-columns:90px 1fr;gap:8px;padding:8px 10px;border-radius:6px;background:#0D1113"><span class="mono">Editor</span><span>commonhall / <strong>dev</strong></span></div>
+</div>
+<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn">Switch to qa</button><button class="btn">Who can grant this?</button></div>
+</div>
+<p class="cap">Rule: hide what a viewer can never reach (nav items, admin), but explain a scope boundary when they land on one by link.</p>
+</div>
+</section>
+
+<section style="display:flex;flex-direction:column;gap:10px">
+<p class="h">C · A control locked by enforcement</p>
+<div class="panel" style="flex:1;display:flex;flex-direction:column;gap:16px;padding:24px">
+<div style="display:flex;justify-content:space-between;align-items:center"><h2 style="margin:0;font-size:17px">Capture policy · prod</h2><span class="pill enf">Enforcing</span></div>
+<fieldset style="margin:0;padding:0;border:0;display:flex;flex-direction:column;gap:8px">
+<legend style="padding:0 0 8px;font-weight:600">Identity capture</legend>
+<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">
+<label class="opt on"><input type="radio" name="idm" checked> Off</label>
+<label class="opt"><input type="radio" name="idm"> Pseudonymous</label>
+<label class="opt off"><input type="radio" name="idm" disabled><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="7" width="10" height="7" rx="1.5"></rect><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"></path></svg> Full</label>
+</div>
+</fieldset>
+<div class="why"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" style="flex:0 0 auto;margin-top:2px"><path d="M8 1.5 2.5 3.5v4c0 3.2 2.3 5.8 5.5 7 3.2-1.2 5.5-3.8 5.5-7v-4z"></path></svg><span><strong>Full identity is disabled under enforcing mode.</strong> Capturing identity in production loosens the instance floor. Pseudonymous hashing is still allowed.</span></div>
+<fieldset style="margin:0;padding:0;border:0;display:flex;flex-direction:column;gap:8px">
+<legend style="padding:0 0 8px;font-weight:600">Masking level</legend>
+<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px">
+<label class="opt off"><input type="radio" name="msk" disabled><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="7" width="10" height="7" rx="1.5"></rect><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"></path></svg> Default (inputs + PII)</label>
+<label class="opt on"><input type="radio" name="msk" checked> Strict (required)</label>
+</div>
+</fieldset>
+<p class="cap">Locked options stay visible with the reason. Raising strictness is always allowed; lowering it isn't.</p>
+</div>
+</section>
+
+<section style="display:flex;flex-direction:column;gap:10px">
+<p class="h">D · Enforcement mode, shown as a dial</p>
+<div class="panel" style="flex:1;display:flex;flex-direction:column;gap:16px;padding:24px">
+<h2 style="margin:0;font-size:17px">Instance enforcement</h2>
+<div style="display:flex;gap:8px">
+<div class="lv"><strong>Advisory</strong><span class="cap">Everything configurable. Dev-shop default.</span></div>
+<div class="lv" style="border-color:#7A5FB5;background:#17132A"><strong style="color:#D2B8FF">Enforcing · current</strong><span class="cap" style="color:#C9BEE0">Compliance controls on. Loosenings refused.</span></div>
+<div class="lv"><strong>Locked</strong><span class="cap">A floor no project can lower.</span></div>
+</div>
+<div>
+<p class="h" style="margin-bottom:8px">Refused at this level</p>
+<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 16px">
+<span>Identity capture in production</span><span>Sending sessions without consent</span><span>Masking below strict</span><span>Weakening role grants</span><span>Outbound channels (Slack, Telegram)</span><span>Capture policy below the floor</span><span>Turning off audit</span>
+</div>
+</div>
+<p class="cap">Projects may run stricter than the instance, never looser.</p>
+</div>
+</section>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1180}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Issue ISS-1042</title>
+<style>
+body{margin:0;background:#0D1012}
+a{color:#6FD3E0;text-decoration:none}a:hover{color:#A6E9F2}
+.app{font-family:ui-sans-serif,-apple-system,"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;color:#E4E9EB;background:#0D1012;font-size:13px;line-height:1.45;-webkit-font-smoothing:antialiased}
+.mono{font-family:ui-monospace,"Cascadia Mono","SF Mono",Menlo,Consolas,"Liberation Mono",monospace;font-size:12px}
+.muted{color:#93A0A7}
+.h{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#93A0A7;font-weight:600;margin:0}
+.btn{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:0 12px;border:1px solid #2C363C;border-radius:6px;background:#161C20;color:#E4E9EB;font:inherit;cursor:pointer;white-space:nowrap}
+.btn:hover{background:#1C2429;color:#E4E9EB}
+.btn.pri{background:#6FD3E0;border-color:#6FD3E0;color:#061316;font-weight:600}
+.btn.pri:hover{background:#8FE0EA;color:#061316}
+.btn:disabled{color:#748087;border-style:dashed;background:transparent;cursor:not-allowed}
+.pill{display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600;white-space:nowrap}
+.regr{background:#3B2311;color:#FFAD60}
+.unres{background:#15253B;color:#93BDFF}
+.res{background:#13291F;color:#80D8B0}
+.enf{background:#271E3A;color:#D2B8FF;border:1px solid #47366B}
+.tag{display:inline-flex;align-items:center;gap:4px;padding:1px 6px;border:1px solid #29333A;border-radius:4px;background:#151B1F;color:#B4BFC5;font-size:11px;white-space:nowrap}
+.panel{background:#12171A;border:1px solid #222A2F;border-radius:8px}
+.top{display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:8px 16px;background:#090B0D;border-bottom:1px solid #20282D}
+.nav{display:flex;flex-direction:column;gap:1px;padding:12px 8px;border-right:1px solid #1D2529;background:#0B0E10}
+.nav a{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:32px;padding:0 10px;border-radius:6px;color:#AEB9BF}
+.nav a:hover{background:#141A1E;color:#E4E9EB}
+.nav a.on{background:#17252A;color:#E4E9EB;font-weight:600}
+.nav .h{padding:16px 10px 6px}
+.ct{padding:0 6px;border-radius:999px;background:#1B2328;font-size:11px;color:#B4BFC5;font-weight:500}
+.kbd{border:1px solid #2C363C;border-bottom-width:2px;border-radius:4px;padding:0 5px;font-size:11px;color:#93A0A7}
+.field{display:flex;align-items:center;gap:8px;min-height:32px;padding:0 10px;border:1px solid #2C363C;border-radius:6px;background:#12171A;color:#93A0A7}
+.field input{flex:1;min-width:0;background:transparent;border:0;outline:0;color:#E4E9EB;font:inherit}
+.av{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;background:#2B3A40;color:#E4E9EB;font-size:10px;font-weight:700}
+.step{flex:1 1 220px;min-width:0;display:flex;flex-direction:column;gap:6px;padding:14px 16px;background:#12171A;border:1px solid #222A2F;border-radius:8px;color:#E4E9EB}
+.step:hover{background:#161E22;border-color:#2F3B42;color:#E4E9EB}
+.step.here{background:#1C130B;border-color:#5A3416}
+.sn{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;background:#1F2A30;color:#B4BFC5;font-size:11px;font-weight:700}
+.arrow{display:grid;place-items:center;color:#4F5D64;flex:0 0 auto}
+.frame{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;padding:9px 14px;border-top:1px solid #1C2428;align-items:center}
+.code{margin:0;padding:8px 0;background:#0A0D0F;border-top:1px solid #1C2428;overflow-x:auto}
+.ln{display:grid;grid-template-columns:52px minmax(0,1fr);white-space:pre}
+.ln span:first-child{text-align:right;padding-right:16px;color:#5F6C73}
+.bc{display:grid;grid-template-columns:64px 72px 92px minmax(0,1fr);gap:12px;padding:8px 14px;border-top:1px solid #1C2428;align-items:baseline}
+.kv{display:grid;grid-template-columns:120px minmax(0,1fr);gap:8px;padding:6px 0;border-top:1px solid #1C2428}
+.vh{display:grid;grid-template-columns:14px 64px minmax(0,1fr);gap:10px;align-items:start;padding:8px 0}
+</style>
+</head>
+<body>
+
+<div class="app" style="min-height:100vh;display:flex;flex-direction:column">
+<header class="top">
+<a href="Main.html" style="display:flex;align-items:center;gap:8px;color:#E4E9EB;font-weight:700"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#6FD3E0" stroke-width="1.6"><rect x="2" y="2" width="14" height="14" rx="3"></rect><path d="M5 6.5h8M9 6.5v7"></path></svg><span class="mono" style="font-size:13px">tamp<span style="color:#6FD3E0">/</span>observer</span></a>
+<button class="btn" aria-label="Switch project"><span class="muted">project</span><strong>commonhall</strong><svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="m4 6 4 4 4-4"></path></svg></button>
+<label class="field" style="flex:1 1 260px;max-width:520px"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="7" cy="7" r="4.5"></circle><path d="m10.5 10.5 3.5 3.5"></path></svg><input type="text" placeholder="Jump to project, issue, trace id or session id" aria-label="Search everything"><span class="kbd">Ctrl K</span></label>
+<div style="flex:1 1 0"></div>
+<button class="pill enf" style="min-height:28px;cursor:pointer" aria-label="Instance enforcement mode: enforcing"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 1.5 2.5 3.5v4c0 3.2 2.3 5.8 5.5 7 3.2-1.2 5.5-3.8 5.5-7v-4z"></path></svg>Enforcing</button>
+<button class="btn" aria-label="Account menu"><span class="av">SS</span>Scott S.<span class="muted">Admin</span></button>
+</header>
+<div style="flex:1 1 auto;display:flex;flex-wrap:wrap;align-items:stretch">
+<nav class="nav" aria-label="Project" style="flex:1 1 200px;max-width:220px">
+<p class="h" style="padding:4px 10px 6px">Project</p>
+<a href="#">Overview</a>
+<a class="on" href="Main.html">Issues <span class="ct">42</span></a>
+<a href="Trace.html">Traces</a>
+<a href="#">Logs</a>
+<a href="#">Metrics</a>
+<a href="Replay.html">Session replay</a>
+<a href="#">Alerts <span class="ct" style="background:#3B2311;color:#FFAD60">3</span></a>
+<a href="#">Project settings</a>
+<p class="h">Admin</p>
+<a href="#">Users &amp; roles</a>
+<a href="Channels.html">Notification channels</a>
+<a href="Access.html">Enforcement</a>
+<a href="#">Storage &amp; health</a>
+</nav>
+<main style="flex:999 1 560px;min-width:0;display:flex;flex-direction:column;gap:18px;padding:20px 24px 40px">
+<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center" class="muted"><a href="Main.html">Issues</a><span>/</span><span class="mono">ISS-1042</span></div>
+<div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-start;gap:16px">
+<div style="flex:1 1 520px;min-width:0;display:flex;flex-direction:column;gap:8px">
+<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+<span class="pill regr" style="font-size:12px;padding:3px 10px"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 9a5 5 0 1 0 1.5-3.6"></path><path d="M3 2.5v3.5h3.5"></path></svg>Regressed in 1.8.2</span>
+<span class="tag">api</span><span class="tag">billing</span><span class="tag">prod</span>
+</div>
+<h1 style="margin:0;font-size:22px;font-weight:650;letter-spacing:-0.01em">NullReferenceException</h1>
+<p class="mono" style="margin:0;font-size:14px;color:#C9D2D6">Object reference not set to an instance of an object.</p>
+<p class="muted" style="margin:0">in <span class="mono" style="color:#B4BFC5">Commonhall.Billing.AssessmentService.BuildLines</span> · resolved by Scott S. in 1.8.0 · recurred automatically 2h ago in 1.8.2</p>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:8px">
+<button class="btn">Resolve</button>
+<button class="btn">Assign</button>
+<button class="btn">Tag area</button>
+<button class="btn">Mute</button>
+<button class="btn" aria-label="Copy link to issue">Copy link</button>
+</div>
+</div>
+
+<section aria-label="Correlation walk" style="display:flex;flex-direction:column;gap:10px">
+<div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap">
+<h2 class="h">Correlation walk · latest occurrence 14:07:42 UTC</h2>
+<span class="muted" style="font-size:12px">linked by session id <span class="mono">s_7Hq2M</span>, minted in the browser and stamped on the request</span>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:stretch">
+<div class="step here">
+<div style="display:flex;gap:8px;align-items:center"><span class="sn" style="background:#5A3416;color:#FFD3A8">1</span><span class="h" style="color:#FFAD60">Error</span><span class="muted" style="margin-left:auto;font-size:12px">you are here</span></div>
+<strong>ISS-1042</strong>
+<span class="muted">NullReferenceException · api 1.8.2</span>
+</div>
+<span class="arrow" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 8h10M9 4l4 4-4 4"></path></svg></span>
+<a class="step" href="Trace.html">
+<div style="display:flex;gap:8px;align-items:center"><span class="sn">2</span><span class="h">Trace</span></div>
+<strong class="mono" style="font-size:13px">4bf92f35…0e4736</strong>
+<span class="muted">POST /api/assessments · 1.21 s · 9 spans · 3 services</span>
+</a>
+<span class="arrow" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 8h10M9 4l4 4-4 4"></path></svg></span>
+<a class="step" href="Trace.html#logs">
+<div style="display:flex;gap:8px;align-items:center"><span class="sn">3</span><span class="h">Logs on trace</span></div>
+<strong>6 lines</strong>
+<span class="muted">1 warning, 1 error · "unit 14B not found"</span>
+</a>
+<span class="arrow" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 8h10M9 4l4 4-4 4"></path></svg></span>
+<div class="step" style="flex:1.3 1 260px;border-color:#2B5A60;background:#0F1D20">
+<div style="display:flex;gap:8px;align-items:center"><span class="sn" style="background:#1F4A50;color:#BFF1F7">4</span><span class="h" style="color:#8FE0EA">Session replay</span></div>
+<strong class="mono" style="font-size:13px">s_7Hq2M at 00:42</strong>
+<span class="muted">Chrome 129 · 3:18 long · strict masking</span>
+<a class="btn pri" href="Replay.html" style="align-self:flex-start;margin-top:4px"><svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M4 2.5v11l9-5.5z"></path></svg>Open replay at 00:42</a>
+</div>
+</div>
+</section>
+
+<div style="display:flex;flex-wrap:wrap;gap:18px;align-items:flex-start">
+<div style="flex:999 1 560px;min-width:0;display:flex;flex-direction:column;gap:18px">
+
+<section class="panel" aria-label="Occurrences" style="padding:14px 16px;display:flex;flex-direction:column;gap:10px">
+<div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap"><h2 class="h">Occurrences · last 24 hours</h2><span class="muted"><strong style="color:#E4E9EB">1,284</strong> events · <strong style="color:#E4E9EB">212</strong> sessions</span></div>
+<div style="position:relative;height:96px;display:flex;align-items:flex-end;gap:3px;border-bottom:1px solid #2A3338">
+<div style="flex:1 1 0;height:3px;background:#4C5A61;border-radius:2px 2px 0 0"></div>
+<div style="flex:1 1 0;height:2px;background:#4C5A61;border-radius:2px 2px 0 0"></div>
+<div style="flex:1 1 0;height:4px;background:#4C5A61;border-radius:2px 2px 0 0"></div>
+<div style="flex:1 1 0;height:3px;background:#4C5A61;border-radius:2px 2px 0 0"></div>
+<div style="flex:1 1 0;height:2px;background:#4C5A61;border-radius:2px 2px 0 0"></div>
+<div style="flex:1 1 0;height:3px;background:#4C5A61;border-radius:2px 2px 0 0"></div>
+<div style="flex:1 1 0;height:2px;background:#4C5A61;border-radius:2px 2px 0 0"></div>
+<div style="flex:1 1 0;height:2px;background:#4C5A61;border-radius:2px 2px 0 0"></div>
+<div style="flex:1 1 0;height:3px;background:#4C5A61;border-radius:2px 2px 0 0"></div>
+<div style="flex:1 1 0;height:4px;background:#4C5A61;border-radius:2px 2px 0 0"></div>
+<div style="flex:1 1 0;height:3px;background:#4C5A61;border-radius:2px 2px 0 0"></div>
+<div style="flex:1 1 0;height:2px;background:#4C5A61;border-radius:2px 2px 0 0"></div>
+<div style="flex:1 1 0;height:3px;background:#4C5A61;border-radius:2px 2px 0 0"></div>
+<div style="flex:1 1 0;height:2px;background:#4C5A61;border-radius:2px 2px 0 0"></div>
+<div style="flex:1 1 0;height:3px;background:#4C5A61;border-radius:2px 2px 0 0"></div>
+<div style="flex:1 1 0;height:2px;background:#4C5A61;border-radius:2px 2px 0 0"></div>
+<div style="flex:1 1 0;height:58px;background:#FFAD60;border-radius:2px 2px 0 0"></div>
+<div style="flex:1 1 0;height:72px;background:#FFAD60;border-radius:2px 2px 0 0"></div>
+<div style="flex:1 1 0;height:80px;background:#FFAD60;border-radius:2px 2px 0 0"></div>
+<div style="flex:1 1 0;height:66px;background:#FFAD60;border-radius:2px 2px 0 0"></div>
+<div style="flex:1 1 0;height:74px;background:#FFAD60;border-radius:2px 2px 0 0"></div>
+<div style="flex:1 1 0;height:88px;background:#FFAD60;border-radius:2px 2px 0 0"></div>
+<div style="flex:1 1 0;height:70px;background:#FFAD60;border-radius:2px 2px 0 0"></div>
+<div style="flex:1 1 0;height:64px;background:#FFAD60;border-radius:2px 2px 0 0"></div>
+<div style="position:absolute;left:66.6%;top:0;bottom:0;border-left:1px dashed #FFAD60"></div>
+<span class="mono" style="position:absolute;left:calc(66.6% + 6px);top:0;color:#FFAD60;font-size:11px">1.8.2 deployed 11:53</span>
+</div>
+<div class="mono muted" style="display:flex;justify-content:space-between;font-size:11px"><span>14:00 yesterday</span><span>20:00</span><span>02:00</span><span>08:00</span><span>now</span></div>
+</section>
+
+<section class="panel" aria-label="Stack trace" style="overflow:hidden">
+<div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px;padding:12px 14px">
+<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h2 class="h">Stack trace</h2><span class="pill res"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 8.5 3 3 7-7"></path></svg>Symbolicated</span><span class="muted" style="font-size:12px">portable PDB · api 1.8.2 · uploaded with the release</span></div>
+<div style="display:flex;gap:6px"><button class="btn" style="min-height:28px">Raw frames</button><button class="btn" style="min-height:28px">Show all 9 frames</button></div>
+</div>
+<div class="frame" style="background:#151B1F">
+<div style="min-width:0"><span class="mono" style="color:#E4E9EB">AssessmentService.BuildLines</span> <span class="muted">in</span> <span class="mono" style="color:#8FE0EA">src/Billing/AssessmentService.cs:143</span></div><span class="tag">in app</span>
+</div>
+<div class="code mono">
+<div class="ln"><span>140</span><span>    foreach (var line in draft.Lines)</span></div>
+<div class="ln"><span>141</span><span>    {</span></div>
+<div class="ln"><span>142</span><span>        var unit = units.FirstOrDefault(u =&gt; u.Id == line.UnitId);</span></div>
+<div class="ln" style="background:#2A1A0E;color:#FFE2C4"><span style="color:#FFAD60">143</span><span>        lines.Add(new AssessmentLine(unit.Id, rate * unit.Shares));</span></div>
+<div class="ln"><span>144</span><span>    }</span></div>
+</div>
+<div class="frame"><div style="min-width:0"><span class="mono" style="color:#E4E9EB">AssessmentService.CreateAsync</span> <span class="muted">in</span> <span class="mono" style="color:#8FE0EA">src/Billing/AssessmentService.cs:61</span></div><span class="tag">in app</span></div>
+<div class="frame"><div style="min-width:0"><span class="mono" style="color:#E4E9EB">AssessmentEndpoints.&lt;Map&gt;b__0_1</span> <span class="muted">in</span> <span class="mono" style="color:#8FE0EA">src/Api/Endpoints/AssessmentEndpoints.cs:38</span></div><span class="tag">in app</span></div>
+<div class="frame"><button class="btn" style="min-height:28px;justify-self:start">6 framework frames · Microsoft.AspNetCore.*</button><span></span></div>
+</section>
+
+<section class="panel" aria-label="Breadcrumbs" style="overflow:hidden">
+<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 14px;flex-wrap:wrap"><h2 class="h">Breadcrumbs · browser and server, one timeline</h2><span class="muted" style="font-size:12px">times relative to session start</span></div>
+
+<div class="bc" style="background:transparent">
+<span class="mono muted">00:38.2</span>
+<span class="tag" style="justify-self:start">browser</span>
+<span class="mono" style="color:#B4BFC5">navigation</span>
+<span class="mono" style="color:#C9D2D6;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">/assessments/2026-q4/new</span>
+</div>
+
+
+<div class="bc" style="background:transparent">
+<span class="mono muted">00:40.9</span>
+<span class="tag" style="justify-self:start">browser</span>
+<span class="mono" style="color:#B4BFC5">ui.click</span>
+<span class="mono" style="color:#C9D2D6;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">button#add-unit (label masked)</span>
+</div>
+
+
+<div class="bc" style="background:transparent">
+<span class="mono muted">00:42.1</span>
+<span class="tag" style="justify-self:start">browser</span>
+<span class="mono" style="color:#B4BFC5">ui.click</span>
+<span class="mono" style="color:#C9D2D6;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">button#save-assessment (label masked)</span>
+</div>
+
+
+<div class="bc" style="background:transparent">
+<span class="mono muted">00:43.2</span>
+<span class="tag" style="justify-self:start">server</span>
+<span class="mono" style="color:#FFD27A">log.warn</span>
+<span class="mono" style="color:#C9D2D6;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Draft line references unit 14B not found in association 7</span>
+</div>
+
+
+<div class="bc" style="background:#1C130B">
+<span class="mono muted">00:43.2</span>
+<span class="tag" style="justify-self:start">server</span>
+<span class="mono" style="color:#FFAD60">exception</span>
+<span class="mono" style="color:#C9D2D6;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">NullReferenceException at AssessmentService.BuildLines:143</span>
+</div>
+
+
+<div class="bc" style="background:transparent">
+<span class="mono muted">00:43.3</span>
+<span class="tag" style="justify-self:start">browser</span>
+<span class="mono" style="color:#FF9A9A">fetch</span>
+<span class="mono" style="color:#C9D2D6;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">POST /api/assessments → 500 · 1.21 s</span>
+</div>
+
+</section>
+</div>
+
+<aside style="flex:1 1 300px;min-width:0;display:flex;flex-direction:column;gap:18px">
+<section class="panel" aria-label="Version history" style="padding:14px 16px">
+<h2 class="h" style="margin-bottom:6px">Version history</h2>
+<div class="vh"><svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="4" fill="#93BDFF"></circle></svg><span class="mono">1.7.9</span><span>First seen · 19 days ago</span></div>
+<div class="vh"><svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="4" fill="#80D8B0"></circle></svg><span class="mono">1.8.0</span><span>Resolved by Scott S.</span></div>
+<div class="vh"><svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="4" fill="none" stroke="#5F6C73" stroke-width="1.5"></circle></svg><span class="mono">1.8.1</span><span class="muted">No events · 6 days in prod</span></div>
+<div class="vh" style="background:#1C130B;border-radius:6px;padding:8px;margin:0 -8px"><svg width="14" height="14" viewBox="0 0 14 14"><path d="M7 2 12 12H2z" fill="#FFAD60"></path></svg><span class="mono" style="color:#FFAD60">1.8.2</span><span style="color:#F1DCC8">Regressed · auto-flipped on first event after resolve</span></div>
+</section>
+<section class="panel" aria-label="Where it happens" style="padding:14px 16px;display:flex;flex-direction:column;gap:10px">
+<h2 class="h">Environments</h2>
+<div style="display:grid;grid-template-columns:64px minmax(0,1fr) 48px;gap:8px;align-items:center"><span>prod</span><div style="height:6px;background:#1E262A;border-radius:3px"><div style="width:94%;height:6px;background:#FFAD60;border-radius:3px"></div></div><span class="mono" style="text-align:right">1,201</span></div>
+<div style="display:grid;grid-template-columns:64px minmax(0,1fr) 48px;gap:8px;align-items:center"><span>staging</span><div style="height:6px;background:#1E262A;border-radius:3px"><div style="width:7%;height:6px;background:#93A0A7;border-radius:3px"></div></div><span class="mono" style="text-align:right">83</span></div>
+<div style="display:grid;grid-template-columns:64px minmax(0,1fr) 48px;gap:8px;align-items:center"><span>qa</span><div style="height:6px;background:#1E262A;border-radius:3px"></div><span class="mono" style="text-align:right">0</span></div>
+</section>
+<section class="panel" aria-label="Details" style="padding:14px 16px">
+<h2 class="h" style="margin-bottom:6px">Details</h2>
+<div class="kv"><span class="muted">Assignee</span><button class="btn" style="min-height:28px;justify-self:start">Unassigned</button></div>
+<div class="kv"><span class="muted">Area</span><span><span class="tag">billing</span></span></div>
+<div class="kv"><span class="muted">Service</span><span class="mono">api</span></div>
+<div class="kv"><span class="muted">Fingerprint</span><span class="mono" style="overflow-wrap:anywhere">api:NRE:BuildLines:143</span></div>
+<div class="kv"><span class="muted">Alerted</span><span>Regressed rule · email to on-call, 11:55</span></div>
+<div class="kv"><span class="muted">Linked</span><a href="#">Add link</a></div>
+</section>
+</aside>
+</div>
+</main>
+</div>
+</div>
+</body>
+</html>

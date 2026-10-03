@@ -1,0 +1,67 @@
+/* tamp-observer design tokens, extracted from the mockups.
+   Offline-safe: system font stacks only; no web fonts, no CDNs. */
+:root {
+  /* Surfaces (dark, cool-neutral) */
+  --bg:            #0D1012; /* app background */
+  --bg-chrome:     #090B0D; /* top bar */
+  --bg-nav:        #0B0E10; /* sidebar */
+  --bg-sunken:     #0A0D0F; /* code blocks, sign-in backdrop */
+  --surface:       #12171A; /* panels, inputs */
+  --surface-2:     #161C20; /* buttons */
+  --surface-hover: #141A1E; /* row / nav hover */
+  --surface-sel:   #17252A; /* selected nav item, current row */
+  --table-bg:      #101417;
+
+  /* Lines */
+  --border:        #222A2F; /* panels */
+  --border-ctl:    #2C363C; /* buttons, inputs, segmented controls */
+  --divider:       #1C2428; /* row separators */
+
+  /* Text */
+  --text:          #E4E9EB;
+  --text-2:        #B4BFC5; /* secondary values, tags */
+  --text-nav:      #AEB9BF;
+  --muted:         #93A0A7; /* captions, labels: 6.7:1 on --surface */
+  --disabled:      #748087; /* disabled controls only; pair with dashed border */
+
+  /* Accent: interactive (links, primary buttons, selection, playhead) */
+  --accent:        #6FD3E0;
+  --accent-hover:  #A6E9F2;
+  --on-accent:     #061316;
+
+  /* Issue status (blue / orange / green; differ in lightness too) */
+  --unres-bg:  #15253B; --unres-fg:  #93BDFF;
+  --regr-bg:   #3B2311; --regr-fg:   #FFAD60; --regr-border: #5A3416; --regr-wash: #1C130B;
+  --res-bg:    #13291F; --res-fg:    #80D8B0;
+
+  /* Enforcement mode (violet = policy; never reused for status) */
+  --enf-bg:    #271E3A; --enf-fg:    #D2B8FF; --enf-border: #47366B; --enf-wash: #17132A;
+
+  /* Masking / privacy */
+  --mask-bg:   #1A2430; --mask-fg:   #BCD3EA; --mask-border: #2E4256;
+
+  /* Severity / signal */
+  --err:       #FF9A9A; --err-bg: #3A1A1C; --err-outline: #FF8A8A;
+  --warn:      #FFD27A;
+  --demo-bg:   #3A3110; --demo-fg: #FFE59A; --demo-border: #6A5A1C; /* dev/demo banner only */
+
+  /* Service colors (traces) */
+  --svc-1: #6FD3E0; --svc-2: #93BDFF; --svc-3: #D8C27A;
+
+  /* Type */
+  --font-ui:   ui-sans-serif, -apple-system, "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --font-mono: ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --fs-base: 13px;   /* desktop body; 14px on mobile */
+  --fs-mono: 12px;
+  --fs-label: 11px;  /* uppercase section labels, letter-spacing .08em, weight 600 */
+  --fs-h1: 22px;     /* weight 650, letter-spacing -0.01em */
+  --lh: 1.45;
+
+  /* Shape and spacing */
+  --r-ctl: 6px;      /* buttons, inputs */
+  --r-panel: 8px;
+  --r-pill: 999px;
+  --r-tag: 4px;
+  --ctl-h: 32px;     /* desktop control height; 44px minimum on touch */
+  --gap-1: 4px; --gap-2: 8px; --gap-3: 12px; --gap-4: 16px; --gap-5: 24px;
+}
