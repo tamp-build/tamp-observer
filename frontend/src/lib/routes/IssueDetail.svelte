@@ -113,7 +113,7 @@
   </Panel>
 
   <Panel label="Correlation walk">
-    <CorrelationWalk {projectId} {issueId} errorType={issue.errorType ?? issue.title} />
+    <CorrelationWalk {projectId} current="issue" {issueId} errorType={issue.errorType ?? issue.title} />
   </Panel>
 {/if}
 

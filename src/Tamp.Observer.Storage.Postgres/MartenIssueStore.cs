@@ -27,6 +27,13 @@ public sealed class MartenIssueStore(IDocumentStore store) : IIssueStore
         return await s.Query<Issue>().FirstOrDefaultAsync(i => i.ProjectId == projectId && i.Id == issueId, ct);
     }
 
+    public async Task<Issue?> GetByFingerprintAsync(Guid projectId, string fingerprint, CancellationToken ct = default)
+    {
+        await using var s = _store.QuerySession();
+        return await s.Query<Issue>()
+            .FirstOrDefaultAsync(i => i.ProjectId == projectId && i.Fingerprint == fingerprint, ct);
+    }
+
     public async Task<bool> SetStatusAsync(
         Guid projectId, Guid issueId, IssueStatus status, long? resolvedInVersionSequence = null, CancellationToken ct = default)
     {

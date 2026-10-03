@@ -61,6 +61,12 @@ public sealed class FakeObservabilityStore : IObservabilityStore
 
     public Task<IssueOccurrence?> GetLatestOccurrenceAsync(Guid projectId, string fingerprint, CancellationToken ct = default) =>
         Task.FromResult<IssueOccurrence?>(null);
+
+    public Task<IssueOccurrence?> GetLatestOccurrenceBySessionAsync(Guid projectId, string sessionId, CancellationToken ct = default) =>
+        Task.FromResult<IssueOccurrence?>(null);
+
+    public Task<IssueOccurrence?> GetLatestOccurrenceByTraceAsync(Guid projectId, string traceId, CancellationToken ct = default) =>
+        Task.FromResult<IssueOccurrence?>(null);
 }
 
 /// <summary>A controllable admission list: the role drives the caller's capabilities, so allow/deny and
@@ -83,6 +89,9 @@ public sealed class FakeIssueStore : IIssueStore
         Task.FromResult<IReadOnlyList<Issue>>([]);
 
     public Task<Issue?> GetAsync(Guid projectId, Guid issueId, CancellationToken ct = default) =>
+        Task.FromResult<Issue?>(null);
+
+    public Task<Issue?> GetByFingerprintAsync(Guid projectId, string fingerprint, CancellationToken ct = default) =>
         Task.FromResult<Issue?>(null);
 
     public Task<bool> SetStatusAsync(Guid projectId, Guid issueId, IssueStatus status, long? resolvedInVersionSequence = null, CancellationToken ct = default) =>

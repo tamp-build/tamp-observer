@@ -16,6 +16,10 @@ public interface IIssueStore
     /// <summary>One issue by id within a project, or null.</summary>
     Task<Issue?> GetAsync(Guid projectId, Guid issueId, CancellationToken ct = default);
 
+    /// <summary>One issue by its fingerprint within a project, or null. Resolves the correlation walk back to its
+    /// Issue when anchored on a trace or session occurrence.</summary>
+    Task<Issue?> GetByFingerprintAsync(Guid projectId, string fingerprint, CancellationToken ct = default);
+
     /// <summary>Set an issue's status (resolve/reopen/ignore). Records the resolving version when provided.
     /// Returns false if the issue does not exist.</summary>
     Task<bool> SetStatusAsync(

@@ -8,6 +8,7 @@
   import EmptyState from "../components/ui/EmptyState.svelte";
   import ErrorState from "../components/ui/ErrorState.svelte";
   import Panel from "../components/ui/Panel.svelte";
+  import CorrelationWalk from "../components/CorrelationWalk.svelte";
   import { int64, nanosToTime, severityLabel, severityClass } from "../format";
   import { guard, timeout } from "../net";
   import { services } from "../stores/services.svelte";
@@ -76,6 +77,10 @@
 {:else if error}
   <ErrorState message={`Could not load trace (${error}).`} onretry={load} />
 {:else if trace}
+  <Panel label="Correlation walk">
+    <CorrelationWalk {projectId} current="trace" {traceId} />
+  </Panel>
+
   <Panel label={`Waterfall · ${trace.spans.length} spans`}>
     {#if trace.spans.length === 0}
       <EmptyState message="No spans for this trace." />

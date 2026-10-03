@@ -21,10 +21,11 @@ public sealed record TraceView(IReadOnlyList<IngestedSpan> Spans, IReadOnlyList<
 public sealed record LogQuery(
     Guid ProjectId, TimeWindow Window, Guid? ServiceId = null, int? MinSeverityNumber = null, int Limit = 200);
 
-/// <summary>The latest occurrence of an Issue (by fingerprint): the span or log that most recently matched it,
-/// with the correlation keys needed for the walk (ADR 0014). TraceId/SessionId are null when not captured.</summary>
+/// <summary>The latest occurrence of an Issue: the span or log that most recently matched it, with the
+/// correlation keys needed for the walk (ADR 0014). Fingerprint links it back to its Issue (needed when the
+/// walk is anchored on a trace or session rather than an issue). TraceId/SessionId are null when not captured.</summary>
 public sealed record IssueOccurrence(
-    string Source, long AtUnixNano, string? TraceId, string? SpanId, string? SessionId, Guid ServiceId);
+    string Source, long AtUnixNano, string? TraceId, string? SpanId, string? SessionId, Guid ServiceId, string? Fingerprint);
 
 /// <summary>
 /// The capability-based read interface over the tiered store (ADR 0006). Operations are expressed as
@@ -49,4 +50,12 @@ public interface IObservabilityStore
     /// <summary>The latest error occurrence (span or log) stamped with the given Issue fingerprint, or null if
     /// none is stored. Drives the correlation walk: from an Issue to its most recent trace and session.</summary>
     Task<IssueOccurrence?> GetLatestOccurrenceAsync(Guid projectId, string fingerprint, CancellationToken ct = default);
+
+    /// <summary>The latest error occurrence tied to a session id, or null. Anchors the correlation walk on a
+    /// session (the replay page) and resolves back to its Issue via the occurrence fingerprint.</summary>
+    Task<IssueOccurrence?> GetLatestOccurrenceBySessionAsync(Guid projectId, string sessionId, CancellationToken ct = default);
+
+    /// <summary>The latest error occurrence within a trace, or null. Anchors the correlation walk on a trace
+    /// (the trace page) and resolves back to its Issue via the occurrence fingerprint.</summary>
+    Task<IssueOccurrence?> GetLatestOccurrenceByTraceAsync(Guid projectId, string traceId, CancellationToken ct = default);
 }

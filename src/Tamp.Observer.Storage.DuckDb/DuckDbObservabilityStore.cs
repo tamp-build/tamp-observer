@@ -197,28 +197,55 @@ ORDER BY time_nano DESC LIMIT {(query.Limit <= 0 ? 200 : query.Limit)}";
 
     public async Task<IssueOccurrence?> GetLatestOccurrenceAsync(Guid projectId, string fingerprint, CancellationToken ct = default)
     {
+        const string match = "json_extract_string(data,'$.Fingerprint') = $match";
         await using var conn = await OpenAsync(ct);
-        var span = await LatestOccurrence(conn, _spans, "StartUnixNano", "span", projectId, fingerprint, ct);
-        var log = await LatestOccurrence(conn, _logs, "TimeUnixNano", "log", projectId, fingerprint, ct);
+        var span = await LatestOccurrence(conn, _spans, "StartUnixNano", "span", projectId, match, fingerprint, ct);
+        var log = await LatestOccurrence(conn, _logs, "TimeUnixNano", "log", projectId, match, fingerprint, ct);
+        if (span is null) return log;
+        if (log is null) return span;
+        return span.AtUnixNano >= log.AtUnixNano ? span : log;
+    }
+
+    public async Task<IssueOccurrence?> GetLatestOccurrenceBySessionAsync(Guid projectId, string sessionId, CancellationToken ct = default)
+    {
+        // Latest error occurrence (has a fingerprint) carrying this session id.
+        const string match = "json_extract_string(data,'$.Attributes.\"tamp.session.id\"') = $match"
+                           + " AND json_extract_string(data,'$.Fingerprint') IS NOT NULL";
+        await using var conn = await OpenAsync(ct);
+        var span = await LatestOccurrence(conn, _spans, "StartUnixNano", "span", projectId, match, sessionId, ct);
+        var log = await LatestOccurrence(conn, _logs, "TimeUnixNano", "log", projectId, match, sessionId, ct);
+        if (span is null) return log;
+        if (log is null) return span;
+        return span.AtUnixNano >= log.AtUnixNano ? span : log;
+    }
+
+    public async Task<IssueOccurrence?> GetLatestOccurrenceByTraceAsync(Guid projectId, string traceId, CancellationToken ct = default)
+    {
+        const string match = "json_extract_string(data,'$.TraceId') = $match"
+                           + " AND json_extract_string(data,'$.Fingerprint') IS NOT NULL";
+        await using var conn = await OpenAsync(ct);
+        var span = await LatestOccurrence(conn, _spans, "StartUnixNano", "span", projectId, match, traceId, ct);
+        var log = await LatestOccurrence(conn, _logs, "TimeUnixNano", "log", projectId, match, traceId, ct);
         if (span is null) return log;
         if (log is null) return span;
         return span.AtUnixNano >= log.AtUnixNano ? span : log;
     }
 
     private async Task<IssueOccurrence?> LatestOccurrence(
-        DuckDBConnection conn, string table, string timeField, string source, Guid projectId, string fingerprint, CancellationToken ct)
+        DuckDBConnection conn, string table, string timeField, string source, Guid projectId, string matchSql, string matchValue, CancellationToken ct)
     {
         var sql = $@"
 SELECT json_extract_string(data,'$.TraceId') AS trace_id,
        json_extract_string(data,'$.SpanId') AS span_id,
        json_extract_string(data,'$.Attributes.""tamp.session.id""') AS session_id,
        json_extract_string(data,'$.ServiceId') AS service_id,
+       json_extract_string(data,'$.Fingerprint') AS fingerprint,
        CAST(json_extract_string(data,'$.{timeField}') AS BIGINT) AS at_nano
 FROM {table}
 WHERE json_extract_string(data,'$.ProjectId') = $projectId
-  AND json_extract_string(data,'$.Fingerprint') = $fingerprint
+  AND {matchSql}
 ORDER BY at_nano DESC LIMIT 1";
-        await using var cmd = Command(conn, sql, [("projectId", projectId.ToString()), ("fingerprint", fingerprint)]);
+        await using var cmd = Command(conn, sql, [("projectId", projectId.ToString()), ("match", matchValue)]);
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         if (!await reader.ReadAsync(ct))
             return null;
@@ -228,7 +255,8 @@ ORDER BY at_nano DESC LIMIT 1";
             reader["trace_id"] as string,
             reader["span_id"] as string,
             reader["session_id"] as string,
-            Guid.Parse((string)reader["service_id"]));
+            Guid.Parse((string)reader["service_id"]),
+            reader["fingerprint"] as string);
     }
 
     private (string Where, (string Name, object Value)[] Bind) SpanWhere(SpanQuery query)

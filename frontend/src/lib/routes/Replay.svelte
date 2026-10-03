@@ -6,6 +6,7 @@
   import type { components } from "../api/schema";
   import { router, link } from "../router.svelte";
   import ReplayPlayer from "../replay/ReplayPlayer.svelte";
+  import CorrelationWalk from "../components/CorrelationWalk.svelte";
   import LoadingState from "../components/ui/LoadingState.svelte";
   import EmptyState from "../components/ui/EmptyState.svelte";
   import ErrorState from "../components/ui/ErrorState.svelte";
@@ -68,6 +69,12 @@
     <Icon name="chevron-right" size={12} />
     <span>{sessionId}</span>
   </nav>
+
+  <section class="panel walk-panel">
+    <h2 class="h">Correlation walk</h2>
+    <CorrelationWalk {projectId} current="replay" {sessionId} />
+  </section>
+
   <section class="panel player">
     {#if loading}
       <LoadingState rows={3} />
@@ -109,6 +116,12 @@
   }
   .surface-head h1 {
     margin: 0;
+  }
+  .walk-panel {
+    padding: var(--gap-3) var(--gap-4);
+    display: flex;
+    flex-direction: column;
+    gap: var(--gap-3);
   }
   .player {
     padding: var(--gap-3);

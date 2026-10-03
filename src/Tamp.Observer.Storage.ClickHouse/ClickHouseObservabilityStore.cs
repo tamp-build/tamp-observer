@@ -134,6 +134,12 @@ ORDER BY time_unix_nano DESC LIMIT {(query.Limit <= 0 ? 200 : query.Limit)}";
         // current deployment); the correlation-walk occurrence lookup is unavailable here until it is added.
         Task.FromResult<IssueOccurrence?>(null);
 
+    public Task<IssueOccurrence?> GetLatestOccurrenceBySessionAsync(Guid projectId, string sessionId, CancellationToken ct = default) =>
+        Task.FromResult<IssueOccurrence?>(null);
+
+    public Task<IssueOccurrence?> GetLatestOccurrenceByTraceAsync(Guid projectId, string traceId, CancellationToken ct = default) =>
+        Task.FromResult<IssueOccurrence?>(null);
+
     private static string SpanWhere(SpanQuery query, out bool hasService)
     {
         hasService = query.ServiceId is not null;

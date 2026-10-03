@@ -85,15 +85,57 @@ public sealed class MartenObservabilityStore(IDocumentStore store) : IObservabil
             .OrderByDescending(l => l.TimeUnixNano)
             .FirstOrDefaultAsync(ct);
 
-        var spanOcc = span is null ? null : new IssueOccurrence(
-            "span", span.StartUnixNano, span.TraceId, span.SpanId, Session(span.Attributes), span.ServiceId);
-        var logOcc = log is null ? null : new IssueOccurrence(
-            "log", log.TimeUnixNano, log.TraceId, log.SpanId, Session(log.Attributes), log.ServiceId);
+        var spanOcc = span is null ? null : FromSpan(span);
+        var logOcc = log is null ? null : FromLog(log);
 
         if (spanOcc is null) return logOcc;
         if (logOcc is null) return spanOcc;
         return spanOcc.AtUnixNano >= logOcc.AtUnixNano ? spanOcc : logOcc;
     }
+
+    public async Task<IssueOccurrence?> GetLatestOccurrenceBySessionAsync(Guid projectId, string sessionId, CancellationToken ct = default)
+    {
+        await using var session = _store.QuerySession();
+        var span = await session.Query<IngestedSpan>()
+            .Where(s => s.ProjectId == projectId && s.Fingerprint != null && s.Attributes["tamp.session.id"] == sessionId)
+            .OrderByDescending(s => s.StartUnixNano)
+            .FirstOrDefaultAsync(ct);
+        var log = await session.Query<IngestedLog>()
+            .Where(l => l.ProjectId == projectId && l.Fingerprint != null && l.Attributes["tamp.session.id"] == sessionId)
+            .OrderByDescending(l => l.TimeUnixNano)
+            .FirstOrDefaultAsync(ct);
+
+        var spanOcc = span is null ? null : FromSpan(span);
+        var logOcc = log is null ? null : FromLog(log);
+        if (spanOcc is null) return logOcc;
+        if (logOcc is null) return spanOcc;
+        return spanOcc.AtUnixNano >= logOcc.AtUnixNano ? spanOcc : logOcc;
+    }
+
+    public async Task<IssueOccurrence?> GetLatestOccurrenceByTraceAsync(Guid projectId, string traceId, CancellationToken ct = default)
+    {
+        await using var session = _store.QuerySession();
+        var span = await session.Query<IngestedSpan>()
+            .Where(s => s.ProjectId == projectId && s.Fingerprint != null && s.TraceId == traceId)
+            .OrderByDescending(s => s.StartUnixNano)
+            .FirstOrDefaultAsync(ct);
+        var log = await session.Query<IngestedLog>()
+            .Where(l => l.ProjectId == projectId && l.Fingerprint != null && l.TraceId == traceId)
+            .OrderByDescending(l => l.TimeUnixNano)
+            .FirstOrDefaultAsync(ct);
+
+        var spanOcc = span is null ? null : FromSpan(span);
+        var logOcc = log is null ? null : FromLog(log);
+        if (spanOcc is null) return logOcc;
+        if (logOcc is null) return spanOcc;
+        return spanOcc.AtUnixNano >= logOcc.AtUnixNano ? spanOcc : logOcc;
+    }
+
+    private static IssueOccurrence FromSpan(IngestedSpan s) => new(
+        "span", s.StartUnixNano, s.TraceId, s.SpanId, Session(s.Attributes), s.ServiceId, s.Fingerprint);
+
+    private static IssueOccurrence FromLog(IngestedLog l) => new(
+        "log", l.TimeUnixNano, l.TraceId, l.SpanId, Session(l.Attributes), l.ServiceId, l.Fingerprint);
 
     // The browser-minted correlation key, when present on the occurrence.
     private static string? Session(IReadOnlyDictionary<string, string> attrs) =>
