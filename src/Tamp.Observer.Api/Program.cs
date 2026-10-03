@@ -694,8 +694,9 @@ public static class CorrelationBuilder
             {
                 var minStart = view.Spans.Min(s => s.StartUnixNano);
                 var maxEnd = view.Spans.Max(s => s.EndUnixNano);
-                var root = view.Spans.FirstOrDefault(s => string.IsNullOrEmpty(s.ParentSpanId))
-                           ?? view.Spans.OrderBy(s => s.StartUnixNano).First();
+                // The earliest-starting span is the most robust root for display (a partial trace may be missing
+                // the true root's parent link).
+                var root = view.Spans.OrderBy(s => s.StartUnixNano).First();
                 trace = new TraceSummary(
                     root.Name, maxEnd - minStart, view.Spans.Count,
                     view.Spans.Select(s => s.ServiceId).Distinct().Count(),

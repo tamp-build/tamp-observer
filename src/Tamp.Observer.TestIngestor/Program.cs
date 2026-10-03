@@ -1,7 +1,9 @@
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
 using OpenTelemetry;
+using OpenTelemetry.Logs;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 
@@ -82,6 +84,99 @@ foreach (var svc in services)
 }
 
 Console.WriteLine($"emitted {spanTotal} spans ({errorTotal} errors across {errorTypes.Length} types x {services.Length} services x {versions.Length} versions)");
+
+using var scenarioHttp = new HttpClient();
+
+// Correlated scenarios (TOBS-23 / ADR 0014): a full thread per scenario so the correlation walk lights up end
+// to end. One trace (root + db child + error child), error + warn logs ON that trace, and a replay session, all
+// sharing a browser-minted tamp.session.id. The error span groups into an Issue whose walk reaches the trace,
+// its logs, and the exact session.
+// Distinct error types so each scenario is its own Issue whose latest occurrence is the full thread (not merged
+// with the standalone bulk errors above).
+string[] scenarioErrorTypes =
+[
+    "Stripe.CardDeclinedException",
+    "Payments.GatewayTimeoutException",
+    "Checkout.InventoryConflictException",
+];
+var scenarioCount = int.Parse(Env("TI_SCENARIOS", "6"));
+var scenariosSent = 0;
+for (var i = 0; i < scenarioCount; i++)
+{
+    var svc = services[i % services.Length];
+    var ver = versions[^1];
+    var errorType = scenarioErrorTypes[i % scenarioErrorTypes.Length];
+    var sessionId = Guid.NewGuid().ToString();
+    var t0 = DateTime.UtcNow.AddSeconds(-rng.Next(5, 90));
+
+    var resource = ResourceBuilder.CreateDefault()
+        .AddService(serviceName: svc, serviceVersion: ver)
+        .AddAttributes(
+        [
+            new KeyValuePair<string, object>("tamp.project.key", project),
+            new KeyValuePair<string, object>("deployment.environment", environment),
+        ]);
+
+    using (var tracer = Sdk.CreateTracerProviderBuilder()
+        .AddSource(SourceName).SetResourceBuilder(resource)
+        .AddOtlpExporter(o => o.Endpoint = new Uri(otlp)).Build())
+    using (var loggerFactory = LoggerFactory.Create(b => b.AddOpenTelemetry(o =>
+    {
+        o.SetResourceBuilder(resource);
+        o.IncludeScopes = true;
+        o.IncludeFormattedMessage = true;
+        o.AddOtlpExporter(e => e.Endpoint = new Uri(otlp));
+    })))
+    {
+        var logger = loggerFactory.CreateLogger("checkout");
+        using (var root = source.StartActivity("POST /checkout", ActivityKind.Server, default(ActivityContext), startTime: t0))
+        {
+            root?.SetTag("tamp.session.id", sessionId);
+            using (var db = source.StartActivity("SELECT orders", ActivityKind.Client, root?.Context ?? default))
+            {
+                db?.SetStartTime(t0.AddMilliseconds(10));
+                db?.SetTag("tamp.session.id", sessionId);
+                db?.SetTag("db.system", "postgresql");
+                db?.SetEndTime(t0.AddMilliseconds(55));
+            }
+
+            using (var err = source.StartActivity("charge card", ActivityKind.Internal, root?.Context ?? default))
+            {
+                err?.SetStartTime(t0.AddMilliseconds(60));
+                err?.SetTag("tamp.session.id", sessionId);
+                err?.SetTag("exception.type", errorType);
+                err?.SetTag("exception.message", $"{errorType}: card charge declined");
+                err?.SetStatus(ActivityStatusCode.Error, "synthetic scenario error");
+                using (logger.BeginScope(new Dictionary<string, object> { ["tamp.session.id"] = sessionId }))
+                {
+                    logger.LogWarning("retrying card charge for order on {Service}", svc);
+                    logger.LogError("card charge failed: {ErrorType}", errorType);
+                }
+                err?.SetEndTime(t0.AddMilliseconds(230));
+            }
+            root?.SetEndTime(t0.AddMilliseconds(260));
+        }
+        tracer.ForceFlush(10_000);
+    } // dispose flushes the logs
+
+    var body = JsonSerializer.Serialize(new
+    {
+        sessionId,
+        startUrl = $"https://demo.local/{svc}/checkout",
+        userAgent = "TestIngestor/1.0 (synthetic)",
+        events = SyntheticRrwebEvents(((DateTimeOffset)t0).ToUnixTimeMilliseconds(), svc),
+    });
+    using var sreq = new HttpRequestMessage(HttpMethod.Post, replayUrl)
+    {
+        Content = new StringContent(body, Encoding.UTF8, "application/json"),
+    };
+    sreq.Headers.Add("X-Tamp-Project-Key", project);
+    var sresp = await scenarioHttp.SendAsync(sreq);
+    if (sresp.IsSuccessStatusCode) scenariosSent++;
+    else Console.WriteLine($"scenario session {sessionId[..8]} replay failed: {(int)sresp.StatusCode} {sresp.ReasonPhrase}");
+}
+
+Console.WriteLine($"emitted {scenariosSent} correlated scenarios (trace + logs + session, one error each)");
 
 // Synthetic replay sessions over the session front door.
 using var http = new HttpClient();
