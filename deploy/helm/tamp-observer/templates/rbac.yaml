@@ -1,0 +1,42 @@
+{{- if .Values.api.healthMetrics.enabled }}
+{{- $apiName := printf "%s-api" (include "tamp-observer.fullname" .) }}
+# RBAC for the Storage & health page's per-component metrics (TOBS-33): the api reads pod status and the
+# metrics.k8s.io API in its own namespace only. Namespace-scoped Role, not a ClusterRole, so a locked enclave
+# grants nothing beyond this namespace. Disable with api.healthMetrics.enabled=false (the page then shows the
+# static component list without CPU/memory/restarts).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $apiName }}
+  labels:
+    {{- include "tamp-observer.labels" . | nindent 4 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $apiName }}-health
+  labels:
+    {{- include "tamp-observer.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+  - apiGroups: ["metrics.k8s.io"]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $apiName }}-health
+  labels:
+    {{- include "tamp-observer.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $apiName }}-health
+subjects:
+  - kind: ServiceAccount
+    name: {{ $apiName }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}

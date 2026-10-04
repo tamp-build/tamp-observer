@@ -623,7 +623,7 @@ export interface components {
             status: string;
             runningDesired: null | string;
             /** Format: double */
-            cpuPercent: null | number | string;
+            cpuMillicores: null | number | string;
             /** Format: int64 */
             memoryBytes: null | number | string;
             /** Format: int32 */

@@ -39,7 +39,7 @@ public sealed record TableSize(string Name, long Bytes);
 public sealed record DuckTier(bool Enabled, string Store);
 public sealed record ComponentHealth(
     string Name, string Subtitle, string Status, string? RunningDesired,
-    double? CpuPercent, long? MemoryBytes, int? Restarts, string? Uptime);
+    double? CpuMillicores, long? MemoryBytes, int? Restarts, string? Uptime);
 
 public static class HealthReport
 {
@@ -51,6 +51,7 @@ public static class HealthReport
         var pg = await TryPostgresAsync(pgConn, ct);
         var valkey = string.IsNullOrWhiteSpace(valkeyConn) ? null : await TryValkeyAsync(valkeyConn, ct);
         var (rejected24h, quarantineTotal) = await QuarantineAsync(docs, ct);
+        var pods = await K8sMetrics.TryReadAsync(ct);
 
         var buffered = valkey?.Streams.Sum(s => s.Pending) ?? 0;
         var dominant = valkey?.Streams.OrderByDescending(s => s.Pending).FirstOrDefault();
@@ -88,19 +89,48 @@ public static class HealthReport
 
         var components = new List<ComponentHealth>
         {
-            new("API", "serves UI + DuckDB", "ok", null, null, null, null, null),
-            new("Collector", "Go OTel", "ok", null, null, null, null, null),
-            new("Evaluator", ".NET workers", lagging > 0 ? "warn" : "ok", null, null, null, null, null),
-            new("Valkey", "streams", valkey is null ? "crit" : "ok", valkey is null ? "0 / 1" : "1 / 1", null,
-                valkey?.Server.UsedMemoryBytes, null, null),
-            new("Postgres", "write store", pgOk ? "ok" : "crit", pgOk ? "1 / 1" : "0 / 1", null, null, null, null),
-            new("Dex", "OIDC broker", "ok", null, null, null, null, null),
+            Component("API", "api", "serves UI + DuckDB", "ok", pods),
+            Component("Collector", "collector", "Go OTel", "ok", pods),
+            Component("Evaluator", "evaluator", ".NET workers", lagging > 0 ? "warn" : "ok", pods),
+            Component("Valkey", "valkey", "streams", valkey is null ? "crit" : "ok", pods),
+            Component("Postgres", "postgres", "write store", pgOk ? "ok" : "crit", pods),
+            Component("Dex", "dex", "OIDC broker", "ok", pods),
         };
 
         return new HealthView(
             overall, overallMsg, kpis, pipeline, valkey, pg,
             new DuckTier(storeTier == "duckdb", storeTier), clickHouse, components);
     }
+
+    // Merge the static component descriptor with live pod metrics (TOBS-33). Pods are matched to a component by
+    // the "-<token>" segment of their name (e.g. "observer-tamp-observer-api-xxxx" -> "api"). CPU/memory sum
+    // across matched pods; running/desired counts ready pods vs matched pods; restarts/uptime come from the first
+    // matched pod. When no pod matches (not in a cluster, or no RBAC) the live fields stay null and the page shows
+    // the static status with em-dashes, exactly as before.
+    private static ComponentHealth Component(string name, string token, string subtitle, string status, IReadOnlyList<PodMetrics> pods)
+    {
+        var matched = pods.Where(p => p.Pod.Contains($"-{token}", StringComparison.Ordinal)).ToList();
+        if (matched.Count == 0)
+            return new ComponentHealth(name, subtitle, status, null, null, null, null, null);
+
+        var cpu = matched.Any(p => p.CpuMillicores is not null) ? matched.Sum(p => p.CpuMillicores ?? 0) : (double?)null;
+        var mem = matched.Any(p => p.MemoryBytes is not null) ? matched.Sum(p => p.MemoryBytes ?? 0) : (long?)null;
+        var running = matched.Count(p => p.Running && p.Ready);
+        var restarts = matched.Sum(p => p.Restarts);
+        var started = matched.Where(p => p.StartedAt is not null).Select(p => p.StartedAt!.Value).DefaultIfEmpty().Min();
+        var uptime = started == default ? null : FormatUptime(DateTimeOffset.UtcNow - started);
+        // A matched pod that is not ready downgrades the component status.
+        var liveStatus = running < matched.Count && status == "ok" ? "warn" : status;
+        return new ComponentHealth(name, subtitle, liveStatus, $"{running} / {matched.Count}", cpu, mem, restarts, uptime);
+    }
+
+    private static string FormatUptime(TimeSpan up) => up switch
+    {
+        { TotalDays: >= 1 } => $"{(int)up.TotalDays}d {up.Hours}h",
+        { TotalHours: >= 1 } => $"{(int)up.TotalHours}h {up.Minutes}m",
+        { TotalMinutes: >= 1 } => $"{(int)up.TotalMinutes}m",
+        _ => $"{(int)up.TotalSeconds}s",
+    };
 
     private static async Task<(long Rejected24h, long Total)> QuarantineAsync(IDocumentStore docs, CancellationToken ct)
     {
@@ -175,7 +205,6 @@ public static class HealthReport
             var streamKey = "tamp.observer.raw";
             var streams = new List<StreamStat>();
             long length = 0, pending = 0;
-            int consumers = 0;
             var status = "ok";
             try
             {
@@ -183,21 +212,24 @@ public static class HealthReport
                 var groups = await db.StreamGroupInfoAsync(streamKey);
                 var evalGroup = groups.FirstOrDefault(g => g.Name == "evaluator");
                 pending = evalGroup.PendingMessageCount;
-                consumers = evalGroup.ConsumerCount;
+                // "N of M": active consumers of total registered. The raw ConsumerCount counts stale members a
+                // crashed/replaced evaluator left behind, which is what produced the nonsensical "3 of 1"; count
+                // only consumers with recent activity as active, and show the registered total as the denominator.
+                var (active, total) = await ConsumersAsync(db, streamKey);
                 status = pending > PendingWarnThreshold ? "warn" : "ok";
-                streams.Add(new StreamStat(streamKey, length, pending, null, consumers, 1, status));
+                streams.Add(new StreamStat(streamKey, length, pending, null, active, total, status));
             }
             catch
             {
                 // Stream/group not created yet (no ingest): show it empty rather than failing the whole page.
-                streams.Add(new StreamStat(streamKey, 0, 0, null, 0, 1, "ok"));
+                streams.Add(new StreamStat(streamKey, 0, 0, null, 0, 0, "ok"));
             }
 
             var srv = new ValkeyServer(
                 UsedMemoryBytes: InfoLong(info, "used_memory"),
                 MaxMemoryBytes: InfoLong(info, "maxmemory"),
                 EvictionPolicy: InfoStr(info, "maxmemory_policy") ?? "?",
-                Persistence: InfoStr(info, "aof_enabled") == "1" ? "AOF enabled" : "RDB only",
+                Persistence: await PersistenceAsync(info, server),
                 OpsPerSec: InfoLong(info, "instantaneous_ops_per_sec"),
                 Clients: (int)InfoLong(info, "connected_clients"),
                 Version: InfoStr(info, "redis_version") ?? InfoStr(info, "valkey_version") ?? "?",
@@ -210,6 +242,46 @@ public static class HealthReport
         {
             return null;
         }
+    }
+
+    private const long StaleConsumerIdleMs = 60_000; // a consumer idle longer than this is treated as dropped.
+
+    // Active (recently seen) vs total registered consumers in the evaluator group. XINFO CONSUMERS gives per
+    // consumer idle time; a long-idle one is a stale member left by a crashed/replaced evaluator.
+    private static async Task<(int Active, int Total)> ConsumersAsync(IDatabase db, string streamKey)
+    {
+        try
+        {
+            var consumers = await db.StreamConsumerInfoAsync(streamKey, "evaluator");
+            var active = consumers.Count(c => c.IdleTimeInMilliseconds < StaleConsumerIdleMs);
+            return (active, consumers.Length);
+        }
+        catch
+        {
+            return (0, 0);
+        }
+    }
+
+    // Honest persistence posture: AOF if enabled; otherwise RDB only when snapshot points are configured, else
+    // "persistence off" (the pod runs with no durability, which "RDB only" wrongly implied).
+    private static async Task<string> PersistenceAsync(Dictionary<string, string> info, IServer? server)
+    {
+        if (InfoStr(info, "aof_enabled") == "1")
+            return "AOF enabled";
+        try
+        {
+            if (server is not null)
+            {
+                var save = await server.ConfigGetAsync("save");
+                var saveVal = save.Length > 0 ? save[0].Value : null;
+                return string.IsNullOrWhiteSpace(saveVal) ? "persistence off" : "RDB snapshots";
+            }
+        }
+        catch
+        {
+            // CONFIG GET unavailable: fall through to the conservative label below.
+        }
+        return "RDB only";
     }
 
     private static async Task<Dictionary<string, string>> ReadInfoAsync(IServer? server)

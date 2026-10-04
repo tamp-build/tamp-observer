@@ -91,6 +91,11 @@ api:
   selfTelemetry:
     enabled: false
     otlp: ""              # e.g. http://<release>-collector:4317
+  # Storage & health per-component metrics (TOBS-33): grants the api a namespace-scoped Role to read pods and the
+  # metrics.k8s.io API. Turn off for an enclave that forbids the app any Kubernetes API access; the health page
+  # then omits CPU/memory/restarts/uptime and shows the static component list.
+  healthMetrics:
+    enabled: true
   resources:
     # DuckDB runs in-process and is vectorized; a tight memory limit OOMKills the whole pod mid-aggregation.
     requests: { cpu: 250m, memory: 512Mi }

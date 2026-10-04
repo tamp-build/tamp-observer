@@ -1746,7 +1746,7 @@
           "subtitle",
           "status",
           "runningDesired",
-          "cpuPercent",
+          "cpuMillicores",
           "memoryBytes",
           "restarts",
           "uptime"
@@ -1768,7 +1768,7 @@
               "string"
             ]
           },
-          "cpuPercent": {
+          "cpuMillicores": {
             "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "null",

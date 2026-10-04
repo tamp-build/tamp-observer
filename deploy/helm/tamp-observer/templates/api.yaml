@@ -48,6 +48,9 @@ spec:
       labels:
         {{- include "tamp-observer.selectorLabels" (dict "root" . "component" "api") | nindent 8 }}
     spec:
+      {{- if .Values.api.healthMetrics.enabled }}
+      serviceAccountName: {{ $apiName }}
+      {{- end }}
       containers:
         - name: api
           image: {{ include "tamp-observer.image" (dict "root" . "repository" .Values.api.repository "tag" .Values.api.tag) | quote }}
@@ -55,6 +58,13 @@ spec:
           env:
             - name: ASPNETCORE_URLS
               value: "http://+:8080"
+            {{- if .Values.api.healthMetrics.enabled }}
+            # Namespace for the Storage & health per-component metrics (reads pods + metrics.k8s.io in this ns).
+            - name: OBSERVER_POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            {{- end }}
             - name: OBSERVER_DB
               valueFrom:
                 secretKeyRef:

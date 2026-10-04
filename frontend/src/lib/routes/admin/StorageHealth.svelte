@@ -1,8 +1,9 @@
 <script lang="ts">
   // Storage & health (README 7.8): the pipeline-health dashboard, matched to the design. Live data where the API
-  // can source it (Valkey, Postgres, pipeline, KPIs); sections that need data we do not collect yet (throughput
-  // and freshness history, per-pod CPU/memory, retention schedule, the health-event log) show an honest "not
-  // collected yet" rather than fabricated numbers. Polls every 15s while the tab is visible.
+  // can source it (Valkey, Postgres, pipeline, KPIs, and per-component CPU/memory/restarts/uptime from the k8s
+  // metrics API, TOBS-33); sections that need data we do not collect yet (throughput and freshness history,
+  // retention schedule, the health-event log) show an honest "not collected yet" rather than fabricated numbers.
+  // Polls every 15s while the tab is visible.
   import { api } from "../../api/client";
   import type { components } from "../../api/schema";
   import LoadingState from "../../components/ui/LoadingState.svelte";
@@ -208,17 +209,19 @@
     <section id="components" class="panel comp-panel">
       <div class="pad"><h2 class="h">Components</h2></div>
       <div class="scroll-x"><div class="cmp-wrap">
-        <div class="cmp th"><span>Component</span><span class="num">Running</span><span>Status</span><span class="num">Memory</span></div>
+        <div class="cmp th"><span>Component</span><span class="num">Running</span><span>Status</span><span class="num">CPU</span><span class="num">Memory</span><span class="num">Restarts</span><span class="num">Uptime</span></div>
         {#each data.components as c (c.name)}
           <div class="cmp">
             <span class="cname"><span>{c.name}</span><span class="mono muted tiny">{c.subtitle}</span></span>
             <span class="num mono">{c.runningDesired ?? "—"}</span>
             <span><span class="pill {pill(c.status)}">{c.status === "ok" ? "Healthy" : c.status === "warn" ? "Degraded" : "Down"}</span></span>
+            <span class="num mono">{c.cpuMillicores != null ? `${Math.round(Number(c.cpuMillicores))}m` : "—"}</span>
             <span class="num mono">{c.memoryBytes ? bytes(c.memoryBytes) : "—"}</span>
+            <span class="num mono">{c.restarts != null ? c.restarts : "—"}</span>
+            <span class="num mono">{c.uptime ?? "—"}</span>
           </div>
         {/each}
       </div></div>
-      <p class="muted small pad">CPU, restarts and uptime need the k8s metrics API (not wired yet).</p>
     </section>
   </div>
 
@@ -296,8 +299,8 @@
   .two-col { display: flex; flex-wrap: wrap; gap: var(--gap-3); align-items: flex-start; }
   .two-col > * { flex: 1 1 400px; min-width: 0; }
   .comp-panel { overflow: hidden; }
-  .cmp-wrap { min-width: 520px; }
-  .cmp { display: grid; grid-template-columns: minmax(140px, 1.4fr) 90px 110px 100px; gap: var(--gap-3); align-items: center; padding: 9px 14px; border-top: 1px solid var(--divider); }
+  .cmp-wrap { min-width: 680px; }
+  .cmp { display: grid; grid-template-columns: minmax(140px, 1.4fr) 80px 104px 72px 92px 76px 88px; gap: var(--gap-3); align-items: center; padding: 9px 14px; border-top: 1px solid var(--divider); }
   .cmp.th { border-top: 0; padding: 8px 14px; font-size: var(--fs-label); color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
   .cname { display: flex; flex-direction: column; }
 
