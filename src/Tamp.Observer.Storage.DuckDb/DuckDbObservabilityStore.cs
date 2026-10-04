@@ -267,13 +267,18 @@ ORDER BY time_nano DESC LIMIT {(query.Limit <= 0 ? 200 : query.Limit)}";
             where += " AND json_extract_string(data,'$.ServiceId') = $serviceId";
             bind.Add(("serviceId", svc.ToString()));
         }
+        // DuckDB is the columnar accelerator: compute volume/errors AND an exact per-bucket p95 natively
+        // (quantile_cont over span duration). The materialized rollup (TOBS-25) is the Postgres-floor
+        // optimization; here native exact quantiles are cheaper and more precise than folding histograms.
         var sql = $@"
 SELECT CAST((CAST(json_extract_string(data,'$.StartUnixNano') AS BIGINT) - $start) / $width AS INTEGER) AS b,
        count(*) AS c,
-       count(*) FILTER (WHERE CAST(json_extract_string(data,'$.StatusCode') AS INTEGER) = 2) AS e
+       count(*) FILTER (WHERE CAST(json_extract_string(data,'$.StatusCode') AS INTEGER) = 2) AS e,
+       quantile_cont(CAST(json_extract_string(data,'$.DurationNano') AS BIGINT), 0.95) AS p95
 FROM {_spans} WHERE {where} GROUP BY b";
         var counts = new long[buckets];
         var errors = new long[buckets];
+        var p95 = new long[buckets];
         await using var lease = await OpenAsync(ct);
         var conn = lease.Conn;
         await using var cmd = Command(conn, sql, bind.ToArray());
@@ -283,11 +288,64 @@ FROM {_spans} WHERE {where} GROUP BY b";
             var b = Math.Clamp(Convert.ToInt32(reader["b"]), 0, buckets - 1);
             counts[b] = Convert.ToInt64(reader["c"]);
             errors[b] = Convert.ToInt64(reader["e"]);
+            p95[b] = (long)Dbl(reader["p95"]);
         }
         var list = new List<SeriesBucket>(buckets);
         for (var i = 0; i < buckets; i++)
-            list.Add(new SeriesBucket(query.Window.StartUnixNano + (long)i * width, counts[i], errors[i]));
+            list.Add(new SeriesBucket(query.Window.StartUnixNano + (long)i * width, counts[i], errors[i], p95[i]));
         return list;
+    }
+
+    public async Task<IReadOnlyList<OperationSeries>> GetOperationSeriesAsync(SpanQuery query, int buckets, int limit = 10, CancellationToken ct = default)
+    {
+        buckets = Math.Clamp(buckets, 1, 500);
+        limit = limit <= 0 ? 10 : limit;
+        var width = Math.Max(1, (query.Window.EndUnixNano - query.Window.StartUnixNano) / buckets);
+        var (where, bind) = SpanWhere(query);
+        var bindW = bind.Append(("width", (object)width)).ToArray();
+        const string dur = "CAST(json_extract_string(data,'$.DurationNano') AS BIGINT)";
+        const string isErr = "CAST(json_extract_string(data,'$.StatusCode') AS INTEGER) = 2";
+
+        await using var lease = await OpenAsync(ct);
+        var conn = lease.Conn;
+
+        // Top operations with exact overall p95.
+        var top = new List<(string Op, long Count, long Err, long P95)>();
+        var topSql = $@"
+SELECT json_extract_string(data,'$.Name') AS op, count(*) AS c,
+       count(*) FILTER (WHERE {isErr}) AS e, quantile_cont({dur}, 0.95) AS p95
+FROM {_spans} WHERE {where} GROUP BY op ORDER BY c DESC, op LIMIT {limit}";
+        await using (var cmd = Command(conn, topSql, bind))
+        await using (var r = await cmd.ExecuteReaderAsync(ct))
+            while (await r.ReadAsync(ct))
+                top.Add(((string)r["op"], Convert.ToInt64(r["c"]), Convert.ToInt64(r["e"]), (long)Dbl(r["p95"])));
+
+        // Per-(operation, bucket) call volume for the sparklines.
+        var series = new Dictionary<string, (long[] C, long[] E)>(StringComparer.Ordinal);
+        var seriesSql = $@"
+SELECT json_extract_string(data,'$.Name') AS op,
+       CAST((CAST(json_extract_string(data,'$.StartUnixNano') AS BIGINT) - $start) / $width AS INTEGER) AS b,
+       count(*) AS c, count(*) FILTER (WHERE {isErr}) AS e
+FROM {_spans} WHERE {where} GROUP BY op, b";
+        await using (var cmd = Command(conn, seriesSql, bindW))
+        await using (var r = await cmd.ExecuteReaderAsync(ct))
+            while (await r.ReadAsync(ct))
+            {
+                var op = (string)r["op"];
+                if (!series.TryGetValue(op, out var agg)) series[op] = agg = (new long[buckets], new long[buckets]);
+                var b = Math.Clamp(Convert.ToInt32(r["b"]), 0, buckets - 1);
+                agg.C[b] += Convert.ToInt64(r["c"]);
+                agg.E[b] += Convert.ToInt64(r["e"]);
+            }
+
+        return top.Select(t =>
+        {
+            var (cc, ee) = series.GetValueOrDefault(t.Op, (new long[buckets], new long[buckets]));
+            var sb = new List<SeriesBucket>(buckets);
+            for (var i = 0; i < buckets; i++)
+                sb.Add(new SeriesBucket(query.Window.StartUnixNano + (long)i * width, cc[i], ee[i]));
+            return new OperationSeries(t.Op, t.Count, t.Err, t.P95, sb);
+        }).ToList();
     }
 
     public async Task<IReadOnlyList<IssueSeries>> GetIssueSeriesAsync(Guid projectId, TimeWindow window, int buckets, CancellationToken ct = default)

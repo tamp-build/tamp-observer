@@ -27,6 +27,25 @@ public sealed class MartenEventSink(IDocumentStore store) : IEventSink
         // Issues are upserts (new or updated projections); Marten Store() inserts or updates by Id.
         foreach (var issue in batch.Issues) session.Store(issue);
 
+        // Time-bucketed rollup (TOBS-25): fold the per-bucket deltas into the rollup table in the SAME
+        // transaction as the documents, so a rollup bucket never drifts from the events that produced it.
+        if (batch.Rollups is { IsEmpty: false } rollups)
+        {
+            foreach (var r in rollups.Signals)
+                session.QueueSqlCommand(RollupSchema.UpsertSignalSql,
+                    r.ProjectId, r.ServiceId, r.Signal, r.BucketStart,
+                    r.EventCount, r.ErrorCount, r.Bytes, r.LatHist, r.FreshHist);
+            foreach (var o in rollups.Operations)
+                session.QueueSqlCommand(RollupSchema.UpsertOperationSql,
+                    o.ProjectId, o.ServiceId, o.Operation, o.BucketStart, o.Count, o.ErrorCount, o.LatHist);
+            foreach (var i in rollups.Issues)
+                session.QueueSqlCommand(RollupSchema.UpsertIssueSql,
+                    i.ProjectId, i.ServiceId, i.Fingerprint, i.BucketStart, i.Count);
+            foreach (var se in rollups.Sessions)
+                session.QueueSqlCommand(RollupSchema.UpsertSessionSql,
+                    se.ProjectId, se.ServiceId, se.Fingerprint, se.SessionId, se.LastSeenNano);
+        }
+
         await session.SaveChangesAsync(ct);
     }
 }
