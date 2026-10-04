@@ -70,24 +70,9 @@ public sealed class ReadInterfaceTests : IAsyncLifetime
         Assert.Equal(2, p.Count); // only svcA, only in-window
     }
 
-    [Fact]
-    public async Task Top_operations_by_frequency_with_error_counts()
-    {
-        var project = Guid.NewGuid();
-        var service = Guid.NewGuid();
-        await StoreSpans(project, service, "t",
-            ("op1", 1000, 10, 0),
-            ("op1", 1010, 10, 0),
-            ("op1", 1020, 10, 0),
-            ("op2", 1030, 10, 2),   // error
-            ("op2", 1040, 10, 0));
-
-        var top = await _reads.GetTopOperationsAsync(new SpanQuery(project, new TimeWindow(1000, 2000)));
-
-        Assert.Equal(2, top.Count);
-        Assert.Equal(new OperationStat("op1", 3, 0), top[0]);
-        Assert.Equal(new OperationStat("op2", 2, 1), top[1]);
-    }
+    // NOTE: GetTopOperationsAsync is now served from the operation rollup (TOBS-25), not a raw span scan, so it
+    // is exercised against seeded rollup rows in RollupIntegrationTests.Operation_and_issue_and_session_rollups_read_back.
+    // A raw-span-seeded test here would assert behavior the method no longer has.
 
     [Fact]
     public async Task Trace_view_returns_spans_and_logs_for_the_trace()
