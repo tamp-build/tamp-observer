@@ -564,6 +564,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{projectId}/logs/tail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ProjectLogsTail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects/{projectId}/alerts": {
         parameters: {
             query?: never;
@@ -2106,6 +2122,49 @@ export interface operations {
                 service?: string;
                 minSeverity?: number | string;
                 limit?: number | string;
+                category?: string;
+                q?: string;
+                environment?: string;
+                version?: string;
+                traceId?: string;
+                sessionId?: string;
+                before?: number | string;
+            };
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IngestedLog"][];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ProjectLogsTail: {
+        parameters: {
+            query: {
+                after: number | string;
+                service?: string;
+                minSeverity?: number | string;
+                limit?: number | string;
+                category?: string;
+                q?: string;
             };
             header?: never;
             path: {
