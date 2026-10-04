@@ -17,6 +17,18 @@ Next steps:
        kubectl exec deploy/{{ include "tamp-observer.fullname" . }}-evaluator -- \
          dotnet Tamp.Observer.Evaluator.Host.dll allow-user you@example.com admin
   3. Point apps' OTLP at the collector service (or your ingress host); open the UI on the api host and sign in.
+{{- if .Values.logAgent.enabled }}
+
+Edge log-agent (TOBS-41) is ENABLED: a DaemonSet tails node container logs and ships OTLP to the collector at
+  {{ .Values.logAgent.gatewayOtlp | default (printf "%s.%s.svc:%d" (include "tamp-observer.collectorHost" .) .Release.Namespace (int .Values.collector.service.grpcPort)) }}.
+  {{- if .Values.logAgent.provisionProject }}
+  The `skyfire` trust-root project is auto-provisioned by a post-install hook Job.
+  {{- else }}
+  Provision the target project so its logs are admitted (not quarantined):
+       kubectl exec deploy/{{ include "tamp-observer.fullname" . }}-evaluator -- \
+         dotnet Tamp.Observer.Evaluator.Host.dll create-project skyfire "SkyFire"
+  {{- end }}
+{{- end }}
 
 Reminders:
   - The api is intentionally single-replica (replay blobs on a RWO PVC; DuckDB in-process). Do not scale it out

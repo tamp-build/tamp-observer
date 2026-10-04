@@ -23,6 +23,18 @@
   let loading = $state(true);
   let error = $state<string | null>(null);
   let errorsOnly = $state(false);
+  // Client-side quick filter on the parsed logger category (log.category, e.g. SkyFire's sql.sql / server.hub).
+  // Deep server-side log search is the Logs-explorer backend ticket (TOBS-38); here we just isolate by category.
+  let categoryFilter = $state<string | null>(null);
+
+  const categoryOf = (log: Log): string | null => log.attributes?.["log.category"] ?? null;
+  // Distinct categories present in the loaded window, for the filter dropdown.
+  let categories = $derived(
+    [...new Set(logs.map(categoryOf).filter((c): c is string => !!c))].sort(),
+  );
+  let visibleLogs = $derived(
+    categoryFilter ? logs.filter((l) => categoryOf(l) === categoryFilter) : logs,
+  );
 
   async function load() {
     loading = true;
@@ -58,6 +70,17 @@
   <label class="check">
     <input type="checkbox" bind:checked={errorsOnly} /> Errors only
   </label>
+  {#if categories.length > 0}
+    <label class="check">
+      Category
+      <select bind:value={categoryFilter}>
+        <option value={null}>All</option>
+        {#each categories as c (c)}
+          <option value={c}>{c}</option>
+        {/each}
+      </select>
+    </label>
+  {/if}
 </div>
 
 <section class="panel">
@@ -69,11 +92,16 @@
     <EmptyState message="No logs in this window." />
   {:else}
     <div class="scroll-x">
-      {#each logs as log, i (i)}
+      {#each visibleLogs as log, i (i)}
         <div class="log-row" class:err={severityClass(log.severityNumber) === 'lvl-err'}>
           <span class="mono muted time">{nanosToTime(log.timeUnixNano)}</span>
           <span class="lvl {severityClass(log.severityNumber)}">{severityLabel(log.severityNumber)}</span>
           <span class="svc muted" title={services.name(projectId, log.serviceId)}>{services.name(projectId, log.serviceId)}</span>
+          {#if categoryOf(log)}
+            <button class="cat" title={`Filter by ${categoryOf(log)}`} onclick={() => (categoryFilter = categoryOf(log))}>{categoryOf(log)}</button>
+          {:else}
+            <span class="cat muted">·</span>
+          {/if}
           <span class="mono body">{log.body ?? ''}</span>
         </div>
       {/each}
@@ -101,18 +129,35 @@
   }
   .log-row {
     display: grid;
-    grid-template-columns: 96px 60px 140px minmax(0, 1fr);
+    grid-template-columns: 96px 60px 140px 120px minmax(0, 1fr);
     gap: var(--gap-3);
     align-items: baseline;
     padding: 5px var(--gap-4);
     border-top: 1px solid var(--divider);
-    min-width: 680px;
+    min-width: 800px;
   }
   .svc {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     font-size: var(--fs-label);
+  }
+  .cat {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--fs-label);
+    font-family: var(--font-mono, monospace);
+    color: var(--text-2);
+    text-align: left;
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+  }
+  button.cat:hover {
+    color: var(--text-1);
+    text-decoration: underline;
   }
   .log-row.err {
     background: var(--err-bg);
