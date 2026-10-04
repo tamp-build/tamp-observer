@@ -15,7 +15,7 @@ public class IngestedMetric
     public Guid? EnvironmentId { get; set; }
     public Guid VersionId { get; set; }
 
-    /// <summary>The metric name (e.g. "sample.players", "up").</summary>
+    /// <summary>The metric name (e.g. "sample.active_count", "up").</summary>
     public required string Name { get; set; }
 
     /// <summary>The numeric value at <see cref="TimeUnixNano"/> (int points are widened to double).</summary>

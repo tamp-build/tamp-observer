@@ -5,7 +5,7 @@
 # container logs for workloads whose logger has no OTLP appender (Sample -> Console -> stdout), enriches with
 # k8sattributes, stamps tamp.project.key, and ships OTLP to the central gateway collector. DaemonSet (not a
 # sidecar) so it catches KEDA scale-to-zero pods and survives pod restarts. Off by default; cluster-scoped RBAC
-# is only created when enabled. microk8s applies this for the `sample` workload.
+# is only created when enabled. an operator applies this for the `sample` workload.
 apiVersion: v1
 kind: ServiceAccount
 metadata:

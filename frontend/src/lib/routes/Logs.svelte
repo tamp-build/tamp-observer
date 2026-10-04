@@ -23,7 +23,7 @@
   let loading = $state(true);
   let error = $state<string | null>(null);
   let errorsOnly = $state(false);
-  // Client-side quick filter on the parsed logger category (log.category, e.g. Sample's db.query / app.auth).
+  // Client-side quick filter on the parsed logger category (log.category, e.g. db.query / app.auth).
   // Deep server-side log search is the Logs-explorer backend ticket (TOBS-38); here we just isolate by category.
   let categoryFilter = $state<string | null>(null);
 

@@ -15,8 +15,8 @@ public sealed class LogGroupingTests
     public void Same_class_different_numbers_groups()
     {
         const string cat = "db.query";
-        var a = LogGrouping.Key("RecordValidator: Entry 3887200 SourceType 9 Event 4 Action 33 Kill Credit: There is a linked record spell for refEntry 38872 (RefId: 73118 effect: 0)", cat);
-        var b = LogGrouping.Key("RecordValidator: Entry 1120 SourceType 0 Event 25 Action 11 Kill Credit: There is a linked record spell for refEntry 50409 (RefId: 59390 effect: 1)", cat);
+        var a = LogGrouping.Key("RecordValidator: Entry 3887200 Type 9 Code 4 Step 33 Link: there is a linked record for refEntry 38872 (RefId: 73118 slot: 0)", cat);
+        var b = LogGrouping.Key("RecordValidator: Entry 1120 Type 0 Code 25 Step 11 Link: there is a linked record for refEntry 50409 (RefId: 59390 slot: 1)", cat);
         Assert.Equal(a, b);
     }
 
@@ -25,8 +25,8 @@ public sealed class LogGroupingTests
     public void Different_classes_stay_separate()
     {
         const string cat = "db.query";
-        var validator = LogGrouping.Key("RecordValidator: Entry 3887200 SourceType 9 Event 4 Action 33 Kill Credit: ...", cat);
-        var missingRef = LogGrouping.Key("Table 'items_catalog' entry 38659 (creature entry) does not exist but used as reference id in DB.", cat);
+        var validator = LogGrouping.Key("RecordValidator: Entry 3887200 Type 9 Code 4 Step 33 Link: ...", cat);
+        var missingRef = LogGrouping.Key("Table 'items_catalog' entry 38659 (catalog entry) does not exist but used as reference id in DB.", cat);
         Assert.NotEqual(validator, missingRef);
     }
 
@@ -43,16 +43,16 @@ public sealed class LogGroupingTests
         Assert.Equal(k1, k1b);
     }
 
-    // The real Sample restart case: same "did not match the expected schema" shape, different script names in
-    // backticks + different RefIds -> different scripts are different classes, same script collapses.
+    // Same "did not match the expected schema" shape, different handler names in backticks + different ids ->
+    // different handlers are different classes, same handler collapses (TOBS-42 over-collapse fix).
     [Fact]
-    public void Script_name_discriminates_dbc_mismatch_classes()
+    public void Handler_name_discriminates_schema_mismatch_classes()
     {
-        var alpha1 = LogGrouping.Key("Spell `62518` Effect `Index: EFFECT_1 Name: 28` of script `handler_alpha` did not match the expected schema", "scripts");
-        var alpha2 = LogGrouping.Key("Spell `64306` Effect `Index: EFFECT_0 Name: 14` of script `handler_alpha` did not match the expected schema", "scripts");
-        var beta = LogGrouping.Key("Spell `45204` Effect `Index: EFFECT_1 Name: 77` of script `handler_beta` did not match the expected schema", "scripts");
-        Assert.Equal(alpha1, alpha2);   // same script, different ids -> one class
-        Assert.NotEqual(alpha1, beta);  // different script -> separate class (no over-collapse)
+        var alpha1 = LogGrouping.Key("Record `62518` Field `Index: FIELD_1 Name: 28` of handler `handler_alpha` did not match the expected schema", "handlers");
+        var alpha2 = LogGrouping.Key("Record `64306` Field `Index: FIELD_0 Name: 14` of handler `handler_alpha` did not match the expected schema", "handlers");
+        var beta = LogGrouping.Key("Record `45204` Field `Index: FIELD_1 Name: 77` of handler `handler_beta` did not match the expected schema", "handlers");
+        Assert.Equal(alpha1, alpha2);   // same handler, different ids -> one class
+        Assert.NotEqual(alpha1, beta);  // different handler -> separate class (no over-collapse)
     }
 
     // Same message under different logger categories must not share an Issue.
@@ -76,7 +76,7 @@ public sealed class LogGroupingTests
     [InlineData("rate 3.14 pct", "rate # pct")]
     [InlineData("guid 550e8400-e29b-41d4-a716-446655440000 seen", "guid # seen")]
     [InlineData("addr 0x1A2B done", "addr # done")]
-    [InlineData("col `creature`.`id` bad", "col `creature`.`id` bad")]
+    [InlineData("col `orders`.`id` bad", "col `orders`.`id` bad")]
     public void Normalize_parameterizes_literals(string input, string expected) =>
         Assert.Equal(expected, LogGrouping.Normalize(input));
 

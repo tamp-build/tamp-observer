@@ -4,7 +4,7 @@ namespace Tamp.Observer.Domain;
 
 /// <summary>
 /// Builds the Issue grouping key for an error-severity LOG that has no <c>exception.type</c> (ADR 0015, TOBS-42).
-/// Unlike an exception, a log line carries volatile literals: entry ids, spell ids, row counts, quoted table or
+/// Unlike an exception, a log line carries volatile literals: entry ids, record ids, row counts, quoted table or
 /// column names that differ on every occurrence of the SAME error class (e.g. Sample's db.query validation
 /// output). Grouping on the raw text would mint one Issue per line. We parameterize those literals so occurrences
 /// collapse into one Issue, and fold in the logger category so distinct categories never share an Issue. The

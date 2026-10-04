@@ -134,17 +134,17 @@ public sealed class RollupIntegrationTests : IAsyncLifetime
         var b = Guid.NewGuid();
         var t0 = Bucket * 700;
         await _sink.WriteAsync(new AdmittedBatch([], [], [], [], [], [], null,
-            [Metric(project, a, "sample.players", 10, t0), Metric(project, a, "sample.players", 25, t0 + Bucket)]));
+            [Metric(project, a, "sample.active_count", 10, t0), Metric(project, a, "sample.active_count", 25, t0 + Bucket)]));
         await _sink.WriteAsync(new AdmittedBatch([], [], [], [], [], [], null,
             [Metric(project, a, "up", 1, t0 + Bucket), Metric(project, b, "up", 0, t0 + Bucket)]));
 
         var latest = await _reads.GetLatestMetricsAsync(project, new TimeWindow(t0, t0 + 2 * Bucket));
-        Assert.Equal(25, latest.Single(m => m.Name == "sample.players").Value); // newest wins
+        Assert.Equal(25, latest.Single(m => m.Name == "sample.active_count").Value); // newest wins
         Assert.Equal(2, latest.Count(m => m.Name == "up"));                      // per service
         Assert.Equal(1, latest.Single(m => m.Name == "up" && m.ServiceId == a).Value);
         Assert.Equal(0, latest.Single(m => m.Name == "up" && m.ServiceId == b).Value);
 
-        var series = await _reads.GetMetricSeriesAsync(project, "sample.players", new TimeWindow(t0, t0 + 2 * Bucket), buckets: 2);
+        var series = await _reads.GetMetricSeriesAsync(project, "sample.active_count", new TimeWindow(t0, t0 + 2 * Bucket), buckets: 2);
         Assert.Equal(2, series.Count);
         Assert.Equal(10, series[0].Value);
         Assert.Equal(25, series[1].Value);

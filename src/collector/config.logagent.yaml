@@ -3,15 +3,16 @@
 # Chosen over a sidecar (needs per-pod injection, misses KEDA scale-to-zero pods) and over kubectl-logs
 # polling (fragile, loses data on restart). Runs as a DaemonSet; see deploy/helm .../log-agent.yaml.
 #
-# Target workload: Sample (namespace `sample`) whose C++ logger has only Console/File/DB appenders -> all
-# output goes to stdout -> container log files on the node. We capture out-of-process at the platform.
+# Target workload: a sample workload (namespace `sample`) whose logger only writes plain text to stdout, so its
+# output lands in the node's container log files. We capture it out-of-process at the platform.
 #
-# PARSER NOTE: tuned to microk8s's real structured format output (confirmed 2026-10-04). Each Sample stdout line is:
+# PARSER NOTE: tuned to the target workload's structured log format. Each stdout line is:
 #   <TS> <LEVEL> [<category>] <message>
 # where TS = `YYYY-MM-DD_HH:MM:SS` (underscore between date and time, whole seconds, UTC), LEVEL is %-5s padded
-# (so 1-2 spaces follow), and the logger category is in square brackets (structured format's 0x04 bit). Runtime is
-# containerd/CRI. We take the record TIME from the CRI envelope (RFC3339 nanos, UTC) via the `container`
-# operator and keep Sample's whole-second inline TS as an attribute. Separator is SPACES, not pipes.
+# (so 1-2 spaces follow), and the logger category is in square brackets. Runtime is containerd/CRI. We take the
+# record TIME from the CRI envelope (RFC3339 nanos, UTC) via the `container` operator and keep the inline
+# whole-second TS as an attribute. Separator is SPACES, not pipes. (Workload-specific values below live in the
+# deploy overlay; this file is a generic template.)
 
 extensions:
   # Persist read offsets to a host checkpoint dir (hostPath volume in the DaemonSet) so an agent pod restart
@@ -39,7 +40,7 @@ receivers:
       - type: container
         add_metadata_from_filepath: true
 
-      # 2) RECOMBINE: join application-level multiline records (C++ crash stack dumps, embedded-newline SQL)
+      # 2) RECOMBINE: join application-level multiline records (multi-line crash/stack dumps, embedded newlines)
       #    into one. Continuation lines LACK the prefix, so a new logical record STARTS only when a line begins
       #    with the structured format timestamp (note the UNDERSCORE between date and time). Most db.query errors are
       #    single-line, so this is a no-op for them and correctly coalesces the rare multiliners.

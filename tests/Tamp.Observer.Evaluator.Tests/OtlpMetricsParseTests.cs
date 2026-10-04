@@ -31,13 +31,13 @@ public sealed class OtlpMetricsParseTests
     public void Parses_gauge_double_and_int_points()
     {
         var parsed = OtlpParser.Parse("metrics",
-            Metrics(("sample.players", 42.0, null, 1000), ("up", null, 1, 2000)));
+            Metrics(("sample.active_count", 42.0, null, 1000), ("up", null, 1, 2000)));
 
         Assert.Single(parsed);
         var pts = parsed[0].Metrics;
         Assert.Equal(2, pts.Count);
 
-        var players = Assert.Single(pts, p => p.Name == "sample.players");
+        var players = Assert.Single(pts, p => p.Name == "sample.active_count");
         Assert.Equal(42.0, players.Value);
         Assert.Equal(1000, players.TimeUnixNano);
 
