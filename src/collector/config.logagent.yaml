@@ -18,6 +18,7 @@ extensions:
   # resumes where it left off rather than re-reading (dupes) or skipping (loss).
   file_storage:
     directory: /var/lib/tamp-observer-logagent
+    create_directory: true   # self-heal if the hostPath mount is empty on first start
 
 receivers:
   filelog:
@@ -33,9 +34,9 @@ receivers:
     include_file_name: false
     operators:
       # 1) Unwrap the CRI envelope (containerd). Promotes stream/time and recombines CRI partial lines (P/F
-      #    logtag) into one log line. If microk8s is on dockerd json-file instead, change format to docker.
+      #    logtag) into one log line. The operator auto-detects the runtime format (CRI vs docker json-file),
+      #    so no explicit `format` field (it was removed from this operator in recent filelog versions).
       - type: container
-        format: cri
         add_metadata_from_filepath: true
 
       # 2) RECOMBINE: join application-level multiline records (C++ crash stack dumps, embedded-newline SQL)
