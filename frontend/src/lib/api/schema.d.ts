@@ -324,6 +324,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{projectId}/operations/series": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ProjectOperationSeries"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects/{projectId}/traces/{traceId}": {
         parameters: {
             query?: never;
@@ -816,6 +832,16 @@ export interface components {
             role: null | string;
             capabilities: string[];
         };
+        OperationSeries: {
+            operation: string;
+            /** Format: int64 */
+            count: number | string;
+            /** Format: int64 */
+            errorCount: number | string;
+            /** Format: int64 */
+            p95Nano: number | string;
+            buckets: components["schemas"]["SeriesBucket"][];
+        };
         OperationStat: {
             operation: string;
             /** Format: int64 */
@@ -886,6 +912,16 @@ export interface components {
             count: number | string;
             /** Format: int64 */
             errorCount: number | string;
+            /**
+             * Format: int64
+             * @default 0
+             */
+            p95Nano: number | string;
+            /**
+             * Format: int64
+             * @default 0
+             */
+            bytes: number | string;
         };
         ServiceSummary: {
             /** Format: uuid */
@@ -1528,6 +1564,41 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ProjectOperationSeries: {
+        parameters: {
+            query: {
+                start: number | string;
+                end: number | string;
+                service?: string;
+                buckets?: number | string;
+                limit: number | string;
+            };
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationSeries"][];
+                };
             };
             /** @description Forbidden */
             403: {
