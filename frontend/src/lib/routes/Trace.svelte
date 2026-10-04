@@ -138,11 +138,24 @@
   {#if selected}
     <Panel label="Selected span">
       <div class="sel-head"><strong class="mono">{selected.name}</strong><span class="tag">{services.name(projectId, selected.serviceId)}</span><span class="pill {int64(selected.statusCode) === 2 ? 'err' : 'ok'}">{int64(selected.statusCode) === 2 ? "Error" : "OK"}</span></div>
+      {#if selected.attributes?.["exception.type"] || selected.attributes?.["exception.message"]}
+        <div class="exc">
+          <div class="exc-head">
+            <span class="exc-type mono">{selected.attributes?.["exception.type"] ?? "Exception"}</span>
+          </div>
+          {#if selected.attributes?.["exception.message"]}
+            <div class="exc-msg mono">{selected.attributes["exception.message"]}</div>
+          {/if}
+          {#if selected.attributes?.["exception.stacktrace"]}
+            <pre class="exc-trace mono">{selected.attributes["exception.stacktrace"]}</pre>
+          {/if}
+        </div>
+      {/if}
       <dl class="attrs">
         <dt class="muted">span id</dt><dd class="mono">{selected.spanId}</dd>
         <dt class="muted">duration</dt><dd class="mono">{ms(selected.durationNano)}</dd>
         {#if selected.statusMessage}<dt class="muted">status</dt><dd class="mono">{selected.statusMessage}</dd>{/if}
-        {#each Object.entries(selected.attributes ?? {}) as [k, v] (k)}
+        {#each Object.entries(selected.attributes ?? {}).filter(([k]) => !k.startsWith("exception.")) as [k, v] (k)}
           <dt class="muted mono akey">{k}</dt>
           <dd class="mono">
             {#if k === "tamp.session.id"}<a href={router.projectHref(projectId, `/replay/${encodeURIComponent(v)}`)} use:link data-keep-filters="true">{v}</a>
@@ -179,16 +192,22 @@
   .axis { display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 11px; }
   .span-row { display: grid; grid-template-columns: 240px minmax(0, 1fr) 80px; gap: var(--gap-3); align-items: center; padding: 4px 0; width: 100%; background: none; border: 0; color: var(--text); font: inherit; cursor: pointer; text-align: left; border-radius: var(--r-ctl); }
   .span-row:hover { background: var(--surface-hover); }
-  .span-row.sel { background: var(--regr-wash); }
+  .span-row.sel { background: var(--regr-wash); box-shadow: inset 3px 0 0 var(--regr-fg); }
   .span-row.err .name { color: var(--err); }
   .name-cell { display: flex; align-items: center; gap: 6px; min-width: 0; }
   .chip { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
   .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .track { position: relative; height: 16px; background: var(--table-bg); border-radius: var(--r-tag); }
   .bar { position: absolute; top: 2px; bottom: 2px; border-radius: var(--r-tag); min-width: 2px; }
+  .bar.err { box-shadow: 0 0 0 1px var(--err-outline); }
   .legend { display: flex; flex-wrap: wrap; gap: var(--gap-3); margin-top: var(--gap-3); padding-top: var(--gap-2); border-top: 1px solid var(--divider); }
   .leg { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-2); }
   .sel-head { display: flex; align-items: center; gap: var(--gap-2); margin-bottom: var(--gap-3); }
+  .exc { border: 1px solid var(--err-outline); background: var(--err-bg); border-radius: var(--r-ctl); padding: var(--gap-2) var(--gap-3); margin-bottom: var(--gap-3); display: flex; flex-direction: column; gap: 4px; }
+  .exc-head { display: flex; align-items: center; justify-content: space-between; gap: var(--gap-2); flex-wrap: wrap; }
+  .exc-type { color: var(--err); font-weight: 600; word-break: break-all; }
+  .exc-msg { color: var(--text); word-break: break-word; }
+  .exc-trace { margin: 4px 0 0; max-height: 220px; overflow: auto; font-size: 12px; color: var(--text-2); white-space: pre; background: var(--table-bg); border-radius: var(--r-tag); padding: var(--gap-2); }
   .attrs { display: grid; grid-template-columns: 200px 1fr; gap: 4px var(--gap-4); margin: 0; }
   .attrs dd { margin: 0; word-break: break-all; }
   .akey { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
