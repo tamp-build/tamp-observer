@@ -187,20 +187,60 @@ WHERE json_extract_string(data,'$.ProjectId') = $projectId AND json_extract_stri
             where += " AND json_extract_string(data,'$.ServiceId') = $serviceId";
             bind.Add(("serviceId", serviceId.ToString()));
         }
+        if (query.EnvironmentId is Guid envId)
+        {
+            where += " AND json_extract_string(data,'$.EnvironmentId') = $envId";
+            bind.Add(("envId", envId.ToString()));
+        }
+        if (query.VersionId is Guid verId)
+        {
+            where += " AND json_extract_string(data,'$.VersionId') = $verId";
+            bind.Add(("verId", verId.ToString()));
+        }
         if (query.MinSeverityNumber is int min)
         {
             where += " AND CAST(json_extract_string(data,'$.SeverityNumber') AS INTEGER) >= $minSev";
             bind.Add(("minSev", min));
         }
+        if (query.TraceId is { Length: > 0 } traceId)
+        {
+            where += " AND json_extract_string(data,'$.TraceId') = $traceId";
+            bind.Add(("traceId", traceId));
+        }
+        if (query.Category is { Length: > 0 } category)
+        {
+            where += " AND json_extract_string(data,'$.Attributes.\"log.category\"') = $category";
+            bind.Add(("category", category));
+        }
+        if (query.SessionId is { Length: > 0 } sessionId)
+        {
+            where += " AND json_extract_string(data,'$.Attributes.\"tamp.session.id\"') = $sessionId";
+            bind.Add(("sessionId", sessionId));
+        }
+        if (query.Search is { Length: > 0 } search)
+        {
+            // Case-insensitive substring over the body.
+            where += " AND lower(json_extract_string(data,'$.Body')) LIKE $search";
+            bind.Add(("search", $"%{search.ToLowerInvariant()}%"));
+        }
+        if (query.BeforeUnixNano is long before)
+        {
+            where += " AND CAST(json_extract_string(data,'$.TimeUnixNano') AS BIGINT) < $before";
+            bind.Add(("before", before));
+        }
         var sql = $@"
 SELECT json_extract_string(data,'$.ProjectId') AS project_id,
        json_extract_string(data,'$.ServiceId') AS service_id,
+       json_extract_string(data,'$.EnvironmentId') AS environment_id,
        json_extract_string(data,'$.VersionId') AS version_id,
        CAST(json_extract_string(data,'$.TimeUnixNano') AS BIGINT) AS time_nano,
        CAST(json_extract_string(data,'$.SeverityNumber') AS INTEGER) AS sev_num,
        json_extract_string(data,'$.SeverityText') AS sev_text,
        json_extract_string(data,'$.Body') AS body,
        json_extract_string(data,'$.TraceId') AS trace_id,
+       json_extract_string(data,'$.SpanId') AS span_id,
+       json_extract(data,'$.Attributes')::VARCHAR AS attributes,
+       json_extract_string(data,'$.Fingerprint') AS fingerprint,
        json_extract_string(data,'$.InstanceId') AS instance_id,
        json_extract_string(data,'$.ReceiptId') AS receipt_id
 FROM {_logs} WHERE {where}
@@ -213,12 +253,16 @@ ORDER BY time_nano DESC LIMIT {(query.Limit <= 0 ? 200 : query.Limit)}";
             {
                 ProjectId = Guid.Parse((string)reader["project_id"]),
                 ServiceId = Guid.Parse((string)reader["service_id"]),
+                EnvironmentId = reader["environment_id"] is string e && Guid.TryParse(e, out var eg) ? eg : null,
                 VersionId = Guid.Parse((string)reader["version_id"]),
                 TimeUnixNano = Convert.ToInt64(reader["time_nano"]),
                 SeverityNumber = Convert.ToInt32(reader["sev_num"]),
                 SeverityText = reader["sev_text"] as string,
                 Body = reader["body"] as string,
                 TraceId = reader["trace_id"] as string,
+                SpanId = reader["span_id"] as string,
+                Attributes = ParseAttrs(reader["attributes"] as string),
+                Fingerprint = reader["fingerprint"] as string,
                 InstanceId = (string)reader["instance_id"],
                 ReceiptId = (string)reader["receipt_id"],
             });

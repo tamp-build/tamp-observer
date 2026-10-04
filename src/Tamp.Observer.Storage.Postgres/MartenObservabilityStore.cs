@@ -137,8 +137,26 @@ public sealed class MartenObservabilityStore(IDocumentStore store, string connec
                 && l.TimeUnixNano < query.Window.EndUnixNano);
         if (query.ServiceId is Guid serviceId)
             q = q.Where(l => l.ServiceId == serviceId);
+        if (query.EnvironmentId is Guid envId)
+            q = q.Where(l => l.EnvironmentId == envId);
+        if (query.VersionId is Guid verId)
+            q = q.Where(l => l.VersionId == verId);
         if (query.MinSeverityNumber is int min)
             q = q.Where(l => l.SeverityNumber >= min);
+        if (query.TraceId is { Length: > 0 } traceId)
+            q = q.Where(l => l.TraceId == traceId);
+        if (query.Category is { Length: > 0 } category)
+            q = q.Where(l => l.Attributes["log.category"] == category);
+        if (query.SessionId is { Length: > 0 } sessionId)
+            q = q.Where(l => l.Attributes["tamp.session.id"] == sessionId);
+        if (query.Search is { Length: > 0 } search)
+        {
+            // Case-insensitive substring over the body (Marten -> lower(body) LIKE '%search%').
+            var lowered = search.ToLowerInvariant();
+            q = q.Where(l => l.Body != null && l.Body.ToLower().Contains(lowered));
+        }
+        if (query.BeforeUnixNano is long before)
+            q = q.Where(l => l.TimeUnixNano < before);
         return await q.OrderByDescending(l => l.TimeUnixNano).Take(query.Limit <= 0 ? 200 : query.Limit).ToListAsync(ct);
     }
 

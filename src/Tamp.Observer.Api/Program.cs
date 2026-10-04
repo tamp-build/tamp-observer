@@ -837,16 +837,21 @@ api.MapPost("/projects/{projectId:guid}/issues/{issueId:guid}/status", async (
     .Produces(StatusCodes.Status404NotFound)
     .Produces(StatusCodes.Status403Forbidden);
 
-// Logs explorer (read interface, ADR 0006). ViewLogs.
+// Logs explorer (read interface, ADR 0006; TOBS-38). ViewLogs. Optional filters narrow the window scan:
+// service/environment/version entity refs, minimum severity, logger category, free-text body search, the
+// trace/session correlation keys, and `before` for keyset "load older" paging (rows strictly older than it).
 api.MapGet("/projects/{projectId:guid}/logs", async (
         Guid projectId, long start, long end, Guid? service, int? minSeverity, int? limit,
+        string? category, string? q, Guid? environment, Guid? version, string? traceId, string? sessionId, long? before,
         HttpContext http, IAllowedIdentityStore allow, IObservabilityStore store, CancellationToken ct) =>
     {
         var denied = await HttpAuthorization.RequireAsync(http, allow, Capability.ViewLogs, ct);
         if (denied is not null)
             return denied;
         var logs = await store.GetLogsAsync(
-            new LogQuery(projectId, new TimeWindow(start, end), service, minSeverity, limit ?? 200), ct);
+            new LogQuery(projectId, new TimeWindow(start, end), service, minSeverity, limit ?? 200,
+                Category: category, Search: q, EnvironmentId: environment, VersionId: version,
+                TraceId: traceId, SessionId: sessionId, BeforeUnixNano: before), ct);
         return Results.Ok(logs);
     })
     .WithName("ProjectLogs")

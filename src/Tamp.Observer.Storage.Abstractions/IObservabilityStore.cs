@@ -40,9 +40,27 @@ public sealed record ExceptionDetail(string? Type, string? Message, string? Stac
 /// <summary>The spans and logs sharing a trace id (the correlation walk, ADR 0010).</summary>
 public sealed record TraceView(IReadOnlyList<IngestedSpan> Spans, IReadOnlyList<IngestedLog> Logs);
 
-/// <summary>Scope for a log query: a Project, a window, and optional Service / minimum-severity filters.</summary>
+/// <summary>
+/// Scope for a log query (TOBS-38 logs explorer). A Project + window, plus optional narrowing filters:
+/// Service / Environment / Version entity refs, minimum OTLP severity, exact logger Category
+/// (<c>attributes["log.category"]</c>), case-insensitive free-text <see cref="Search"/> over the body, and the
+/// correlation keys TraceId / SessionId. <see cref="BeforeUnixNano"/> pages OLDER records (keyset pagination:
+/// return rows strictly before this time, newest first) so the explorer can "load older" without OFFSET scans.
+/// All filters are optional; the baseline query (project + window, newest-first, bounded by Limit) is unchanged.
+/// </summary>
 public sealed record LogQuery(
-    Guid ProjectId, TimeWindow Window, Guid? ServiceId = null, int? MinSeverityNumber = null, int Limit = 200);
+    Guid ProjectId,
+    TimeWindow Window,
+    Guid? ServiceId = null,
+    int? MinSeverityNumber = null,
+    int Limit = 200,
+    string? Category = null,
+    string? Search = null,
+    Guid? EnvironmentId = null,
+    Guid? VersionId = null,
+    string? TraceId = null,
+    string? SessionId = null,
+    long? BeforeUnixNano = null);
 
 /// <summary>The latest occurrence of an Issue: the span or log that most recently matched it, with the
 /// correlation keys needed for the walk (ADR 0014). Fingerprint links it back to its Issue (needed when the
