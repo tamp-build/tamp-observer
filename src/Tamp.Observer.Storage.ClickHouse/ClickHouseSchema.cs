@@ -6,14 +6,15 @@ namespace Tamp.Observer.Storage.ClickHouse;
 /// DDL for the ClickHouse telemetry tier (ADR 0005 opt-in top tier). ClickHouse holds the high-volume
 /// span/log events for fast columnar aggregation; the entity catalog and raw bucket stay in the Postgres
 /// system of record (ADR 0005 section 7, Postgres-canonical). Tables are flat, matching the superset
-/// write model (ADR 0006).
+/// write model (ADR 0006). Retention (TOBS-24) is native MergeTree TTL on <c>received_at</c>, applied on both
+/// create and (for already-created tables) an ALTER MODIFY TTL so a changed window takes effect.
 /// </summary>
 public static class ClickHouseSchema
 {
     public const string SpansTable = "observer_spans";
     public const string LogsTable = "observer_logs";
 
-    private const string CreateSpans = $@"
+    private static string CreateSpans(int retentionDays) => $@"
 CREATE TABLE IF NOT EXISTS {SpansTable} (
     project_id UUID,
     service_id UUID,
@@ -33,9 +34,10 @@ CREATE TABLE IF NOT EXISTS {SpansTable} (
     attributes String,
     receipt_id String,
     received_at DateTime64(9, 'UTC')
-) ENGINE = MergeTree ORDER BY (project_id, service_id, start_unix_nano)";
+) ENGINE = MergeTree ORDER BY (project_id, service_id, start_unix_nano)
+  TTL toDateTime(received_at) + INTERVAL {retentionDays} DAY";
 
-    private const string CreateLogs = $@"
+    private static string CreateLogs(int retentionDays) => $@"
 CREATE TABLE IF NOT EXISTS {LogsTable} (
     project_id UUID,
     service_id UUID,
@@ -51,14 +53,25 @@ CREATE TABLE IF NOT EXISTS {LogsTable} (
     attributes String,
     receipt_id String,
     received_at DateTime64(9, 'UTC')
-) ENGINE = MergeTree ORDER BY (project_id, service_id, time_unix_nano)";
+) ENGINE = MergeTree ORDER BY (project_id, service_id, time_unix_nano)
+  TTL toDateTime(received_at) + INTERVAL {retentionDays} DAY";
 
-    /// <summary>Create the telemetry tables if they do not exist.</summary>
-    public static async Task EnsureAsync(string connectionString, CancellationToken ct = default)
+    /// <summary>Create the telemetry tables if they do not exist, and apply the retention TTL (TOBS-24). The
+    /// ALTER MODIFY TTL ensures an existing table (created before TTL, or with a different window) adopts the
+    /// configured retention.</summary>
+    public static async Task EnsureAsync(string connectionString, int retentionDays = 30, CancellationToken ct = default)
     {
+        var days = retentionDays > 0 ? retentionDays : 30;
         await using var conn = new ClickHouseConnection(connectionString);
         await conn.OpenAsync(ct);
-        foreach (var ddl in new[] { CreateSpans, CreateLogs })
+        var statements = new[]
+        {
+            CreateSpans(days),
+            CreateLogs(days),
+            $"ALTER TABLE {SpansTable} MODIFY TTL toDateTime(received_at) + INTERVAL {days} DAY",
+            $"ALTER TABLE {LogsTable} MODIFY TTL toDateTime(received_at) + INTERVAL {days} DAY",
+        };
+        foreach (var ddl in statements)
         {
             await using var cmd = conn.CreateCommand();
             cmd.CommandText = ddl;

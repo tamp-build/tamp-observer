@@ -33,7 +33,8 @@ Edge log-agent (TOBS-41) is ENABLED: a DaemonSet tails node container logs and s
 Reminders:
   - The api is intentionally single-replica (replay blobs on a RWO PVC; DuckDB in-process). Do not scale it out
     until an object-storage blob tier exists.
-  - No telemetry retention/pruning yet: Postgres grows with ingest. Watch the {{ .Values.postgres.persistence.size }} PVC.
+  - Telemetry retention (TOBS-24): raw spans/logs/metrics are pruned after {{ .Values.evaluator.retention.telemetryDays }}d, rollup
+    aggregates after {{ .Values.evaluator.retention.rollupDays }}d (evaluator, hourly; ClickHouse uses native TTL). Issues/entities are kept.
   {{- if and .Values.dex.enabled (not .Values.dex.github.clientId) }}
   - WARNING: dex.enabled but dex.github.clientId is empty. Set it (and secrets.dexGithubClientSecret) or logins fail.
   {{- end }}
