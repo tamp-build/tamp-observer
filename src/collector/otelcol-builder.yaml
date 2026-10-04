@@ -30,7 +30,9 @@ processors:
   - gomod: go.opentelemetry.io/collector/processor/batchprocessor v0.162.0
   # Edge AGENT role (TOBS-41): enrich tailed logs with pod/namespace/labels, then stamp the resource
   # attributes (tamp.project.key, service.name, deployment.environment) the evaluator keys admit/quarantine on.
-  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/k8sattributesprocessor v0.162.0
+  # k8sattributes has graduated to stable 1.x versioning; v1.1.0 is cut from the same contrib release commit
+  # as the v0.162.0 beta modules (there is no v0.162.0 of this module).
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/k8sattributesprocessor v1.1.0
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourceprocessor v0.162.0
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/transformprocessor v0.162.0
 
