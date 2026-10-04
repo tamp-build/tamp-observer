@@ -29,6 +29,9 @@ public sealed class SpoolEvaluationTests : IAsyncLifetime
     public async Task InitializeAsync()
     {
         await _postgres.StartAsync();
+        // Admit upserts the materialized rollup (TOBS-25) in the same transaction as the docs, so the rollup
+        // tables + observer_hist_add() must exist before the first DrainAsync, or the upsert 42P01s.
+        await RollupSchema.EnsureAsync(_postgres.GetConnectionString());
         _store = ObserverStore.For(_postgres.GetConnectionString());
         _spoolDir = Path.Combine(Path.GetTempPath(), "tobs-spool-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_spoolDir);
