@@ -6,6 +6,7 @@
   import type { components } from "../api/schema";
   import { router, link } from "../router.svelte";
   import { services } from "../stores/services.svelte";
+  import { entities } from "../stores/entities.svelte";
   import LoadingState from "../components/ui/LoadingState.svelte";
   import EmptyState from "../components/ui/EmptyState.svelte";
   import ErrorState from "../components/ui/ErrorState.svelte";
@@ -27,6 +28,8 @@
   let loading = $state(true);
   let error = $state<string | null>(null);
   let selectedId = $state<string | null>(null);
+  // Resolved Issue id for the selected error span's fingerprint (TOBS-28), for the exception->issue link.
+  let selectedIssueId = $state<string | null>(null);
 
   const SVC_COLORS = ["var(--svc-1)", "var(--svc-2)", "var(--svc-3)", "#B7A0FF", "#7AD0A8"];
 
@@ -62,6 +65,9 @@
   const hasError = $derived(spans.some((s) => int64(s.statusCode) === 2));
   const sessionId = $derived(spans.map((s) => s.attributes?.["tamp.session.id"]).find((v) => !!v) ?? null);
   const selected = $derived(selectedId ? byId.get(selectedId) : undefined);
+  // Env/version tags for the header, resolved from the root span's entity ids (TOBS-28).
+  const envName = $derived(root ? entities.envName(projectId, root.environmentId) : null);
+  const versionName = $derived(root ? entities.versionName(projectId, root.versionId) : null);
 
   function left(s: Span): number {
     return ((int64(s.startUnixNano) - bounds.min) / bounds.total) * 100;
@@ -87,7 +93,23 @@
   $effect(() => {
     void traceId;
     services.loadFor(projectId);
+    entities.loadFor(projectId);
     load();
+  });
+
+  // Resolve the selected error span's fingerprint to its Issue, for the exception->issue link (TOBS-28).
+  $effect(() => {
+    const fp = selected?.fingerprint;
+    selectedIssueId = null;
+    if (!fp) return;
+    let stale = false;
+    (async () => {
+      const { data } = await api.GET("/api/projects/{projectId}/issues/by-fingerprint", {
+        params: { path: { projectId }, query: { fingerprint: fp } },
+      });
+      if (!stale && data) selectedIssueId = data.id ?? null;
+    })();
+    return () => { stale = true; };
   });
 </script>
 
@@ -101,6 +123,8 @@
       <div class="pills">
         <span class="pill {hasError ? 'err' : 'ok'}">{hasError ? "Error" : "OK"}</span>
         {#if root}<span class="tag mono">{services.name(projectId, root.serviceId)}</span>{/if}
+        {#if envName}<span class="tag env mono" title="Environment">{envName}</span>{/if}
+        {#if versionName}<span class="tag ver mono" title="Version">{versionName}</span>{/if}
       </div>
       <h1>{root?.name ?? "Trace"}</h1>
       <p class="mono meta muted">{traceId} · {durationMs} ms · {spans.length} spans · {serviceCount} svc{#if root} · {nanosToTime(root.startUnixNano)}{/if}</p>
@@ -142,6 +166,9 @@
         <div class="exc">
           <div class="exc-head">
             <span class="exc-type mono">{selected.attributes?.["exception.type"] ?? "Exception"}</span>
+            {#if selectedIssueId}
+              <a class="exc-issue" href={router.projectHref(projectId, `/issues/${selectedIssueId}`)} use:link data-keep-filters="true">View issue</a>
+            {/if}
           </div>
           {#if selected.attributes?.["exception.message"]}
             <div class="exc-msg mono">{selected.attributes["exception.message"]}</div>
@@ -206,6 +233,10 @@
   .exc { border: 1px solid var(--err-outline); background: var(--err-bg); border-radius: var(--r-ctl); padding: var(--gap-2) var(--gap-3); margin-bottom: var(--gap-3); display: flex; flex-direction: column; gap: 4px; }
   .exc-head { display: flex; align-items: center; justify-content: space-between; gap: var(--gap-2); flex-wrap: wrap; }
   .exc-type { color: var(--err); font-weight: 600; word-break: break-all; }
+  .exc-issue { color: var(--regr-fg); text-decoration: none; font-size: var(--fs-label); white-space: nowrap; }
+  .exc-issue:hover { text-decoration: underline; }
+  .tag.env { background: var(--unres-bg); color: var(--unres-fg); }
+  .tag.ver { background: var(--regr-bg); color: var(--regr-fg); }
   .exc-msg { color: var(--text); word-break: break-word; }
   .exc-trace { margin: 4px 0 0; max-height: 220px; overflow: auto; font-size: 12px; color: var(--text-2); white-space: pre; background: var(--table-bg); border-radius: var(--r-tag); padding: var(--gap-2); }
   .attrs { display: grid; grid-template-columns: 200px 1fr; gap: 4px var(--gap-4); margin: 0; }

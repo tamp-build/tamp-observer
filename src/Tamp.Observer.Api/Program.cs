@@ -302,6 +302,34 @@ api.MapGet("/projects/{projectId:guid}/services", async (Guid projectId, IDocume
     .WithName("ListServices")
     .Produces<IReadOnlyList<ServiceSummary>>();
 
+// Discovered Environments for a project (TOBS-28): resolves a span's EnvironmentId -> name for the trace
+// header env tag. Low-sensitivity metadata, same as /services; group auth (allowlist) is enough.
+api.MapGet("/projects/{projectId:guid}/environments", async (Guid projectId, IDocumentStore docs, CancellationToken ct) =>
+    {
+        await using var session = docs.QuerySession();
+        var envs = await session.Query<DeploymentEnvironment>()
+            .Where(e => e.ProjectId == projectId)
+            .OrderBy(e => e.Name)
+            .ToListAsync(ct);
+        return envs.Select(e => new EnvironmentSummary(e.Id, e.Name)).ToList();
+    })
+    .WithName("ListEnvironments")
+    .Produces<IReadOnlyList<EnvironmentSummary>>();
+
+// Discovered Service versions for a project (TOBS-28): resolves a span's VersionId -> version string for the
+// trace header version tag.
+api.MapGet("/projects/{projectId:guid}/versions", async (Guid projectId, IDocumentStore docs, CancellationToken ct) =>
+    {
+        await using var session = docs.QuerySession();
+        var versions = await session.Query<ServiceVersion>()
+            .Where(v => v.ProjectId == projectId)
+            .OrderByDescending(v => v.Sequence)
+            .ToListAsync(ct);
+        return versions.Select(v => new VersionSummary(v.Id, v.ServiceId, v.VersionString, v.Sequence)).ToList();
+    })
+    .WithName("ListVersions")
+    .Produces<IReadOnlyList<VersionSummary>>();
+
 // Enforcement posture (the mode badge + explainer, ADR 0002).
 api.MapGet("/enforcement", async (IDocumentStore docs, CancellationToken ct) =>
     {
@@ -705,6 +733,26 @@ api.MapGet("/projects/{projectId:guid}/issues/{issueId:guid}", async (
     .Produces(StatusCodes.Status404NotFound)
     .Produces(StatusCodes.Status403Forbidden);
 
+// Resolve an Issue by its grouping fingerprint (TOBS-28): lets the trace view link an error span's
+// exception to its Issue (spans carry the fingerprint, not the issue id). Fingerprint is a query param so
+// any hash/base64 content passes without route-encoding surprises. ViewErrors.
+api.MapGet("/projects/{projectId:guid}/issues/by-fingerprint", async (
+        Guid projectId, string fingerprint,
+        HttpContext http, IAllowedIdentityStore allow, IIssueStore issues, CancellationToken ct) =>
+    {
+        var denied = await HttpAuthorization.RequireAsync(http, allow, Capability.ViewErrors, ct);
+        if (denied is not null)
+            return denied;
+        if (string.IsNullOrWhiteSpace(fingerprint))
+            return Results.BadRequest("fingerprint is required");
+        var issue = await issues.GetByFingerprintAsync(projectId, fingerprint, ct);
+        return issue is null ? Results.NotFound() : Results.Ok(issue);
+    })
+    .WithName("GetIssueByFingerprint")
+    .Produces<Issue>()
+    .Produces(StatusCodes.Status404NotFound)
+    .Produces(StatusCodes.Status403Forbidden);
+
 // Issue counts by status (the Issues tab badges + Overview open-issue tile). ViewErrors.
 api.MapGet("/projects/{projectId:guid}/issues/counts", async (
         Guid projectId, HttpContext http, IAllowedIdentityStore allow, IDocumentStore docs, CancellationToken ct) =>
@@ -915,6 +963,13 @@ public sealed record MeResponse(
 public sealed record ProjectSummary(Guid Id, string Key, string Name);
 
 public sealed record ServiceSummary(Guid Id, string ServiceName, string? Namespace);
+
+/// <summary>A discovered Environment for the trace/header env tag (TOBS-28).</summary>
+public sealed record EnvironmentSummary(Guid Id, string Name);
+
+/// <summary>A discovered Service version for the trace/header version tag (TOBS-28). Sequence is the server
+/// ordering key (ADR 0008); VersionString is the display label.</summary>
+public sealed record VersionSummary(Guid Id, Guid ServiceId, string VersionString, long Sequence);
 
 public sealed record IssueCounts(int Unresolved, int Regressed, int Resolved, int Muted, int Total);
 
