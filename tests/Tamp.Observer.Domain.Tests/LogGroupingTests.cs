@@ -30,13 +30,29 @@ public sealed class LogGroupingTests
         Assert.NotEqual(smartAi, missingLoot);
     }
 
-    // Quoted table names are parameterized: the loot-missing class groups across tables (literal stripped).
+    // Quoted identifiers (table/script names) are the class DISCRIMINATOR and must be preserved: different
+    // tables in the same message shape are different classes (TOBS-42 over-collapse fix).
     [Fact]
-    public void Quoted_identifiers_are_parameterized()
+    public void Quoted_identifiers_discriminate_classes()
     {
         var k1 = LogGrouping.Key("Table 'creature_loot_template' entry 38659 does not exist but used as loot id in DB.", "sql.sql");
         var k2 = LogGrouping.Key("Table 'gameobject_loot_template' entry 90001 does not exist but used as loot id in DB.", "sql.sql");
-        Assert.Equal(k1, k2);
+        Assert.NotEqual(k1, k2);
+        // ...but the SAME table with a different numeric entry still collapses to one class.
+        var k1b = LogGrouping.Key("Table 'creature_loot_template' entry 11111 does not exist but used as loot id in DB.", "sql.sql");
+        Assert.Equal(k1, k1b);
+    }
+
+    // The real SkyFire restart case: same "did not match dbc effect data" shape, different script names in
+    // backticks + different SpellIds -> different scripts are different classes, same script collapses.
+    [Fact]
+    public void Script_name_discriminates_dbc_mismatch_classes()
+    {
+        var darkshore1 = LogGrouping.Key("Spell `62518` Effect `Index: EFFECT_1 Name: 28` of script `spell_darkshore_corpse_soothe` did not match dbc effect data", "scripts");
+        var darkshore2 = LogGrouping.Key("Spell `64306` Effect `Index: EFFECT_0 Name: 14` of script `spell_darkshore_corpse_soothe` did not match dbc effect data", "scripts");
+        var genClone = LogGrouping.Key("Spell `45204` Effect `Index: EFFECT_1 Name: 77` of script `spell_gen_clone` did not match dbc effect data", "scripts");
+        Assert.Equal(darkshore1, darkshore2);   // same script, different ids -> one class
+        Assert.NotEqual(darkshore1, genClone);  // different script -> separate class (no over-collapse)
     }
 
     // Same message under different logger categories must not share an Issue.
@@ -60,7 +76,7 @@ public sealed class LogGroupingTests
     [InlineData("rate 3.14 pct", "rate # pct")]
     [InlineData("guid 550e8400-e29b-41d4-a716-446655440000 seen", "guid # seen")]
     [InlineData("addr 0x1A2B done", "addr # done")]
-    [InlineData("col `creature`.`id` bad", "col `?`.`?` bad")]
+    [InlineData("col `creature`.`id` bad", "col `creature`.`id` bad")]
     public void Normalize_parameterizes_literals(string input, string expected) =>
         Assert.Equal(expected, LogGrouping.Normalize(input));
 
