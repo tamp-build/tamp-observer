@@ -32,6 +32,8 @@
   let selectedIssueId = $state<string | null>(null);
 
   const SVC_COLORS = ["var(--svc-1)", "var(--svc-2)", "var(--svc-3)", "#B7A0FF", "#7AD0A8"];
+  // Sentinel the evaluator stores for privacy-gated attribute values (TOBS-28, AttributeRedaction.NotCaptured).
+  const NOT_CAPTURED = "[tamp:not-captured]";
 
   const spans = $derived(trace?.spans ?? []);
   const bounds = $derived.by(() => {
@@ -185,7 +187,8 @@
         {#each Object.entries(selected.attributes ?? {}).filter(([k]) => !k.startsWith("exception.")) as [k, v] (k)}
           <dt class="muted mono akey">{k}</dt>
           <dd class="mono">
-            {#if k === "tamp.session.id"}<a href={router.projectHref(projectId, `/replay/${encodeURIComponent(v)}`)} use:link data-keep-filters="true">{v}</a>
+            {#if v === NOT_CAPTURED}<span class="gated" title="Gated by capture policy">not captured</span>
+            {:else if k === "tamp.session.id"}<a href={router.projectHref(projectId, `/replay/${encodeURIComponent(v)}`)} use:link data-keep-filters="true">{v}</a>
             {:else}{v}{/if}
           </dd>
         {/each}
@@ -242,6 +245,7 @@
   .attrs { display: grid; grid-template-columns: 200px 1fr; gap: 4px var(--gap-4); margin: 0; }
   .attrs dd { margin: 0; word-break: break-all; }
   .akey { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .gated { color: var(--muted); font-style: italic; }
   .log { display: grid; grid-template-columns: 96px 60px minmax(0, 1fr); gap: var(--gap-3); padding: 4px 0; border-top: 1px solid var(--divider); }
   .log.errrow { background: var(--err-bg); }
   .lvl { font-size: var(--fs-label); font-weight: 600; }
