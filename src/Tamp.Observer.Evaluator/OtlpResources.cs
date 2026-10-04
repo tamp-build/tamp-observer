@@ -19,6 +19,9 @@ public static class ResourceKeys
 
     /// <summary>The browser-minted session id, stamped on spans/logs for the correlation walk (ADR 0010/0014).</summary>
     public const string SessionId = "tamp.session.id";
+
+    /// <summary>Logger category on a log record (e.g. SkyFire's sql.sql); folded into the Issue grouping key (TOBS-42).</summary>
+    public const string LogCategory = "log.category";
 }
 
 /// <summary>The resource attributes of one resource block within an OTLP payload.</summary>
