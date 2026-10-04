@@ -29,6 +29,38 @@ CREATE TABLE IF NOT EXISTS {Schema}.observer_rollup_signal (
     PRIMARY KEY (project_id, service_id, signal, bucket_start)
 );";
 
+    private static readonly string CreateOperation = $@"
+CREATE TABLE IF NOT EXISTS {Schema}.observer_rollup_operation (
+    project_id   uuid   NOT NULL,
+    service_id   uuid   NOT NULL,
+    operation    text   NOT NULL,
+    bucket_start bigint NOT NULL,
+    count        bigint NOT NULL DEFAULT 0,
+    error_count  bigint NOT NULL DEFAULT 0,
+    lat_hist     bigint[] NOT NULL,
+    PRIMARY KEY (project_id, service_id, operation, bucket_start)
+);";
+
+    private static readonly string CreateIssue = $@"
+CREATE TABLE IF NOT EXISTS {Schema}.observer_rollup_issue (
+    project_id   uuid   NOT NULL,
+    service_id   uuid   NOT NULL,
+    fingerprint  text   NOT NULL,
+    bucket_start bigint NOT NULL,
+    count        bigint NOT NULL DEFAULT 0,
+    PRIMARY KEY (project_id, service_id, fingerprint, bucket_start)
+);";
+
+    private static readonly string CreateIssueSession = $@"
+CREATE TABLE IF NOT EXISTS {Schema}.observer_rollup_issue_session (
+    project_id     uuid   NOT NULL,
+    service_id     uuid   NOT NULL,
+    fingerprint    text   NOT NULL,
+    session_id     text   NOT NULL,
+    last_seen_nano bigint NOT NULL,
+    PRIMARY KEY (project_id, service_id, fingerprint, session_id)
+);";
+
     // Element-wise add of two fixed-length (32) bigint[] histograms, order-preserving.
     private static readonly string HistAddFn = $@"
 CREATE OR REPLACE FUNCTION {Schema}.observer_hist_add(a bigint[], b bigint[]) RETURNS bigint[] AS $$
@@ -49,12 +81,38 @@ ON CONFLICT (project_id, service_id, signal, bucket_start) DO UPDATE SET
     lat_hist    = observer.observer_hist_add(observer_rollup_signal.lat_hist, excluded.lat_hist),
     fresh_hist  = observer.observer_hist_add(observer_rollup_signal.fresh_hist, excluded.fresh_hist);";
 
+    /// <summary>Upsert one operation bucket. Order: project_id, service_id, operation, bucket_start, count,
+    /// error_count, lat_hist.</summary>
+    public const string UpsertOperationSql = @"
+INSERT INTO observer.observer_rollup_operation
+    (project_id, service_id, operation, bucket_start, count, error_count, lat_hist)
+VALUES (?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT (project_id, service_id, operation, bucket_start) DO UPDATE SET
+    count       = observer_rollup_operation.count       + excluded.count,
+    error_count = observer_rollup_operation.error_count + excluded.error_count,
+    lat_hist    = observer.observer_hist_add(observer_rollup_operation.lat_hist, excluded.lat_hist);";
+
+    /// <summary>Upsert one issue-occurrence bucket. Order: project_id, service_id, fingerprint, bucket_start, count.</summary>
+    public const string UpsertIssueSql = @"
+INSERT INTO observer.observer_rollup_issue (project_id, service_id, fingerprint, bucket_start, count)
+VALUES (?, ?, ?, ?, ?)
+ON CONFLICT (project_id, service_id, fingerprint, bucket_start) DO UPDATE SET
+    count = observer_rollup_issue.count + excluded.count;";
+
+    /// <summary>Record a distinct (fingerprint, session). Order: project_id, service_id, fingerprint, session_id,
+    /// last_seen_nano. Keeps the latest time the pair was seen.</summary>
+    public const string UpsertSessionSql = @"
+INSERT INTO observer.observer_rollup_issue_session (project_id, service_id, fingerprint, session_id, last_seen_nano)
+VALUES (?, ?, ?, ?, ?)
+ON CONFLICT (project_id, service_id, fingerprint, session_id) DO UPDATE SET
+    last_seen_nano = GREATEST(observer_rollup_issue_session.last_seen_nano, excluded.last_seen_nano);";
+
     /// <summary>Create the rollup schema objects if they do not exist (idempotent).</summary>
     public static async Task EnsureAsync(string connectionString, CancellationToken ct = default)
     {
         await using var conn = new NpgsqlConnection(connectionString);
         await conn.OpenAsync(ct);
-        foreach (var ddl in new[] { CreateSignal, HistAddFn })
+        foreach (var ddl in new[] { CreateSignal, CreateOperation, CreateIssue, CreateIssueSession, HistAddFn })
         {
             await using var cmd = new NpgsqlCommand(ddl, conn);
             await cmd.ExecuteNonQueryAsync(ct);

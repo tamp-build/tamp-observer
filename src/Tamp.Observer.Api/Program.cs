@@ -553,6 +553,23 @@ api.MapGet("/projects/{projectId:guid}/operations", async (
     .Produces(StatusCodes.Status401Unauthorized)
     .Produces(StatusCodes.Status403Forbidden);
 
+// Top operations with p95 latency and a per-operation call-volume series over the window (TOBS-25). Drives the
+// Overview operations table's p95 column and per-op calls sparkline. ViewTraces.
+api.MapGet("/projects/{projectId:guid}/operations/series", async (
+        Guid projectId, long start, long end, Guid? service, int? buckets, int limit,
+        HttpContext http, IAllowedIdentityStore allow, IObservabilityStore store, CancellationToken ct) =>
+    {
+        var denied = await HttpAuthorization.RequireAsync(http, allow, Capability.ViewTraces, ct);
+        if (denied is not null)
+            return denied;
+        var result = await store.GetOperationSeriesAsync(
+            new SpanQuery(projectId, new TimeWindow(start, end), service), buckets ?? 24, limit <= 0 ? 10 : limit, ct);
+        return Results.Ok(result);
+    })
+    .WithName("ProjectOperationSeries")
+    .Produces<IReadOnlyList<OperationSeries>>()
+    .Produces(StatusCodes.Status403Forbidden);
+
 // The correlation walk: all spans and logs sharing a trace id within a project (read interface, ADR 0006).
 api.MapGet("/projects/{projectId:guid}/traces/{traceId}", async (
         Guid projectId,

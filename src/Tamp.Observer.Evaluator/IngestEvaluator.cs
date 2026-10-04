@@ -181,7 +181,8 @@ public sealed partial class IngestEvaluator(
                     ReceiptId = item.Envelope.ReceiptId,
                     ReceivedAt = item.Envelope.ReceivedAt,
                 });
-                rollup.AddSpan(project.Id, service.Id, s.StartUnixNano, s.EndUnixNano - s.StartUnixNano, s.StatusCode == 2, receivedAtNano);
+                rollup.AddSpan(project.Id, service.Id, s.Name, s.StartUnixNano, s.EndUnixNano - s.StartUnixNano,
+                    s.StatusCode == 2, fingerprint, s.Attributes.GetValueOrDefault(ResourceKeys.SessionId), receivedAtNano);
             }
 
             foreach (var l in res.Logs)
@@ -212,7 +213,8 @@ public sealed partial class IngestEvaluator(
                     ReceiptId = item.Envelope.ReceiptId,
                     ReceivedAt = item.Envelope.ReceivedAt,
                 });
-                rollup.AddLog(project.Id, service.Id, l.TimeUnixNano, l.SeverityNumber >= 17, receivedAtNano);
+                rollup.AddLog(project.Id, service.Id, l.TimeUnixNano, l.SeverityNumber >= 17,
+                    fingerprint, l.Attributes.GetValueOrDefault(ResourceKeys.SessionId), receivedAtNano);
             }
 
             // Project error signals into Issues (ADR 0015): ERROR-status spans and error-severity logs.

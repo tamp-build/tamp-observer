@@ -22,6 +22,10 @@ public sealed record SeriesBucket(long StartUnixNano, long Count, long ErrorCoun
 /// <summary>An Issue's occurrence series over a window: dense per-bucket counts and distinct session count (TOBS-25).</summary>
 public sealed record IssueSeries(string Fingerprint, IReadOnlyList<long> Buckets, int Sessions);
 
+/// <summary>A top operation with its calls/errors, p95 latency (nanos), and a dense call-volume series over the
+/// window (TOBS-25). Drives the Overview operations table's per-op p95 and calls sparkline.</summary>
+public sealed record OperationSeries(string Operation, long Count, long ErrorCount, long P95Nano, IReadOnlyList<SeriesBucket> Buckets);
+
 /// <summary>The exception detail of an Issue's latest occurrence: the OTLP exception.* attributes, when present
 /// (TOBS-27). Stacktrace is the raw string; the API parses it into frames.</summary>
 public sealed record ExceptionDetail(string? Type, string? Message, string? Stacktrace);
@@ -70,6 +74,11 @@ public interface IObservabilityStore
     /// <summary>Per-Issue occurrence series over the window: for each fingerprint, a dense bucket count plus the
     /// number of distinct sessions that hit it (TOBS-25). Drives the per-issue sparkline and session counts.</summary>
     Task<IReadOnlyList<IssueSeries>> GetIssueSeriesAsync(Guid projectId, TimeWindow window, int buckets, CancellationToken ct = default);
+
+    /// <summary>Top operations over the window with calls/errors, p95 latency, and a dense call-volume series each
+    /// (TOBS-25). Providers back this from their rollup; the default is empty until a provider implements it.</summary>
+    Task<IReadOnlyList<OperationSeries>> GetOperationSeriesAsync(SpanQuery query, int buckets, int limit = 10, CancellationToken ct = default)
+        => Task.FromResult<IReadOnlyList<OperationSeries>>([]);
 
     /// <summary>The exception detail (type/message/stacktrace attributes) of the most recent occurrence carrying
     /// one for the fingerprint, or null (TOBS-27). Drives the stack-trace panel.</summary>

@@ -47,8 +47,11 @@ public sealed class RollupIntegrationTests : IAsyncLifetime
     {
         var row = new SignalRollupRow(project, service, "span", bucketStart, events, errors, bytes,
             Hist(durationNano, events), LatencyHistogram.Empty());
-        await _sink.WriteAsync(new AdmittedBatch([], [], [], [], [], [], new RollupDelta([row])));
+        await _sink.WriteAsync(new AdmittedBatch([], [], [], [], [], [], new RollupDelta([row], [], [], [])));
     }
+
+    private async Task WriteRollup(RollupDelta delta)
+        => await _sink.WriteAsync(new AdmittedBatch([], [], [], [], [], [], delta));
 
     [Fact]
     public async Task Series_sums_buckets_and_upsert_increments()
@@ -79,6 +82,44 @@ public sealed class RollupIntegrationTests : IAsyncLifetime
         Assert.Equal(2, split.Count);
         Assert.Equal(5, split[0].Count);  // first bucket: 3 + 2
         Assert.Equal(4, split[1].Count);  // second bucket
+    }
+
+    [Fact]
+    public async Task Operation_and_issue_and_session_rollups_read_back()
+    {
+        var project = Guid.NewGuid();
+        var service = Guid.NewGuid();
+        var b0 = Bucket * 300;
+        var window = new TimeWindow(b0, b0 + Bucket);
+
+        // Two operations across two writes to the same bucket (must sum via upsert).
+        await WriteRollup(new RollupDelta(
+            [],
+            [new OperationRollupRow(project, service, "GET /a", b0, 6, 1, Hist(2_000_000, 6)),
+             new OperationRollupRow(project, service, "GET /b", b0, 2, 0, Hist(2_000_000, 2))],
+            [new IssueRollupRow(project, service, "fp1", b0, 3)],
+            [new IssueSessionRow(project, service, "fp1", "sess-1", b0 + 1),
+             new IssueSessionRow(project, service, "fp1", "sess-2", b0 + 2)]));
+        await WriteRollup(new RollupDelta(
+            [],
+            [new OperationRollupRow(project, service, "GET /a", b0, 4, 2, Hist(2_000_000, 4))],
+            [new IssueRollupRow(project, service, "fp1", b0, 1)],
+            [new IssueSessionRow(project, service, "fp1", "sess-1", b0 + 9)])); // duplicate session, GREATEST last_seen
+
+        var ops = await _reads.GetTopOperationsAsync(new SpanQuery(project, window));
+        Assert.Equal("GET /a", ops[0].Operation);
+        Assert.Equal(10, ops[0].Count);      // 6 + 4
+        Assert.Equal(3, ops[0].ErrorCount);  // 1 + 2
+
+        var opSeries = await _reads.GetOperationSeriesAsync(new SpanQuery(project, window), buckets: 1);
+        var a = opSeries.Single(o => o.Operation == "GET /a");
+        Assert.Equal(10, a.Count);
+        Assert.InRange(a.P95Nano, 1024L * 1000, 2048L * 1000); // 2ms band
+
+        var issues = await _reads.GetIssueSeriesAsync(project, window, buckets: 1);
+        var fp1 = issues.Single(i => i.Fingerprint == "fp1");
+        Assert.Equal(4, fp1.Buckets[0]);  // 3 + 1 occurrences
+        Assert.Equal(2, fp1.Sessions);    // sess-1 (deduped) + sess-2
     }
 
     [Fact]
