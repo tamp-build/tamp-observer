@@ -24,6 +24,15 @@ class ServiceState {
     if (!serviceId) return "-";
     return this.byProject[projectId]?.[serviceId] ?? "-";
   }
+
+  /** The {id, name} pairs for a project, name-sorted, for a filter dropdown. Empty until loadFor resolves. */
+  list(projectId: string): { id: string; name: string }[] {
+    const map = this.byProject[projectId];
+    if (!map) return [];
+    return Object.entries(map)
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }
 }
 
 export const services = new ServiceState();

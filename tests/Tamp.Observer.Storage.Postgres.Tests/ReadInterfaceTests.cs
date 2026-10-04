@@ -105,6 +105,94 @@ public sealed class ReadInterfaceTests : IAsyncLifetime
         Assert.Equal("boom", view.Logs[0].Body);
     }
 
+    [Fact]
+    public async Task Log_query_filters_narrow_the_result_set()
+    {
+        var project = Guid.NewGuid();
+        var svcA = Guid.NewGuid();
+        var svcB = Guid.NewGuid();
+        // (time, severity, category, body, session, service)
+        await StoreRichLog(project, svcA, 1000, 17, "db.query", "Timeout connecting to primary", "sess-1");
+        await StoreRichLog(project, svcA, 2000, 9, "db.query", "slow query WARN", "sess-1");       // below min severity
+        await StoreRichLog(project, svcB, 3000, 17, "app.auth", "login TIMEOUT for user", "sess-2");
+        await StoreRichLog(project, svcA, 4000, 17, "db.query", "another timeout here", "sess-1");
+        await StoreRichLog(project, svcA, 9000, 17, "db.query", "outside window", "sess-1");        // outside window
+
+        var window = new TimeWindow(0, 5000);
+
+        // Category filter.
+        var byCategory = await _reads.GetLogsAsync(new LogQuery(project, window, Category: "db.query"));
+        Assert.All(byCategory, l => Assert.Equal("db.query", l.Attributes["log.category"]));
+        Assert.Equal(3, byCategory.Count); // the three in-window db.query rows (incl. the WARN)
+
+        // Case-insensitive body search.
+        var bySearch = await _reads.GetLogsAsync(new LogQuery(project, window, Search: "timeout"));
+        Assert.Equal(3, bySearch.Count); // "Timeout", "TIMEOUT", "timeout" all match
+
+        // Min severity + category together.
+        var errorsOnly = await _reads.GetLogsAsync(
+            new LogQuery(project, window, MinSeverityNumber: 17, Category: "db.query"));
+        Assert.Equal(2, errorsOnly.Count); // drops the severity-9 WARN row
+
+        // Session correlation key.
+        var bySession = await _reads.GetLogsAsync(new LogQuery(project, window, SessionId: "sess-2"));
+        Assert.Single(bySession);
+        Assert.Equal(svcB, bySession[0].ServiceId);
+
+        // Keyset "load older" paging: only rows strictly older than the cursor, newest first.
+        var older = await _reads.GetLogsAsync(new LogQuery(project, window, BeforeUnixNano: 4000));
+        Assert.Equal(3, older.Count);
+        Assert.True(older[0].TimeUnixNano < 4000);
+        Assert.Equal(3000, older[0].TimeUnixNano); // newest-first among those older than 4000
+    }
+
+    [Fact]
+    public async Task Log_tail_returns_strictly_newer_rows_oldest_first()
+    {
+        var project = Guid.NewGuid();
+        var service = Guid.NewGuid();
+        await StoreRichLog(project, service, 1000, 17, "db.query", "first", "s");
+        await StoreRichLog(project, service, 2000, 17, "db.query", "second", "s");
+        await StoreRichLog(project, service, 3000, 17, "db.query", "third", "s");
+
+        // Tail from a cursor at 1000: only strictly-newer rows, oldest-first for appending.
+        var tail = await _reads.GetLogsAsync(new LogQuery(
+            project, new TimeWindow(1000, long.MaxValue), AfterUnixNano: 1000, Ascending: true));
+
+        Assert.Equal(2, tail.Count);
+        Assert.Equal(2000, tail[0].TimeUnixNano); // oldest-first
+        Assert.Equal(3000, tail[1].TimeUnixNano);
+
+        // Advancing the cursor to the newest seen returns nothing until more arrives.
+        var caughtUp = await _reads.GetLogsAsync(new LogQuery(
+            project, new TimeWindow(3000, long.MaxValue), AfterUnixNano: 3000, Ascending: true));
+        Assert.Empty(caughtUp);
+    }
+
+    private async Task StoreRichLog(
+        Guid project, Guid service, long time, int severity, string category, string body, string session)
+    {
+        await using var s = _store.LightweightSession();
+        s.Store(new IngestedLog
+        {
+            ProjectId = project,
+            ServiceId = service,
+            VersionId = Guid.NewGuid(),
+            TimeUnixNano = time,
+            SeverityNumber = severity,
+            SeverityText = severity >= 17 ? "ERROR" : "WARN",
+            Body = body,
+            Attributes = new Dictionary<string, string>
+            {
+                ["log.category"] = category,
+                ["tamp.session.id"] = session,
+            },
+            ReceiptId = Guid.NewGuid().ToString("N"),
+            ReceivedAt = DateTimeOffset.UtcNow,
+        });
+        await s.SaveChangesAsync();
+    }
+
     private async Task StoreSpans(Guid project, Guid service, string trace,
         params (string name, long start, long duration, int status)[] spans)
     {
