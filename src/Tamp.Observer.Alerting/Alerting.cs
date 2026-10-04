@@ -54,8 +54,13 @@ public interface IAlertDispatcher
     Task DispatchAsync(IReadOnlyList<AlertEvent> alerts, IEnforcementGate gate, CancellationToken ct = default);
 }
 
-/// <summary>Fans out to the enabled channels, honoring the enforcement gate for reachback channels.</summary>
-public sealed class AlertDispatcher(IEnumerable<INotificationChannel> channels, Action<string, Exception>? onError = null)
+/// <summary>Fans out to the enabled channels, honoring the enforcement gate for reachback channels. An optional
+/// routing map (alert kind to the set of channel names that should receive it, ADR 0016 / TOBS-29) filters
+/// delivery; when null, every alert goes to every channel (the pre-routing behaviour).</summary>
+public sealed class AlertDispatcher(
+    IEnumerable<INotificationChannel> channels,
+    Action<string, Exception>? onError = null,
+    IReadOnlyDictionary<AlertKind, IReadOnlySet<string>>? routing = null)
     : IAlertDispatcher
 {
     private readonly IReadOnlyList<INotificationChannel> _channels = [.. channels];
@@ -67,8 +72,15 @@ public sealed class AlertDispatcher(IEnumerable<INotificationChannel> channels, 
 
         foreach (var alert in alerts)
         {
+            // When a routing matrix is configured, only the channels mapped to this alert kind receive it.
+            IReadOnlySet<string>? routed = null;
+            routing?.TryGetValue(alert.Kind, out routed);
+
             foreach (var channel in _channels)
             {
+                if (routing is not null && (routed is null || !routed.Contains(channel.Name)))
+                    continue; // not routed to this channel for this alert kind.
+
                 if (channel.IsReachback && !gate.Allows(Loosening.ComponentReachback, advisoryOverride: true))
                     continue; // reachback refused under enforcing/locked: the path is absent.
 

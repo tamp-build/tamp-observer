@@ -78,4 +78,41 @@ public sealed class AlertDispatcherTests
         Assert.Single(good.Received);
         Assert.Contains("boom", errors);
     }
+
+    [Fact]
+    public async Task Routing_matrix_delivers_a_kind_only_to_its_mapped_channels()
+    {
+        var smtp = new CollectingChannel("smtp", reachback: false);
+        var slack = new CollectingChannel("slack", reachback: false);
+        // New issue -> smtp only; regressed issue -> both.
+        var routing = new Dictionary<AlertKind, IReadOnlySet<string>>
+        {
+            [AlertKind.NewIssue] = new HashSet<string> { "smtp" },
+            [AlertKind.RegressedIssue] = new HashSet<string> { "smtp", "slack" },
+        };
+        var dispatcher = new AlertDispatcher([smtp, slack], routing: routing);
+
+        await dispatcher.DispatchAsync(
+            [Sample(AlertKind.NewIssue), Sample(AlertKind.RegressedIssue)],
+            new EnforcementGate(EnforcementMode.Advisory));
+
+        Assert.Equal(2, smtp.Received.Count);                                 // both kinds
+        Assert.Single(slack.Received);                                        // regressed only
+        Assert.Equal(AlertKind.RegressedIssue, slack.Received[0].Kind);
+    }
+
+    [Fact]
+    public async Task Routing_matrix_with_no_entry_for_a_kind_drops_it()
+    {
+        var smtp = new CollectingChannel("smtp", reachback: false);
+        var routing = new Dictionary<AlertKind, IReadOnlySet<string>>
+        {
+            [AlertKind.NewIssue] = new HashSet<string> { "smtp" },
+        };
+        var dispatcher = new AlertDispatcher([smtp], routing: routing);
+
+        await dispatcher.DispatchAsync([Sample(AlertKind.RegressedIssue)], new EnforcementGate(EnforcementMode.Advisory));
+
+        Assert.Empty(smtp.Received); // no row for regressed-issue means no delivery
+    }
 }

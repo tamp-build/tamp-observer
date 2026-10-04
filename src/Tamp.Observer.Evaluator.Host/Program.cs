@@ -79,23 +79,55 @@ builder.Services.AddSingleton<IRawBucketReader>(_ => rawBucketTier switch
     "valkey" => new ValkeyRawBucketReader(valkeyConnection),
     _ => new FileSpoolRawBucketReader(spoolDirectory),
 });
-// Alerting channels (ADR 0016): the operator enables one or more by configuration. Cloud channels are
-// reachback and get gated off under locked/enforcing by the dispatcher's enforcement check.
+// Alerting channels (ADR 0016, TOBS-29): configuration is the persisted ChannelSettings document, edited in the
+// admin UI and read by the dispatcher on each dispatch so changes take effect without restarting the evaluator.
+// Env vars remain a fallback for a fresh install with no saved config. Cloud channels are reachback and get gated
+// off under locked/enforcing by the dispatcher's enforcement check.
 var alertHttp = new HttpClient();
-var channels = new List<INotificationChannel>();
+var envChannels = new List<INotificationChannel>();
 if (Environment.GetEnvironmentVariable("OBSERVER_ALERT_SLACK_WEBHOOK") is { Length: > 0 } slackUrl)
-    channels.Add(new SlackChannel(alertHttp, slackUrl));
+    envChannels.Add(new SlackChannel(alertHttp, slackUrl));
 if (Environment.GetEnvironmentVariable("OBSERVER_ALERT_TELEGRAM_TOKEN") is { Length: > 0 } tgToken
     && Environment.GetEnvironmentVariable("OBSERVER_ALERT_TELEGRAM_CHAT") is { Length: > 0 } tgChat)
-    channels.Add(new TelegramChannel(alertHttp, tgToken, tgChat));
+    envChannels.Add(new TelegramChannel(alertHttp, tgToken, tgChat));
 if (Environment.GetEnvironmentVariable("OBSERVER_ALERT_SMTP_HOST") is { Length: > 0 } smtpHost
     && Environment.GetEnvironmentVariable("OBSERVER_ALERT_SMTP_FROM") is { Length: > 0 } smtpFrom
     && Environment.GetEnvironmentVariable("OBSERVER_ALERT_SMTP_TO") is { Length: > 0 } smtpTo)
-    channels.Add(new SmtpChannel(new SmtpChannelOptions { Host = smtpHost, From = smtpFrom, To = smtpTo.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) }));
+    envChannels.Add(new SmtpChannel(new SmtpChannelOptions { Host = smtpHost, From = smtpFrom, To = smtpTo.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) }));
 
 builder.Services.AddSingleton(alertHttp);
-builder.Services.AddSingleton<IAlertDispatcher>(_ => new AlertDispatcher(channels));
+builder.Services.AddSingleton<IAlertDispatcher>(sp =>
+    new DbChannelAlertDispatcher(sp.GetRequiredService<IDocumentStore>(), alertHttp, envChannels));
 builder.Services.AddSingleton<IngestEvaluator>();
 builder.Services.AddHostedService<SpoolIngestWorker>();
 
 await builder.Build().RunAsync();
+
+/// <summary>Live-config alert dispatcher (ADR 0016, TOBS-29): on each dispatch it reads the persisted
+/// <see cref="ChannelSettings"/> and builds the enabled channels and routing matrix from it, so admin edits in the
+/// UI take effect without restarting the evaluator. Falls back to env-configured channels when the saved config
+/// enables none (a fresh install).</summary>
+sealed class DbChannelAlertDispatcher(
+    IDocumentStore store, HttpClient http, IReadOnlyList<INotificationChannel> envFallback) : IAlertDispatcher
+{
+    public async Task DispatchAsync(IReadOnlyList<AlertEvent> alerts, IEnforcementGate gate, CancellationToken ct = default)
+    {
+        await using var session = store.QuerySession();
+        var settings = await session.LoadAsync<ChannelSettings>(ChannelSettings.SingletonId, ct);
+
+        IReadOnlyList<INotificationChannel> channels;
+        IReadOnlyDictionary<AlertKind, IReadOnlySet<string>>? routing = null;
+        if (settings is not null && (settings.Smtp.Enabled || settings.Slack.Enabled || settings.Telegram.Enabled))
+        {
+            channels = ChannelFactory.BuildEnabled(settings, http);
+            var map = ChannelFactory.Routing(settings);
+            routing = map.Count > 0 ? map : null; // no saved matrix: deliver every kind to every enabled channel.
+        }
+        else
+        {
+            channels = envFallback;
+        }
+
+        await new AlertDispatcher(channels, routing: routing).DispatchAsync(alerts, gate, ct);
+    }
+}

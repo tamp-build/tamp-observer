@@ -148,6 +148,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/channels/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["SaveChannelConfig"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/channels/routing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["SaveChannelRouting"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/channels/{type}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["TestChannel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/users": {
         parameters: {
             query?: never;
@@ -496,6 +544,11 @@ export interface components {
             /** Format: date-time */
             atUtc: string;
         };
+        AlertKindView: {
+            key: string;
+            name: string;
+            planned: boolean;
+        };
         AlertRuleView: {
             id: string;
             name: string;
@@ -509,10 +562,44 @@ export interface components {
             email: string;
             role: null | string;
         };
-        ChannelView: {
+        ChannelConfigUpdate: {
+            smtp: null | components["schemas"]["SmtpUpdate"];
+            slack: null | components["schemas"]["SlackUpdate"];
+            telegram: null | components["schemas"]["TelegramUpdate"];
+        };
+        ChannelConfigView: {
             type: string;
+            label: string;
             reachback: boolean;
+            outsideHost: null | string;
             allowedUnderMode: boolean;
+            enabled: boolean;
+            configured: boolean;
+            fields: components["schemas"]["ChannelFieldView"][];
+            lastTest: null | components["schemas"]["ChannelTestView"];
+        };
+        ChannelFieldView: {
+            key: string;
+            label: string;
+            value: null | string;
+            secret: boolean;
+            set: boolean;
+            placeholder: null | string;
+        };
+        ChannelsView: {
+            mode: string;
+            reachbackAllowed: boolean;
+            channels: components["schemas"]["ChannelConfigView"][];
+            alertKinds: components["schemas"]["AlertKindView"][];
+            routing: components["schemas"]["RoutingRow"][];
+        };
+        ChannelTestView: {
+            /** Format: date-time */
+            atUtc: string;
+            ok: boolean;
+            /** Format: int64 */
+            ms: number | string;
+            error: null | string;
         };
         ClientEvent: {
             kind: null | string;
@@ -785,6 +872,13 @@ export interface components {
             startUrl: null | string;
             userAgent: null | string;
         };
+        RoutingRow: {
+            kind: string;
+            channels: string[];
+        };
+        RoutingUpdate: {
+            rows: components["schemas"]["RoutingRow"][];
+        };
         SeriesBucket: {
             /** Format: int64 */
             startUnixNano: number | string;
@@ -798,6 +892,16 @@ export interface components {
             id: string;
             serviceName: string;
             namespace: null | string;
+        };
+        SlackUpdate: {
+            enabled: boolean;
+            webhookUrl: null | string;
+        };
+        SmtpUpdate: {
+            enabled: boolean;
+            host: null | string;
+            from: null | string;
+            to: null | string;
         };
         StackFrameView: {
             function: string;
@@ -837,6 +941,11 @@ export interface components {
             name: string;
             /** Format: int64 */
             bytes: number | string;
+        };
+        TelegramUpdate: {
+            enabled: boolean;
+            botToken: null | string;
+            chatId: null | string;
         };
         TraceSummary: {
             rootOperation: string;
@@ -1066,7 +1175,98 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ChannelView"][];
+                    "application/json": components["schemas"]["ChannelsView"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    SaveChannelConfig: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChannelConfigUpdate"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChannelsView"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    SaveChannelRouting: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RoutingUpdate"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChannelsView"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    TestChannel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                type: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChannelTestView"];
                 };
             };
             /** @description Forbidden */

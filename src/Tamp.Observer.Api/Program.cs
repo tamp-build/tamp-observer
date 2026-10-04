@@ -4,6 +4,7 @@ using Marten;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.DependencyInjection;
+using Tamp.Observer.Alerting;
 using Tamp.Observer.Api;
 using Tamp.Observer.Connector.AspNetCore;
 using Tamp.Observer.Domain;
@@ -311,21 +312,104 @@ api.MapGet("/enforcement", async (IDocumentStore docs, CancellationToken ct) =>
     .WithName("Enforcement")
     .Produces<EnforcementView>();
 
-// Notification channel catalog + policy gating (ADR 0016). Enablement/config is managed on the evaluator today;
-// this reports the supported channels, their reachback nature, and whether the current mode permits them.
+// Notification channels (ADR 0016, TOBS-29, design 7.5): editable per-channel config, send-test, and the routing
+// matrix. AdministerInstance only. Secrets are masked out of the view; the persisted ChannelSettings document is
+// the source of truth shared with the evaluator's live dispatch.
+async Task<(EnforcementMode Mode, ChannelSettings Settings)> LoadChannelsAsync(IQuerySession session, CancellationToken ct)
+{
+    var mode = (await session.LoadAsync<InstanceSettings>(InstanceSettings.SingletonId, ct) ?? new InstanceSettings()).EnforcementMode;
+    var settings = await session.LoadAsync<ChannelSettings>(ChannelSettings.SingletonId, ct) ?? new ChannelSettings();
+    return (mode, settings);
+}
+
 api.MapGet("/channels", async (HttpContext http, IAllowedIdentityStore allow, IDocumentStore docs, CancellationToken ct) =>
     {
         var denied = await HttpAuthorization.RequireAsync(http, allow, Capability.AdministerInstance, ct);
         if (denied is not null)
             return denied;
         await using var session = docs.QuerySession();
-        var settings = await session.LoadAsync<InstanceSettings>(InstanceSettings.SingletonId, ct) ?? new InstanceSettings();
-        var enforcing = settings.EnforcementMode == EnforcementMode.Enforcing;
-        ChannelView Channel(string type, bool reachback) => new(type, reachback, !(reachback && enforcing));
-        return Results.Ok(new[] { Channel("smtp", false), Channel("telegram", true), Channel("slack", true) });
+        var (mode, settings) = await LoadChannelsAsync(session, ct);
+        return Results.Ok(ChannelMapper.Build(settings, mode));
     })
     .WithName("Channels")
-    .Produces<ChannelView[]>()
+    .Produces<ChannelsView>()
+    .Produces(StatusCodes.Status403Forbidden);
+
+// Save per-channel config. A blank secret keeps the stored one (ADR 0016).
+api.MapPut("/channels/config", async (ChannelConfigUpdate body, HttpContext http, IAllowedIdentityStore allow, IDocumentStore docs, CancellationToken ct) =>
+    {
+        var denied = await HttpAuthorization.RequireAsync(http, allow, Capability.AdministerInstance, ct);
+        if (denied is not null)
+            return denied;
+        await using var session = docs.LightweightSession();
+        var (mode, settings) = await LoadChannelsAsync(session, ct);
+        ChannelMapper.Apply(settings, body);
+        session.Store(settings);
+        await session.SaveChangesAsync(ct);
+        return Results.Ok(ChannelMapper.Build(settings, mode));
+    })
+    .WithName("SaveChannelConfig")
+    .Produces<ChannelsView>()
+    .Produces(StatusCodes.Status403Forbidden);
+
+// Save the routing matrix: the given rows replace the stored matrix (ADR 0016).
+api.MapPut("/channels/routing", async (RoutingUpdate body, HttpContext http, IAllowedIdentityStore allow, IDocumentStore docs, CancellationToken ct) =>
+    {
+        var denied = await HttpAuthorization.RequireAsync(http, allow, Capability.AdministerInstance, ct);
+        if (denied is not null)
+            return denied;
+        await using var session = docs.LightweightSession();
+        var (mode, settings) = await LoadChannelsAsync(session, ct);
+        ChannelMapper.ApplyRouting(settings, body);
+        session.Store(settings);
+        await session.SaveChangesAsync(ct);
+        return Results.Ok(ChannelMapper.Build(settings, mode));
+    })
+    .WithName("SaveChannelRouting")
+    .Produces<ChannelsView>()
+    .Produces(StatusCodes.Status403Forbidden);
+
+// Send a test alert through one channel and record the outcome (ADR 0016). A refused reachback channel or an
+// unconfigured one returns a test result with Ok=false rather than an error status, so the UI shows it inline.
+api.MapPost("/channels/{type}/test", async (string type, HttpContext http, IAllowedIdentityStore allow, IDocumentStore docs, CancellationToken ct) =>
+    {
+        var denied = await HttpAuthorization.RequireAsync(http, allow, Capability.AdministerInstance, ct);
+        if (denied is not null)
+            return denied;
+        if (!ChannelFactory.Types.Contains(type))
+            return Results.NotFound();
+        await using var session = docs.LightweightSession();
+        var (mode, settings) = await LoadChannelsAsync(session, ct);
+
+        if (ChannelFactory.IsReachback(type) && mode != EnforcementMode.Advisory)
+            return Results.Ok(new ChannelTestView(DateTime.UtcNow, false, 0, $"Refused under {mode} mode: reachback channel."));
+        if (!ChannelFactory.Configured(type, settings))
+            return Results.Ok(new ChannelTestView(DateTime.UtcNow, false, 0, "Channel is not configured."));
+
+        using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+        var channel = ChannelFactory.Build(type, settings, client)!;
+        var alert = new AlertEvent(AlertKind.NewIssue, Guid.Empty, Guid.Empty, Guid.Empty, "test",
+            "Test alert from tamp/observer", "Observer.TestAlert", 1, 0);
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        ChannelTestResult result;
+        try
+        {
+            await channel.SendAsync(alert, ct);
+            sw.Stop();
+            result = new ChannelTestResult { AtUtc = DateTime.UtcNow, Ok = true, Ms = sw.ElapsedMilliseconds };
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            sw.Stop();
+            result = new ChannelTestResult { AtUtc = DateTime.UtcNow, Ok = false, Ms = sw.ElapsedMilliseconds, Error = ex.Message };
+        }
+        settings.LastTest[type] = result;
+        session.Store(settings);
+        await session.SaveChangesAsync(ct);
+        return Results.Ok(new ChannelTestView(result.AtUtc, result.Ok, result.Ms, result.Error));
+    })
+    .WithName("TestChannel")
+    .Produces<ChannelTestView>()
     .Produces(StatusCodes.Status403Forbidden);
 
 // Admission list (Users & roles). ManageUsers only.
@@ -825,8 +909,6 @@ public static class CorrelationBuilder
 /// <summary>The instance enforcement posture (ADR 0002).</summary>
 public sealed record EnforcementView(string Mode, bool Locked);
 
-/// <summary>A notification channel's nature and whether the current mode permits it (ADR 0016).</summary>
-public sealed record ChannelView(string Type, bool Reachback, bool AllowedUnderMode);
 
 /// <summary>A pre-registered identity (ADR 0013).</summary>
 public sealed record UserView(string Email, string Role, DateTimeOffset CreatedAtUtc);

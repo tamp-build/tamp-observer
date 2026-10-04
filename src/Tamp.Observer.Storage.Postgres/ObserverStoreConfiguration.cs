@@ -77,6 +77,10 @@ public static class ObserverStoreConfiguration
         // Installation-wide settings singleton, incl. enforcement posture (ADR 0002).
         options.Schema.For<InstanceSettings>();
 
+        // Notification channel configuration singleton (ADR 0016, TOBS-29): per-channel config, routing matrix,
+        // last send-test. Shared by the admin API and the evaluator's live dispatch.
+        options.Schema.For<ChannelSettings>();
+
         // Native RBAC grants (ADR 0013): looked up by subject.
         options.Schema.For<RoleAssignment>()
             .Index(x => x.SubjectId);

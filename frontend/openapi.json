@@ -186,10 +186,106 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/ChannelView"
-                  }
+                  "$ref": "#/components/schemas/ChannelsView"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/channels/config": {
+      "put": {
+        "tags": [
+          "Tamp.Observer.Api"
+        ],
+        "operationId": "SaveChannelConfig",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChannelConfigUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelsView"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/channels/routing": {
+      "put": {
+        "tags": [
+          "Tamp.Observer.Api"
+        ],
+        "operationId": "SaveChannelRouting",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoutingUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelsView"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/channels/{type}/test": {
+      "post": {
+        "tags": [
+          "Tamp.Observer.Api"
+        ],
+        "operationId": "TestChannel",
+        "parameters": [
+          {
+            "name": "type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelTestView"
                 }
               }
             }
@@ -1279,6 +1375,25 @@
           }
         }
       },
+      "AlertKindView": {
+        "required": [
+          "key",
+          "name",
+          "planned"
+        ],
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "planned": {
+            "type": "boolean"
+          }
+        }
+      },
       "AlertRuleView": {
         "required": [
           "id",
@@ -1337,22 +1452,204 @@
           }
         }
       },
-      "ChannelView": {
+      "ChannelConfigUpdate": {
+        "required": [
+          "smtp",
+          "slack",
+          "telegram"
+        ],
+        "type": "object",
+        "properties": {
+          "smtp": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SmtpUpdate"
+              }
+            ]
+          },
+          "slack": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SlackUpdate"
+              }
+            ]
+          },
+          "telegram": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/TelegramUpdate"
+              }
+            ]
+          }
+        }
+      },
+      "ChannelConfigView": {
         "required": [
           "type",
+          "label",
           "reachback",
-          "allowedUnderMode"
+          "outsideHost",
+          "allowedUnderMode",
+          "enabled",
+          "configured",
+          "fields",
+          "lastTest"
         ],
         "type": "object",
         "properties": {
           "type": {
             "type": "string"
           },
+          "label": {
+            "type": "string"
+          },
           "reachback": {
             "type": "boolean"
           },
+          "outsideHost": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
           "allowedUnderMode": {
             "type": "boolean"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "configured": {
+            "type": "boolean"
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChannelFieldView"
+            }
+          },
+          "lastTest": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ChannelTestView"
+              }
+            ]
+          }
+        }
+      },
+      "ChannelFieldView": {
+        "required": [
+          "key",
+          "label",
+          "value",
+          "secret",
+          "set",
+          "placeholder"
+        ],
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "value": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "secret": {
+            "type": "boolean"
+          },
+          "set": {
+            "type": "boolean"
+          },
+          "placeholder": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "ChannelsView": {
+        "required": [
+          "mode",
+          "reachbackAllowed",
+          "channels",
+          "alertKinds",
+          "routing"
+        ],
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string"
+          },
+          "reachbackAllowed": {
+            "type": "boolean"
+          },
+          "channels": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChannelConfigView"
+            }
+          },
+          "alertKinds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AlertKindView"
+            }
+          },
+          "routing": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RoutingRow"
+            }
+          }
+        }
+      },
+      "ChannelTestView": {
+        "required": [
+          "atUtc",
+          "ok",
+          "ms",
+          "error"
+        ],
+        "type": "object",
+        "properties": {
+          "atUtc": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "ms": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "error": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -2520,6 +2817,38 @@
           }
         }
       },
+      "RoutingRow": {
+        "required": [
+          "kind",
+          "channels"
+        ],
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "channels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "RoutingUpdate": {
+        "required": [
+          "rows"
+        ],
+        "type": "object",
+        "properties": {
+          "rows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RoutingRow"
+            }
+          }
+        }
+      },
       "SeriesBucket": {
         "required": [
           "startUnixNano",
@@ -2570,6 +2899,56 @@
             "type": "string"
           },
           "namespace": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "SlackUpdate": {
+        "required": [
+          "enabled",
+          "webhookUrl"
+        ],
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "webhookUrl": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "SmtpUpdate": {
+        "required": [
+          "enabled",
+          "host",
+          "from",
+          "to"
+        ],
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "host": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "from": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "to": {
             "type": [
               "null",
               "string"
@@ -2752,6 +3131,31 @@
               "string"
             ],
             "format": "int64"
+          }
+        }
+      },
+      "TelegramUpdate": {
+        "required": [
+          "enabled",
+          "botToken",
+          "chatId"
+        ],
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "botToken": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "chatId": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
