@@ -201,7 +201,7 @@
         {/if}
       </section>
 
-      <!-- Metrics (TOBS-43): latest gauges + per-name series (e.g. SkyFire player count, per-service up/down) -->
+      <!-- Metrics (TOBS-43): latest gauges + per-name series (e.g. Sample gauge, per-service up/down) -->
       {#if metrics.length > 0}
         <section class="panel">
           <div class="panel-head"><h2 class="h">Metrics</h2><span class="muted small">latest gauges</span></div>

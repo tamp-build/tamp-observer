@@ -570,7 +570,7 @@ api.MapGet("/projects/{projectId:guid}/operations/series", async (
     .Produces<IReadOnlyList<OperationSeries>>()
     .Produces(StatusCodes.Status403Forbidden);
 
-// Latest value per (metric name, service) over the window (TOBS-43). Drives the live player-count value and
+// Latest value per (metric name, service) over the window (TOBS-43). Drives the live gauge value and
 // per-service up/down tiles. ViewTraces.
 api.MapGet("/projects/{projectId:guid}/metrics", async (
         Guid projectId, long start, long end,
@@ -586,7 +586,7 @@ api.MapGet("/projects/{projectId:guid}/metrics", async (
     .Produces<IReadOnlyList<MetricLatest>>()
     .Produces(StatusCodes.Status403Forbidden);
 
-// Dense per-bucket last value of a named gauge over the window (TOBS-43). Drives the player-count sparkline.
+// Dense per-bucket last value of a named gauge over the window (TOBS-43). Drives the gauge sparkline.
 api.MapGet("/projects/{projectId:guid}/metrics/series", async (
         Guid projectId, long start, long end, string name, Guid? service, int? buckets,
         HttpContext http, IAllowedIdentityStore allow, IObservabilityStore store, CancellationToken ct) =>

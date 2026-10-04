@@ -22,11 +22,11 @@ Next steps:
 Edge log-agent (TOBS-41) is ENABLED: a DaemonSet tails node container logs and ships OTLP to the collector at
   {{ .Values.logAgent.gatewayOtlp | default (printf "%s.%s.svc:%d" (include "tamp-observer.collectorHost" .) .Release.Namespace (int .Values.collector.service.grpcPort)) }}.
   {{- if .Values.logAgent.provisionProject }}
-  The `skyfire` trust-root project is auto-provisioned by a post-install hook Job.
+  The `sample` trust-root project is auto-provisioned by a post-install hook Job.
   {{- else }}
   Provision the target project so its logs are admitted (not quarantined):
        kubectl exec deploy/{{ include "tamp-observer.fullname" . }}-evaluator -- \
-         dotnet Tamp.Observer.Evaluator.Host.dll create-project skyfire "SkyFire"
+         dotnet Tamp.Observer.Evaluator.Host.dll create-project sample "Sample"
   {{- end }}
 {{- end }}
 

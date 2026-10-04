@@ -27,7 +27,7 @@ public sealed record IssueSeries(string Fingerprint, IReadOnlyList<long> Buckets
 public sealed record OperationSeries(string Operation, long Count, long ErrorCount, long P95Nano, IReadOnlyList<SeriesBucket> Buckets);
 
 /// <summary>The latest value of a gauge/sum metric for a (name, service) over the window (TOBS-43). Drives the
-/// current player-count value and per-service up/down tiles.</summary>
+/// current gauge value and per-service up/down tiles.</summary>
 public sealed record MetricLatest(string Name, Guid ServiceId, double Value, long TimeUnixNano);
 
 /// <summary>One bucket of a metric series: the bucket start (Unix nanos) and the gauge's last value in it (TOBS-43).</summary>

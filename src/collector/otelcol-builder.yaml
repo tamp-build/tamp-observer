@@ -16,7 +16,7 @@ receivers:
   # The one front door that matters for the OTLP-pure boundary (ADR 0009). This is the GATEWAY role.
   - gomod: go.opentelemetry.io/collector/receiver/otlpreceiver v0.162.0
   # Edge AGENT role (TOBS-41): tail node-level container log files so workloads whose logger has no
-  # OTLP/syslog appender (e.g. SkyFire -> Console -> stdout) still reach the pipeline. Same distro, a
+  # OTLP/syslog appender (e.g. Sample -> Console -> stdout) still reach the pipeline. Same distro, a
   # second role selected by config; not a second product.
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/filelogreceiver v0.162.0
 

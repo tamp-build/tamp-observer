@@ -2,10 +2,10 @@
 {{- $agentName := printf "%s-log-agent" (include "tamp-observer.fullname" .) }}
 {{- $collectorHost := include "tamp-observer.collectorHost" . }}
 # Edge log-AGENT (TOBS-41): a DaemonSet running our collector distro in its AGENT role. It tails node-level
-# container logs for workloads whose logger has no OTLP appender (SkyFire -> Console -> stdout), enriches with
+# container logs for workloads whose logger has no OTLP appender (Sample -> Console -> stdout), enriches with
 # k8sattributes, stamps tamp.project.key, and ships OTLP to the central gateway collector. DaemonSet (not a
 # sidecar) so it catches KEDA scale-to-zero pods and survives pod restarts. Off by default; cluster-scoped RBAC
-# is only created when enabled. microk8s applies this for the `skyfire` workload.
+# is only created when enabled. an operator applies this for the `sample` workload.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -13,7 +13,7 @@ metadata:
   labels:
     {{- include "tamp-observer.labels" . | nindent 4 }}
 ---
-# k8sattributes enriches pods in OTHER namespaces (skyfire), so this is a ClusterRole, not the namespaced Role
+# k8sattributes enriches pods in OTHER namespaces (sample), so this is a ClusterRole, not the namespaced Role
 # the api's health page uses. get/list/watch on pods is the minimum the processor needs.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -108,6 +108,6 @@ spec:
             path: /var/lib/tamp-observer-logagent
             type: DirectoryOrCreate
       tolerations:
-        # Tail logs on every node, including control-plane, so no SkyFire pod placement is missed.
+        # Tail logs on every node, including control-plane, so no Sample pod placement is missed.
         - operator: Exists
 {{- end }}

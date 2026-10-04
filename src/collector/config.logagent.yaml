@@ -3,15 +3,16 @@
 # Chosen over a sidecar (needs per-pod injection, misses KEDA scale-to-zero pods) and over kubectl-logs
 # polling (fragile, loses data on restart). Runs as a DaemonSet; see deploy/helm .../log-agent.yaml.
 #
-# Target workload: SkyFire (namespace `skyfire`) whose C++ logger has only Console/File/DB appenders -> all
-# output goes to stdout -> container log files on the node. We capture out-of-process at the platform.
+# Target workload: a sample workload (namespace `sample`) whose logger only writes plain text to stdout, so its
+# output lands in the node's container log files. We capture it out-of-process at the platform.
 #
-# PARSER NOTE: tuned to microk8s's real flags=7 output (confirmed 2026-10-04). Each SkyFire stdout line is:
+# PARSER NOTE: tuned to the target workload's structured log format. Each stdout line is:
 #   <TS> <LEVEL> [<category>] <message>
 # where TS = `YYYY-MM-DD_HH:MM:SS` (underscore between date and time, whole seconds, UTC), LEVEL is %-5s padded
-# (so 1-2 spaces follow), and the logger category is in square brackets (flags=7's 0x04 bit). Runtime is
-# containerd/CRI. We take the record TIME from the CRI envelope (RFC3339 nanos, UTC) via the `container`
-# operator and keep SkyFire's whole-second inline TS as an attribute. Separator is SPACES, not pipes.
+# (so 1-2 spaces follow), and the logger category is in square brackets. Runtime is containerd/CRI. We take the
+# record TIME from the CRI envelope (RFC3339 nanos, UTC) via the `container` operator and keep the inline
+# whole-second TS as an attribute. Separator is SPACES, not pipes. (Workload-specific values below live in the
+# deploy overlay; this file is a generic template.)
 
 extensions:
   # Persist read offsets to a host checkpoint dir (hostPath volume in the DaemonSet) so an agent pod restart
@@ -22,12 +23,12 @@ extensions:
 
 receivers:
   filelog:
-    # Tail SkyFire's real per-container log files under /var/log/pods (dir = <namespace>_<pod>_<uid>). This is
+    # Tail Sample's real per-container log files under /var/log/pods (dir = <namespace>_<pod>_<uid>). This is
     # the canonical input for the `container` operator: it carries pod uid/name/namespace/container, which the
     # /var/log/containers SYMLINK path does NOT reliably yield in this version ("failed to detect a valid log
-    # path"). The skyfire_* prefix scopes to the skyfire namespace; init containers are included by agreement.
+    # path"). The sample_* prefix scopes to the sample namespace; init containers are included by agreement.
     include:
-      - /var/log/pods/skyfire_*/*/*.log
+      - /var/log/pods/sample_*/*/*.log
     start_at: end            # don't replay old node logs on first rollout; only new lines
     storage: file_storage    # checkpoint offsets across agent restarts (see extensions above)
     include_file_path: true
@@ -39,9 +40,9 @@ receivers:
       - type: container
         add_metadata_from_filepath: true
 
-      # 2) RECOMBINE: join application-level multiline records (C++ crash stack dumps, embedded-newline SQL)
+      # 2) RECOMBINE: join application-level multiline records (multi-line crash/stack dumps, embedded newlines)
       #    into one. Continuation lines LACK the prefix, so a new logical record STARTS only when a line begins
-      #    with the flags=7 timestamp (note the UNDERSCORE between date and time). Most sql.sql errors are
+      #    with the structured format timestamp (note the UNDERSCORE between date and time). Most db.query errors are
       #    single-line, so this is a no-op for them and correctly coalesces the rare multiliners.
       - type: recombine
         combine_field: body
@@ -50,11 +51,11 @@ receivers:
         max_log_size: 102400
 
       # 3) REGEX: split "<TS> <LEVEL> [<category>] <message>" into fields. Space-separated; LEVEL is %-5s padded
-      #    (\s+ absorbs the pad). The category in [...] is the high-value signal TOBS-42 leans on (sql.sql).
+      #    (\s+ absorbs the pad). The category in [...] is the high-value signal TOBS-42 leans on (db.query).
       - type: regex_parser
-        regex: '^(?P<skyfire_ts>\d{4}-\d{2}-\d{2}_\d{2}:\d{2}:\d{2})\s+(?P<level>[A-Z]+)\s+\[(?P<category>[\w.]+)\]\s+(?P<msg>(?s:.*))$'
+        regex: '^(?P<sample_ts>\d{4}-\d{2}-\d{2}_\d{2}:\d{2}:\d{2})\s+(?P<level>[A-Z]+)\s+\[(?P<category>[\w.]+)\]\s+(?P<msg>(?s:.*))$'
         parse_from: body
-        # 3a) SEVERITY: map SkyFire LEVEL text -> OTLP severity. Backend keys Issues/filters on >=17 (ERROR)
+        # 3a) SEVERITY: map Sample LEVEL text -> OTLP severity. Backend keys Issues/filters on >=17 (ERROR)
         #     and >=13 (WARN), so FATAL/ERROR/WARN/INFO/DEBUG/TRACE land on the right OTLP bands.
         severity:
           parse_from: attributes.level
@@ -66,10 +67,10 @@ receivers:
             debug: DEBUG
             trace: TRACE
         # NOTE: no timestamp block here on purpose. The record TIME comes from the CRI envelope (RFC3339 nanos,
-        # UTC) that the `container` operator already set -- more precise than SkyFire's whole-second inline TS.
+        # UTC) that the `container` operator already set -- more precise than Sample's whole-second inline TS.
 
       # 4) Promote the parsed message to the body; keep category as log.category (string attrs survive the
-      #    evaluator parse) and retain SkyFire's inline whole-second TS as an attribute for reference.
+      #    evaluator parse) and retain Sample's inline whole-second TS as an attribute for reference.
       - type: move
         from: attributes.msg
         to: body
@@ -77,14 +78,14 @@ receivers:
         from: attributes.category
         to: attributes["log.category"]
       - type: move
-        from: attributes.skyfire_ts
-        to: attributes["skyfire.timestamp"]
+        from: attributes.sample_ts
+        to: attributes["sample.timestamp"]
       # Drop the scratch level field; severity is already parsed onto the record.
       - type: remove
         field: attributes.level
 
 processors:
-  # Enrich each record with pod/namespace/labels. Cross-namespace (agent tails `skyfire` pods): needs the
+  # Enrich each record with pod/namespace/labels. Cross-namespace (agent tails `sample` pods): needs the
   # ClusterRole in the DaemonSet manifest (get/list/watch pods). Association is by pod UID from the CRI metadata
   # the `container` operator added, falling back to IP.
   k8sattributes:
@@ -96,9 +97,9 @@ processors:
         - k8s.pod.name
         - k8s.pod.uid
       labels:
-        # SkyFire pods carry app in (authserver,worldserver,hubserver,chatserver,battlegroundserver,...).
+        # Sample pods carry app in (service-b,service-a,service-c,service-d,service-e,...).
         # Promote that label straight into service.name so the evaluator's EntityResolver discovers one
-        # Service per daemon (authserver, worldserver, ...).
+        # Service per daemon (service-b, service-a, ...).
         - tag_name: service.name
           key: app
           from: pod
@@ -110,15 +111,15 @@ processors:
           - { from: resource_attribute, name: k8s.pod.name }
           - { from: resource_attribute, name: k8s.namespace.name }
 
-  # Stamp the resource attributes the evaluator keys on. tamp.project.key=skyfire is the admit/quarantine
-  # trust-root key (unknown/missing => quarantine); deployment.environment=skyfire scopes capture policy.
+  # Stamp the resource attributes the evaluator keys on. tamp.project.key=sample is the admit/quarantine
+  # trust-root key (unknown/missing => quarantine); deployment.environment=sample scopes capture policy.
   resource:
     attributes:
       - key: tamp.project.key
-        value: skyfire
+        value: sample
         action: upsert
       - key: deployment.environment
-        value: skyfire
+        value: sample
         action: upsert
       # Fallback so a pod whose `app` label is somehow absent still resolves to a Service instead of blanking.
       - key: service.name

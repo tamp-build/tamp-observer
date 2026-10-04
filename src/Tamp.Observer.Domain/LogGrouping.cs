@@ -4,8 +4,8 @@ namespace Tamp.Observer.Domain;
 
 /// <summary>
 /// Builds the Issue grouping key for an error-severity LOG that has no <c>exception.type</c> (ADR 0015, TOBS-42).
-/// Unlike an exception, a log line carries volatile literals: entry ids, spell ids, row counts, quoted table or
-/// column names that differ on every occurrence of the SAME error class (e.g. SkyFire's sql.sql validation
+/// Unlike an exception, a log line carries volatile literals: entry ids, record ids, row counts, quoted table or
+/// column names that differ on every occurrence of the SAME error class (e.g. Sample's db.query validation
 /// output). Grouping on the raw text would mint one Issue per line. We parameterize those literals so occurrences
 /// collapse into one Issue, and fold in the logger category so distinct categories never share an Issue. The
 /// prose that names the error class is preserved, so different classes stay separate.
@@ -30,8 +30,8 @@ public static partial class LogGrouping
     /// <summary>
     /// Replace volatile NUMERIC literals (GUIDs, hex, bare numbers) with placeholders so every occurrence of one
     /// error class maps to one stable key. Quoted spans are deliberately NOT stripped: a quoted table/column/script
-    /// name (e.g. `spell_gen_clone` vs `spell_darkshore_corpse_soothe`) is the class DISCRIMINATOR, not a volatile
-    /// value — stripping it over-collapses distinct error classes into one Issue (the bug the live SkyFire restart
+    /// name (e.g. `handler_beta` vs `handler_alpha`) is the class DISCRIMINATOR, not a volatile
+    /// value — stripping it over-collapses distinct error classes into one Issue (the bug the live Sample restart
     /// corpus exposed, TOBS-42). Numbers inside quotes (ids like '45204') are still parameterized by the number
     /// pass, so a quoted literal value with digits still collapses while a pure-identifier name is preserved.
     /// </summary>
