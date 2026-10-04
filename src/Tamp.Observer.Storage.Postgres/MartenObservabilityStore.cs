@@ -158,6 +158,26 @@ public sealed class MartenObservabilityStore(IDocumentStore store) : IObservabil
         return byFp.Select(kv => new IssueSeries(kv.Key, kv.Value.Counts, kv.Value.Sessions.Count)).ToList();
     }
 
+    public async Task<ExceptionDetail?> GetLatestExceptionAsync(Guid projectId, string fingerprint, CancellationToken ct = default)
+    {
+        await using var session = _store.QuerySession();
+        var span = await session.Query<IngestedSpan>()
+            .Where(s => s.ProjectId == projectId && s.Fingerprint == fingerprint)
+            .OrderByDescending(s => s.StartUnixNano).FirstOrDefaultAsync(ct);
+        var log = await session.Query<IngestedLog>()
+            .Where(l => l.ProjectId == projectId && l.Fingerprint == fingerprint)
+            .OrderByDescending(l => l.TimeUnixNano).FirstOrDefaultAsync(ct);
+
+        var spanAt = span?.StartUnixNano ?? -1;
+        var logAt = log?.TimeUnixNano ?? -1;
+        var attrs = spanAt >= logAt ? span?.Attributes : log?.Attributes;
+        if (attrs is null) return null;
+        return new ExceptionDetail(
+            attrs.GetValueOrDefault("exception.type"),
+            attrs.GetValueOrDefault("exception.message"),
+            attrs.GetValueOrDefault("exception.stacktrace"));
+    }
+
     internal static long BucketWidth(TimeWindow w, int buckets) => Math.Max(1, (w.EndUnixNano - w.StartUnixNano) / buckets);
     internal static int BucketIndex(long t, long start, long width, int buckets) =>
         (int)Math.Clamp((t - start) / width, 0, buckets - 1);

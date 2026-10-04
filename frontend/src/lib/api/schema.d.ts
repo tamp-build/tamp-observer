@@ -388,6 +388,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{projectId}/issues/{issueId}/stacktrace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["IssueStackTrace"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects/{projectId}/traces/{traceId}/correlation": {
         parameters: {
             query?: never;
@@ -782,6 +798,21 @@ export interface components {
             id: string;
             serviceName: string;
             namespace: null | string;
+        };
+        StackFrameView: {
+            function: string;
+            file: null | string;
+            /** Format: int32 */
+            line: null | number | string;
+            inApp: boolean;
+        };
+        StackTraceView: {
+            errorType: null | string;
+            message: null | string;
+            symbolicated: boolean;
+            source: null | string;
+            frames: components["schemas"]["StackFrameView"][];
+            raw: null | string;
         };
         StorageHealth: {
             writeStore: string;
@@ -1528,6 +1559,43 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CorrelationView"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    IssueStackTrace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+                issueId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StackTraceView"];
                 };
             };
             /** @description Forbidden */

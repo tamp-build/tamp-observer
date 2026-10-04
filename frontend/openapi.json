@@ -943,6 +943,52 @@
         }
       }
     },
+    "/api/projects/{projectId}/issues/{issueId}/stacktrace": {
+      "get": {
+        "tags": [
+          "Tamp.Observer.Api"
+        ],
+        "operationId": "IssueStackTrace",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "issueId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StackTraceView"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
     "/api/projects/{projectId}/traces/{traceId}/correlation": {
       "get": {
         "tags": [
@@ -2524,6 +2570,84 @@
             "type": "string"
           },
           "namespace": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "StackFrameView": {
+        "required": [
+          "function",
+          "file",
+          "line",
+          "inApp"
+        ],
+        "type": "object",
+        "properties": {
+          "function": {
+            "type": "string"
+          },
+          "file": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "line": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "inApp": {
+            "type": "boolean"
+          }
+        }
+      },
+      "StackTraceView": {
+        "required": [
+          "errorType",
+          "message",
+          "symbolicated",
+          "source",
+          "frames",
+          "raw"
+        ],
+        "type": "object",
+        "properties": {
+          "errorType": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "message": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "symbolicated": {
+            "type": "boolean"
+          },
+          "source": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "frames": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StackFrameView"
+            }
+          },
+          "raw": {
             "type": [
               "null",
               "string"

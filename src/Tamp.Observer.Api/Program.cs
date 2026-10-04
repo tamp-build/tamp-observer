@@ -617,6 +617,29 @@ api.MapGet("/projects/{projectId:guid}/issues/{issueId:guid}/correlation", async
     .Produces(StatusCodes.Status404NotFound)
     .Produces(StatusCodes.Status403Forbidden);
 
+// Stack trace of an Issue's latest occurrence (TOBS-27). Parses the captured exception.stacktrace into frames.
+api.MapGet("/projects/{projectId:guid}/issues/{issueId:guid}/stacktrace", async (
+        Guid projectId, Guid issueId, HttpContext http, IAllowedIdentityStore allow,
+        IIssueStore issues, IObservabilityStore store, CancellationToken ct) =>
+    {
+        var denied = await HttpAuthorization.RequireAsync(http, allow, Capability.ViewErrors, ct);
+        if (denied is not null)
+            return denied;
+        var issue = await issues.GetAsync(projectId, issueId, ct);
+        if (issue is null)
+            return Results.NotFound();
+        var ex = await store.GetLatestExceptionAsync(projectId, issue.Fingerprint, ct);
+        var frames = StackTraceParser.Parse(ex?.Stacktrace);
+        // Symbolication (source maps / portable PDB) is not wired yet; frames are as-captured.
+        return Results.Ok(new StackTraceView(
+            ex?.Type ?? issue.ErrorType, ex?.Message ?? issue.Title, false,
+            string.IsNullOrEmpty(ex?.Stacktrace) ? null : "raw", frames, ex?.Stacktrace));
+    })
+    .WithName("IssueStackTrace")
+    .Produces<StackTraceView>()
+    .Produces(StatusCodes.Status404NotFound)
+    .Produces(StatusCodes.Status403Forbidden);
+
 // Correlation anchored on a trace (the trace page's reverse link back to the issue + session). ViewTraces.
 api.MapGet("/projects/{projectId:guid}/traces/{traceId}/correlation", async (
         Guid projectId, string traceId,

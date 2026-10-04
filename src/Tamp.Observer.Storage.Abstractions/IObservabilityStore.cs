@@ -20,6 +20,10 @@ public sealed record SeriesBucket(long StartUnixNano, long Count, long ErrorCoun
 /// <summary>An Issue's occurrence series over a window: dense per-bucket counts and distinct session count (TOBS-25).</summary>
 public sealed record IssueSeries(string Fingerprint, IReadOnlyList<long> Buckets, int Sessions);
 
+/// <summary>The exception detail of an Issue's latest occurrence: the OTLP exception.* attributes, when present
+/// (TOBS-27). Stacktrace is the raw string; the API parses it into frames.</summary>
+public sealed record ExceptionDetail(string? Type, string? Message, string? Stacktrace);
+
 /// <summary>The spans and logs sharing a trace id (the correlation walk, ADR 0010).</summary>
 public sealed record TraceView(IReadOnlyList<IngestedSpan> Spans, IReadOnlyList<IngestedLog> Logs);
 
@@ -64,6 +68,10 @@ public interface IObservabilityStore
     /// <summary>Per-Issue occurrence series over the window: for each fingerprint, a dense bucket count plus the
     /// number of distinct sessions that hit it (TOBS-25). Drives the per-issue sparkline and session counts.</summary>
     Task<IReadOnlyList<IssueSeries>> GetIssueSeriesAsync(Guid projectId, TimeWindow window, int buckets, CancellationToken ct = default);
+
+    /// <summary>The exception detail (type/message/stacktrace attributes) of the most recent occurrence carrying
+    /// one for the fingerprint, or null (TOBS-27). Drives the stack-trace panel.</summary>
+    Task<ExceptionDetail?> GetLatestExceptionAsync(Guid projectId, string fingerprint, CancellationToken ct = default);
 
     /// <summary>The latest error occurrence tied to a session id, or null. Anchors the correlation walk on a
     /// session (the replay page) and resolves back to its Issue via the occurrence fingerprint.</summary>

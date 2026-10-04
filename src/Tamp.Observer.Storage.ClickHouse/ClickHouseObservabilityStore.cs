@@ -146,6 +146,9 @@ ORDER BY time_unix_nano DESC LIMIT {(query.Limit <= 0 ? 200 : query.Limit)}";
     public Task<IReadOnlyList<IssueSeries>> GetIssueSeriesAsync(Guid projectId, TimeWindow window, int buckets, CancellationToken ct = default) =>
         Task.FromResult<IReadOnlyList<IssueSeries>>([]);
 
+    public Task<ExceptionDetail?> GetLatestExceptionAsync(Guid projectId, string fingerprint, CancellationToken ct = default) =>
+        Task.FromResult<ExceptionDetail?>(null);
+
     private static string SpanWhere(SpanQuery query, out bool hasService)
     {
         hasService = query.ServiceId is not null;

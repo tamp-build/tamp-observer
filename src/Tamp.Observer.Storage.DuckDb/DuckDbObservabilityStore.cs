@@ -362,6 +362,37 @@ WHERE json_extract_string(data,'$.ProjectId') = $projectId
         return span.AtUnixNano >= log.AtUnixNano ? span : log;
     }
 
+    public async Task<ExceptionDetail?> GetLatestExceptionAsync(Guid projectId, string fingerprint, CancellationToken ct = default)
+    {
+        await using var lease = await OpenAsync(ct);
+        var conn = lease.Conn;
+        var span = await LatestException(conn, _spans, "StartUnixNano", projectId, fingerprint, ct);
+        var log = await LatestException(conn, _logs, "TimeUnixNano", projectId, fingerprint, ct);
+        if (span is null) return log?.Detail;
+        if (log is null) return span?.Detail;
+        return span.Value.At >= log.Value.At ? span.Value.Detail : log.Value.Detail;
+    }
+
+    private async Task<(ExceptionDetail Detail, long At)?> LatestException(
+        DuckDBConnection conn, string table, string timeField, Guid projectId, string fingerprint, CancellationToken ct)
+    {
+        var sql = $@"
+SELECT json_extract_string(data,'$.Attributes.""exception.type""') AS etype,
+       json_extract_string(data,'$.Attributes.""exception.message""') AS emsg,
+       json_extract_string(data,'$.Attributes.""exception.stacktrace""') AS estack,
+       CAST(json_extract_string(data,'$.{timeField}') AS BIGINT) AS at_nano
+FROM {table}
+WHERE json_extract_string(data,'$.ProjectId') = $projectId
+  AND json_extract_string(data,'$.Fingerprint') = $fingerprint
+ORDER BY at_nano DESC LIMIT 1";
+        await using var cmd = Command(conn, sql, [("projectId", projectId.ToString()), ("fingerprint", fingerprint)]);
+        await using var r = await cmd.ExecuteReaderAsync(ct);
+        if (!await r.ReadAsync(ct))
+            return null;
+        var detail = new ExceptionDetail(r["etype"] as string, r["emsg"] as string, r["estack"] as string);
+        return (detail, Convert.ToInt64(r["at_nano"]));
+    }
+
     private async Task<IssueOccurrence?> LatestOccurrence(
         DuckDBConnection conn, string table, string timeField, string source, Guid projectId, string matchSql, string matchValue, CancellationToken ct)
     {

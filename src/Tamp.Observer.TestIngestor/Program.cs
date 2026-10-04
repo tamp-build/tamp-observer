@@ -146,6 +146,12 @@ for (var i = 0; i < scenarioCount; i++)
                 err?.SetTag("tamp.session.id", sessionId);
                 err?.SetTag("exception.type", errorType);
                 err?.SetTag("exception.message", $"{errorType}: card charge declined");
+                err?.SetTag("exception.stacktrace", string.Join("\n",
+                    $"{errorType}: card charge declined",
+                    "   at Payments.ChargeService.Charge(Order order, Card card) in /src/Payments/ChargeService.cs:line 84",
+                    "   at Checkout.CheckoutController.Post(CheckoutRequest req) in /src/Checkout/CheckoutController.cs:line 52",
+                    "   at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.InvokeActionMethodAsync()",
+                    "   at System.Runtime.CompilerServices.AsyncTaskMethodBuilder.Start()"));
                 err?.SetStatus(ActivityStatusCode.Error, "synthetic scenario error");
                 using (logger.BeginScope(new Dictionary<string, object> { ["tamp.session.id"] = sessionId }))
                 {

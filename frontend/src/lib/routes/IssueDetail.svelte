@@ -25,12 +25,20 @@
   type Issue = components["schemas"]["Issue"];
   type Series = components["schemas"]["IssueSeries"];
 
+  type Stack = components["schemas"]["StackTraceView"];
+
   let issue = $state<Issue | null>(null);
   let series = $state<Series | null>(null);
+  let stack = $state<Stack | null>(null);
+  let showFramework = $state(false);
+  let showRaw = $state(false);
   let loading = $state(true);
   let error = $state<string | null>(null);
   let busy = $state(false);
   let copied = $state(false);
+
+  const inAppFrames = $derived((stack?.frames ?? []).filter((f) => f.inApp));
+  const frameworkFrames = $derived((stack?.frames ?? []).filter((f) => !f.inApp));
 
   const canEdit = $derived(session.can("EditCapturePolicy", { project: projectId }));
   const isResolved = $derived(issue?.status === 1);
@@ -42,13 +50,15 @@
     loading = true;
     error = null;
     const { start, end } = filters.rangeNanos;
-    const [det, ser] = await Promise.all([
+    const [det, ser, stk] = await Promise.all([
       api.GET("/api/projects/{projectId}/issues/{issueId}", { params: { path: { projectId, issueId } } }),
       api.GET("/api/projects/{projectId}/issues/series", { params: { path: { projectId }, query: { start, end, buckets: 24 } } }),
+      api.GET("/api/projects/{projectId}/issues/{issueId}/stacktrace", { params: { path: { projectId, issueId } } }),
     ]);
     if (det.data) issue = det.data;
     else error = `${det.response.status} ${det.response.statusText}`;
     series = (ser.data ?? []).find((s) => s.fingerprint === det.data?.fingerprint) ?? null;
+    stack = stk.data ?? null;
     loading = false;
   }
 
@@ -131,7 +141,35 @@
       <Panel label="Correlation walk"><CorrelationWalk {projectId} current="issue" {issueId} errorType={issue.errorType ?? issue.title} /></Panel>
 
       <Panel label="Stack trace">
-        <p class="muted small">Symbolicated frames with source context are TOBS-27 (needs structured exception frames captured on the occurrence).</p>
+        {#if stack && stack.frames.length > 0}
+          <div class="st-head">
+            <span class="pill {stack.symbolicated ? 'res' : 'muted-pill'}">{stack.symbolicated ? "Symbolicated" : "Not symbolicated"}</span>
+            {#if stack.message}<span class="muted mono st-msg">{stack.message}</span>{/if}
+            <button class="btn raw-btn" onclick={() => (showRaw = !showRaw)}>{showRaw ? "Frames" : "Raw"}</button>
+          </div>
+          {#if showRaw}
+            <pre class="raw mono">{stack.raw}</pre>
+          {:else}
+            <div class="frames">
+              {#each inAppFrames as f, i (i)}
+                <div class="frame">
+                  <span class="fn mono">{f.function}</span>
+                  {#if f.file}<span class="loc mono muted">{f.file}{#if f.line}:{f.line}{/if}</span>{/if}
+                </div>
+              {/each}
+              {#if frameworkFrames.length > 0}
+                <button class="fw-toggle" onclick={() => (showFramework = !showFramework)}>{showFramework ? "Hide" : "Show"} {frameworkFrames.length} framework frame{frameworkFrames.length === 1 ? "" : "s"}</button>
+                {#if showFramework}
+                  {#each frameworkFrames as f, i (i)}
+                    <div class="frame fw"><span class="fn mono">{f.function}</span>{#if f.file}<span class="loc mono muted">{f.file}{#if f.line}:{f.line}{/if}</span>{/if}</div>
+                  {/each}
+                {/if}
+              {/if}
+            </div>
+          {/if}
+        {:else}
+          <p class="muted small">No stack trace captured on this issue's occurrences. Browser errors and exceptions with a captured <span class="mono">exception.stacktrace</span> show frames here.</p>
+        {/if}
       </Panel>
     </div>
 
@@ -191,4 +229,15 @@
   .details { display: grid; grid-template-columns: 90px 1fr; gap: var(--gap-2) var(--gap-3); margin: 0; }
   .details dd { margin: 0; }
   .fp { word-break: break-all; }
+
+  .st-head { display: flex; align-items: center; gap: var(--gap-2); margin-bottom: var(--gap-3); flex-wrap: wrap; }
+  .st-msg { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .raw-btn { margin-left: auto; }
+  .raw { margin: 0; padding: var(--gap-3); background: var(--bg-sunken); border-radius: var(--r-ctl); overflow-x: auto; white-space: pre; color: var(--text-2); }
+  .frames { display: flex; flex-direction: column; }
+  .frame { display: flex; justify-content: space-between; gap: var(--gap-3); padding: 7px 10px; border-left: 2px solid var(--accent); background: var(--surface); border-radius: 0 var(--r-tag) var(--r-tag) 0; margin-bottom: 3px; }
+  .frame.fw { border-left-color: var(--divider); opacity: 0.75; }
+  .fn { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .loc { white-space: nowrap; }
+  .fw-toggle { background: none; border: 0; color: var(--accent); cursor: pointer; font: inherit; text-align: left; padding: 6px 0; }
 </style>
