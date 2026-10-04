@@ -21,6 +21,11 @@ var spoolDirectory = Environment.GetEnvironmentVariable("OBSERVER_SPOOL")
 // Raw-bucket tier dial (ADR 0004 section 2): "file" (floor) or "valkey" (high).
 var rawBucketTier = Environment.GetEnvironmentVariable("OBSERVER_RAWBUCKET") ?? "file";
 var valkeyConnection = Environment.GetEnvironmentVariable("OBSERVER_VALKEY") ?? "localhost:6379";
+// Retention windows (TOBS-24 raw telemetry + TOBS-25 rollup). Raw spans/logs/metrics default to 30 days; the
+// rollup is kept longer (default 90) so aggregates outlive the raw events. Used by both the ClickHouse TTL and
+// the Postgres prune service below.
+var telemetryRetentionDays = int.TryParse(Environment.GetEnvironmentVariable("OBSERVER_TELEMETRY_RETENTION_DAYS"), out var td) && td > 0 ? td : 30;
+var rollupRetentionDays = int.TryParse(Environment.GetEnvironmentVariable("OBSERVER_ROLLUP_RETENTION_DAYS"), out var rd) && rd > 0 ? rd : 90;
 
 // Admin one-shot: create the trust-root Project (ADR 0007: a human creates projects; they are never
 // auto-created from telemetry). Usage: create-project <key> [name]
@@ -100,7 +105,7 @@ if (sinkTier == "clickhouse")
     // Retry briefly so a just-started ClickHouse that is healthy but not yet query-ready does not crash boot.
     for (var attempt = 1; ; attempt++)
     {
-        try { await ClickHouseSchema.EnsureAsync(clickHouse); break; }
+        try { await ClickHouseSchema.EnsureAsync(clickHouse, telemetryRetentionDays); break; }
         catch when (attempt < 15) { await Task.Delay(TimeSpan.FromSeconds(2)); }
     }
 }
@@ -136,26 +141,27 @@ builder.Services.AddSingleton<IAlertDispatcher>(sp =>
 builder.Services.AddSingleton<IngestEvaluator>();
 builder.Services.AddHostedService<SpoolIngestWorker>();
 
-// Rollup retention (TOBS-25): bound the rollup even though raw-telemetry retention (TOBS-24) is not built.
-// Default 30 days, pruned hourly; configurable via OBSERVER_ROLLUP_RETENTION_DAYS.
-var rollupRetentionDays = int.TryParse(Environment.GetEnvironmentVariable("OBSERVER_ROLLUP_RETENTION_DAYS"), out var rd) && rd > 0 ? rd : 30;
-builder.Services.AddHostedService(_ => new RollupRetentionService(connectionString, TimeSpan.FromDays(rollupRetentionDays), TimeSpan.FromHours(1)));
+// Retention (TOBS-24 raw telemetry + TOBS-25 rollup), pruned hourly. Windows are configured at the top; raw
+// spans/logs/metrics default to 30 days, the rollup to 90. Issues/entities/auth are never pruned.
+builder.Services.AddHostedService(_ => new RetentionService(
+    connectionString, TimeSpan.FromDays(telemetryRetentionDays), TimeSpan.FromDays(rollupRetentionDays), TimeSpan.FromHours(1)));
 
 await builder.Build().RunAsync();
 
-/// <summary>Prunes rollup rows older than the retention window on a fixed interval (TOBS-25). Best-effort: a
-/// failed prune is swallowed and retried next tick, so it never takes the evaluator down.</summary>
-sealed class RollupRetentionService(string connectionString, TimeSpan retention, TimeSpan interval) : BackgroundService
+/// <summary>Prunes raw telemetry (TOBS-24) and the rollup (TOBS-25) past their retention windows on a fixed
+/// interval. Best-effort: a failed prune is swallowed and retried next tick, so it never takes the evaluator
+/// down. The rollup window is kept longer so aggregates survive after the raw events are gone.</summary>
+sealed class RetentionService(string connectionString, TimeSpan telemetryRetention, TimeSpan rollupRetention, TimeSpan interval) : BackgroundService
 {
+    private static long CutoffNano(TimeSpan window) => (DateTimeOffset.UtcNow - window).ToUnixTimeMilliseconds() * 1_000_000L;
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         while (!stoppingToken.IsCancellationRequested)
         {
-            try
-            {
-                var cutoff = (DateTimeOffset.UtcNow - retention).ToUnixTimeMilliseconds() * 1_000_000L;
-                await RollupSchema.PruneAsync(connectionString, cutoff, stoppingToken);
-            }
+            try { await TelemetryRetention.PruneAsync(connectionString, CutoffNano(telemetryRetention), stoppingToken); }
+            catch { /* best-effort; retry next interval */ }
+            try { await RollupSchema.PruneAsync(connectionString, CutoffNano(rollupRetention), stoppingToken); }
             catch { /* best-effort; retry next interval */ }
             try { await Task.Delay(interval, stoppingToken); }
             catch (OperationCanceledException) { break; }

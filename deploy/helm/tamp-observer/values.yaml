@@ -85,6 +85,12 @@ evaluator:
   repository: tamp-observer-evaluator
   tag: ""
   sink: postgres          # postgres | clickhouse
+  # Telemetry retention (TOBS-24): raw spans/logs/metrics are pruned after telemetryDays; the small rollup
+  # aggregates are kept rollupDays (longer, so sparklines survive after the raw events are gone). On the
+  # ClickHouse tier this becomes native MergeTree TTL. Pruning runs hourly in the evaluator.
+  retention:
+    telemetryDays: 30
+    rollupDays: 90
   resources:
     requests: { cpu: 150m, memory: 256Mi }
     limits: { cpu: "1", memory: 512Mi }    # CPU limit >=1 so Marten startup codegen is not throttled

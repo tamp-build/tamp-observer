@@ -32,6 +32,10 @@ spec:
             {{- end }}
             - name: OBSERVER_SINK
               value: {{ .Values.evaluator.sink | quote }}
+            - name: OBSERVER_TELEMETRY_RETENTION_DAYS
+              value: {{ .Values.evaluator.retention.telemetryDays | quote }}
+            - name: OBSERVER_ROLLUP_RETENTION_DAYS
+              value: {{ .Values.evaluator.retention.rollupDays | quote }}
             {{- if .Values.clickhouse.enabled }}
             - name: OBSERVER_CLICKHOUSE
               valueFrom:
