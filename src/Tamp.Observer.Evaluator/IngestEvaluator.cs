@@ -186,7 +186,8 @@ public sealed partial class IngestEvaluator(
                 if (l.SeverityNumber >= 17) // OTLP SEVERITY_NUMBER_ERROR
                 {
                     var et = l.Attributes.GetValueOrDefault(ResourceKeys.ExceptionType);
-                    fingerprint = IssueFingerprint.Compute(service.Id, et ?? Normalize(l.Body) ?? "log-error");
+                    var category = l.Attributes.GetValueOrDefault(ResourceKeys.LogCategory);
+                    fingerprint = IssueFingerprint.Compute(service.Id, et ?? LogGrouping.Key(l.Body, category));
                 }
 
                 logs.Add(new IngestedLog
@@ -225,8 +226,12 @@ public sealed partial class IngestEvaluator(
                 if (l.SeverityNumber < 17) // OTLP SEVERITY_NUMBER_ERROR
                     continue;
                 var errorType = l.Attributes.GetValueOrDefault(ResourceKeys.ExceptionType);
-                var key = errorType ?? Normalize(l.Body) ?? "log-error";
-                await issueProjector.ProjectAsync(project.Id, service.Id, version.Sequence, errorType, errorType ?? key, key, item.Envelope.ReceivedAt, ct);
+                var category = l.Attributes.GetValueOrDefault(ResourceKeys.LogCategory);
+                // Group by error CLASS: the fingerprint is over the category + the literal-parameterized message, so
+                // repeated occurrences collapse into one Issue (TOBS-42). Title keeps a readable sample line.
+                var key = errorType ?? LogGrouping.Key(l.Body, category);
+                var title = errorType ?? LogGrouping.Title(l.Body);
+                await issueProjector.ProjectAsync(project.Id, service.Id, version.Sequence, errorType, title, key, item.Envelope.ReceivedAt, ct);
             }
         }
 
@@ -245,10 +250,6 @@ public sealed partial class IngestEvaluator(
         LogAdmitted(item.Envelope.ReceiptId, item.Envelope.Signal);
         return true;
     }
-
-    // Coarse grouping key for a log without an exception.type: trimmed, length-bounded body.
-    private static string? Normalize(string? body) =>
-        string.IsNullOrWhiteSpace(body) ? null : body.Trim()[..Math.Min(body.Trim().Length, 200)];
 
     private async Task QuarantineAsync(RawBucketItem item, string reason, string? claimedProjectKey, CancellationToken ct)
     {
