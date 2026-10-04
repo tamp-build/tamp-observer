@@ -364,15 +364,23 @@ WHERE json_extract_string(data,'$.ProjectId') = $projectId
   AND CAST(json_extract_string(data,'$.TimeUnixNano') AS BIGINT) >= $start
   AND CAST(json_extract_string(data,'$.TimeUnixNano') AS BIGINT) < $end";
         var latest = new Dictionary<(string, string), (double Val, long T)>();
-        await using var lease = await OpenAsync(ct);
-        await using var cmd = Command(lease.Conn, sql,
-            [("projectId", projectId.ToString()), ("start", window.StartUnixNano), ("end", window.EndUnixNano)]);
-        await using var r = await cmd.ExecuteReaderAsync(ct);
-        while (await r.ReadAsync(ct))
+        try
         {
-            var key = ((string)r["name"], (string)r["svc"]);
-            var t = Convert.ToInt64(r["t"]);
-            if (!latest.TryGetValue(key, out var cur) || t >= cur.T) latest[key] = (ParseDouble(r["val"]), t);
+            await using var lease = await OpenAsync(ct);
+            await using var cmd = Command(lease.Conn, sql,
+                [("projectId", projectId.ToString()), ("start", window.StartUnixNano), ("end", window.EndUnixNano)]);
+            await using var r = await cmd.ExecuteReaderAsync(ct);
+            while (await r.ReadAsync(ct))
+            {
+                var key = ((string)r["name"], (string)r["svc"]);
+                var t = Convert.ToInt64(r["t"]);
+                if (!latest.TryGetValue(key, out var cur) || t >= cur.T) latest[key] = (ParseDouble(r["val"]), t);
+            }
+        }
+        catch (DuckDBException)
+        {
+            // Metric table not created yet (Marten makes it on first metric write): no metrics is empty, not an error.
+            return [];
         }
         return latest
             .Select(kv => new MetricLatest(kv.Key.Item1, Guid.Parse(kv.Key.Item2), kv.Value.Val, kv.Value.T))
@@ -404,14 +412,21 @@ FROM {_metrics} WHERE {where}";
         var last = new double[buckets];
         var lastAt = new long[buckets];
         var seen = new bool[buckets];
-        await using var lease = await OpenAsync(ct);
-        await using var cmd = Command(lease.Conn, sql, bind.ToArray());
-        await using var r = await cmd.ExecuteReaderAsync(ct);
-        while (await r.ReadAsync(ct))
+        try
         {
-            var t = Convert.ToInt64(r["t"]);
-            var b = (int)Math.Clamp((t - window.StartUnixNano) / width, 0, buckets - 1);
-            if (!seen[b] || t >= lastAt[b]) { last[b] = ParseDouble(r["val"]); lastAt[b] = t; seen[b] = true; }
+            await using var lease = await OpenAsync(ct);
+            await using var cmd = Command(lease.Conn, sql, bind.ToArray());
+            await using var r = await cmd.ExecuteReaderAsync(ct);
+            while (await r.ReadAsync(ct))
+            {
+                var t = Convert.ToInt64(r["t"]);
+                var b = (int)Math.Clamp((t - window.StartUnixNano) / width, 0, buckets - 1);
+                if (!seen[b] || t >= lastAt[b]) { last[b] = ParseDouble(r["val"]); lastAt[b] = t; seen[b] = true; }
+            }
+        }
+        catch (DuckDBException)
+        {
+            // Metric table not created yet: return a zero-filled series rather than erroring.
         }
         var series = new List<MetricBucket>(buckets);
         for (var i = 0; i < buckets; i++)
