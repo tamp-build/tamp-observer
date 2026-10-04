@@ -349,27 +349,35 @@ FROM {_spans} WHERE {where} GROUP BY op, b";
         }).ToList();
     }
 
+    // Metric reads fetch rows and reduce in C# (like the issue series): the gauge count is low-volume, and it
+    // avoids DuckDB window/arg_max and DOUBLE-cast quirks over the Postgres json scanner. Value is read as text
+    // and parsed invariantly.
     public async Task<IReadOnlyList<MetricLatest>> GetLatestMetricsAsync(Guid projectId, TimeWindow window, CancellationToken ct = default)
     {
         var sql = $@"
-SELECT name, svc, val, t FROM (
-  SELECT json_extract_string(data,'$.Name') AS name,
-         json_extract_string(data,'$.ServiceId') AS svc,
-         CAST(json_extract_string(data,'$.Value') AS DOUBLE) AS val,
-         CAST(json_extract_string(data,'$.TimeUnixNano') AS BIGINT) AS t
-  FROM {_metrics}
-  WHERE json_extract_string(data,'$.ProjectId') = $projectId
-    AND CAST(json_extract_string(data,'$.TimeUnixNano') AS BIGINT) >= $start
-    AND CAST(json_extract_string(data,'$.TimeUnixNano') AS BIGINT) < $end)
-QUALIFY row_number() OVER (PARTITION BY name, svc ORDER BY t DESC) = 1";
-        var result = new List<MetricLatest>();
+SELECT json_extract_string(data,'$.Name') AS name,
+       json_extract_string(data,'$.ServiceId') AS svc,
+       json_extract_string(data,'$.Value') AS val,
+       CAST(json_extract_string(data,'$.TimeUnixNano') AS BIGINT) AS t
+FROM {_metrics}
+WHERE json_extract_string(data,'$.ProjectId') = $projectId
+  AND CAST(json_extract_string(data,'$.TimeUnixNano') AS BIGINT) >= $start
+  AND CAST(json_extract_string(data,'$.TimeUnixNano') AS BIGINT) < $end";
+        var latest = new Dictionary<(string, string), (double Val, long T)>();
         await using var lease = await OpenAsync(ct);
         await using var cmd = Command(lease.Conn, sql,
             [("projectId", projectId.ToString()), ("start", window.StartUnixNano), ("end", window.EndUnixNano)]);
         await using var r = await cmd.ExecuteReaderAsync(ct);
         while (await r.ReadAsync(ct))
-            result.Add(new MetricLatest((string)r["name"], Guid.Parse((string)r["svc"]), Dbl(r["val"]), Convert.ToInt64(r["t"])));
-        return result.OrderBy(m => m.Name, StringComparer.Ordinal).ToList();
+        {
+            var key = ((string)r["name"], (string)r["svc"]);
+            var t = Convert.ToInt64(r["t"]);
+            if (!latest.TryGetValue(key, out var cur) || t >= cur.T) latest[key] = (ParseDouble(r["val"]), t);
+        }
+        return latest
+            .Select(kv => new MetricLatest(kv.Key.Item1, Guid.Parse(kv.Key.Item2), kv.Value.Val, kv.Value.T))
+            .OrderBy(m => m.Name, StringComparer.Ordinal)
+            .ToList();
     }
 
     public async Task<IReadOnlyList<MetricBucket>> GetMetricSeriesAsync(Guid projectId, string name, TimeWindow window, int buckets, Guid? serviceId = null, CancellationToken ct = default)
@@ -383,7 +391,7 @@ QUALIFY row_number() OVER (PARTITION BY name, svc ORDER BY t DESC) = 1";
         var bind = new List<(string, object)>
         {
             ("projectId", projectId.ToString()), ("name", name),
-            ("start", window.StartUnixNano), ("end", window.EndUnixNano), ("width", width),
+            ("start", window.StartUnixNano), ("end", window.EndUnixNano),
         };
         if (serviceId is Guid svc)
         {
@@ -391,21 +399,28 @@ QUALIFY row_number() OVER (PARTITION BY name, svc ORDER BY t DESC) = 1";
             bind.Add(("serviceId", svc.ToString()));
         }
         var sql = $@"
-SELECT CAST((CAST(json_extract_string(data,'$.TimeUnixNano') AS BIGINT) - $start) / $width AS INTEGER) AS b,
-       arg_max(CAST(json_extract_string(data,'$.Value') AS DOUBLE),
-               CAST(json_extract_string(data,'$.TimeUnixNano') AS BIGINT)) AS v
-FROM {_metrics} WHERE {where} GROUP BY b";
+SELECT CAST(json_extract_string(data,'$.TimeUnixNano') AS BIGINT) AS t, json_extract_string(data,'$.Value') AS val
+FROM {_metrics} WHERE {where}";
         var last = new double[buckets];
+        var lastAt = new long[buckets];
+        var seen = new bool[buckets];
         await using var lease = await OpenAsync(ct);
         await using var cmd = Command(lease.Conn, sql, bind.ToArray());
         await using var r = await cmd.ExecuteReaderAsync(ct);
         while (await r.ReadAsync(ct))
-            last[Math.Clamp(Convert.ToInt32(r["b"]), 0, buckets - 1)] = Dbl(r["v"]);
+        {
+            var t = Convert.ToInt64(r["t"]);
+            var b = (int)Math.Clamp((t - window.StartUnixNano) / width, 0, buckets - 1);
+            if (!seen[b] || t >= lastAt[b]) { last[b] = ParseDouble(r["val"]); lastAt[b] = t; seen[b] = true; }
+        }
         var series = new List<MetricBucket>(buckets);
         for (var i = 0; i < buckets; i++)
             series.Add(new MetricBucket(window.StartUnixNano + (long)i * width, last[i]));
         return series;
     }
+
+    private static double ParseDouble(object value) =>
+        value is DBNull or null ? 0 : double.TryParse(Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var d) ? d : 0;
 
     public async Task<IReadOnlyList<IssueSeries>> GetIssueSeriesAsync(Guid projectId, TimeWindow window, int buckets, CancellationToken ct = default)
     {
