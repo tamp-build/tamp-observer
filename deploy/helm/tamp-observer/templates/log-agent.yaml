@@ -1,0 +1,107 @@
+{{- if .Values.logAgent.enabled }}
+{{- $agentName := printf "%s-log-agent" (include "tamp-observer.fullname" .) }}
+{{- $collectorHost := include "tamp-observer.collectorHost" . }}
+# Edge log-AGENT (TOBS-41): a DaemonSet running our collector distro in its AGENT role. It tails node-level
+# container logs for workloads whose logger has no OTLP appender (SkyFire -> Console -> stdout), enriches with
+# k8sattributes, stamps tamp.project.key, and ships OTLP to the central gateway collector. DaemonSet (not a
+# sidecar) so it catches KEDA scale-to-zero pods and survives pod restarts. Off by default; cluster-scoped RBAC
+# is only created when enabled. microk8s applies this for the `skyfire` workload.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $agentName }}
+  labels:
+    {{- include "tamp-observer.labels" . | nindent 4 }}
+---
+# k8sattributes enriches pods in OTHER namespaces (skyfire), so this is a ClusterRole, not the namespaced Role
+# the api's health page uses. get/list/watch on pods is the minimum the processor needs.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ $agentName }}
+  labels:
+    {{- include "tamp-observer.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "namespaces"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["replicasets"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ $agentName }}
+  labels:
+    {{- include "tamp-observer.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ $agentName }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ $agentName }}
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ $agentName }}
+  labels:
+    {{- include "tamp-observer.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "tamp-observer.selectorLabels" (dict "root" . "component" "log-agent") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "tamp-observer.selectorLabels" (dict "root" . "component" "log-agent") | nindent 8 }}
+    spec:
+      serviceAccountName: {{ $agentName }}
+      # The agent reads node log files owned by root; no app ports are exposed.
+      securityContext:
+        runAsUser: 0
+      containers:
+        - name: log-agent
+          image: {{ include "tamp-observer.image" (dict "root" . "repository" .Values.collector.repository "tag" .Values.collector.tag) | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["--config", "/etc/observer/collector.logagent.yaml"]
+          env:
+            # Where the agent ships enriched OTLP logs: the central gateway collector Service, gRPC 4317.
+            - name: OBSERVER_GATEWAY_OTLP
+              value: {{ .Values.logAgent.gatewayOtlp | default (printf "%s.%s.svc:%d" $collectorHost .Release.Namespace (int .Values.collector.service.grpcPort)) | quote }}
+            # k8sattributes associates records to pods by UID; expose the node name for downstream filtering.
+            - name: K8S_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          volumeMounts:
+            - name: varlogpods
+              mountPath: /var/log/pods
+              readOnly: true
+            - name: varlogcontainers
+              mountPath: /var/log/containers
+              readOnly: true
+            - name: checkpoint
+              mountPath: /var/lib/tamp-observer-logagent
+          resources:
+            {{- toYaml .Values.logAgent.resources | nindent 12 }}
+      volumes:
+        # CRI container log symlinks and their real files under /var/log/pods. Read-only.
+        - name: varlogcontainers
+          hostPath:
+            path: /var/log/containers
+        - name: varlogpods
+          hostPath:
+            path: /var/log/pods
+        # filelog read-offset checkpoints; survives agent pod restarts.
+        - name: checkpoint
+          hostPath:
+            path: /var/lib/tamp-observer-logagent
+            type: DirectoryOrCreate
+      tolerations:
+        # Tail logs on every node, including control-plane, so no SkyFire pod placement is missed.
+        - operator: Exists
+{{- end }}

@@ -15,6 +15,8 @@ COPY --from=build /collector /collector
 # config by default, the Valkey config via the deploy/compose.valkey.yml overlay).
 COPY src/collector/config.docker.yaml /etc/observer/collector.yaml
 COPY src/collector/config.docker.valkey.yaml /etc/observer/collector.valkey.yaml
+# Edge log-agent role config (TOBS-41): same image, a second role selected by the DaemonSet's --config arg.
+COPY src/collector/config.logagent.yaml /etc/observer/collector.logagent.yaml
 # OTLP gRPC and HTTP front doors (ADR 0009).
 EXPOSE 4317 4318
 ENTRYPOINT ["/collector"]

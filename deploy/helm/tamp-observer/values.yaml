@@ -65,6 +65,21 @@ collector:
     grpcPort: 4317
     httpPort: 4318
 
+# ---- Edge log-agent (TOBS-41): DaemonSet that tails node container logs for workloads with no OTLP appender ----
+# Off by default; it is an opt-in adapter for a specific external workload (SkyFire), not core to the platform.
+# When enabled it creates cluster-scoped RBAC (k8sattributes enriches pods in other namespaces) and a DaemonSet
+# that ships OTLP logs to the central collector. Reuses the collector image in its "agent" role.
+logAgent:
+  enabled: false
+  # OTLP gRPC endpoint of the central gateway collector the agent exports to. Empty = derive the in-cluster
+  # Service DNS of this release's collector (<release>-collector.<namespace>.svc:4317).
+  gatewayOtlp: ""
+  # Run the one-shot that registers the `skyfire` trust-root project so its logs are admitted, not quarantined.
+  provisionProject: true
+  resources:
+    requests: { cpu: 50m, memory: 96Mi }
+    limits: { cpu: 300m, memory: 256Mi }
+
 # ---- Evaluator: drains the raw bucket, admits, writes storage ----
 evaluator:
   repository: tamp-observer-evaluator
