@@ -13,8 +13,10 @@
     events: unknown[];
     /** Correlated server-error time offsets (ms from session start), for the error markers + prev/next. */
     errorOffsets?: number[];
+    /** Offset (ms from session start) to jump to on load, e.g. the moment a correlated trace occurred (TOBS-28). */
+    seekToMs?: number;
   }
-  let { events, errorOffsets = [] }: Props = $props();
+  let { events, errorOffsets = [], seekToMs }: Props = $props();
 
   type RrEvent = { type: number; timestamp: number; data?: { source?: number } };
 
@@ -121,6 +123,8 @@
         if (typeof v === "number") current = v;
       });
       replayer.on("finish", () => (playing = false));
+      // Jump to a correlated moment (e.g. the trace's time), paused, so the operator lands on the event (TOBS-28).
+      if (typeof seekToMs === "number" && seekToMs > 0) goto(seekToMs, false);
     } catch (e) {
       errors.capture({ kind: "render", context: "replay init", message: e instanceof Error ? e.message : String(e) });
     }

@@ -116,6 +116,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{projectId}/environments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ListEnvironments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{projectId}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ListVersions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/enforcement": {
         parameters: {
             query?: never;
@@ -452,6 +484,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{projectId}/issues/by-fingerprint": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["GetIssueByFingerprint"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects/{projectId}/issues/counts": {
         parameters: {
             query?: never;
@@ -714,6 +762,11 @@ export interface components {
         EnforcementView: {
             mode: string;
             locked: boolean;
+        };
+        EnvironmentSummary: {
+            /** Format: uuid */
+            id: string;
+            name: string;
         };
         HealthKpis: {
             /** Format: double */
@@ -1088,6 +1141,15 @@ export interface components {
             /** Format: double */
             uptimeDays: number | string;
         };
+        VersionSummary: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            serviceId: string;
+            versionString: string;
+            /** Format: int64 */
+            sequence: number | string;
+        };
     };
     responses: never;
     parameters: never;
@@ -1235,6 +1297,50 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ServiceSummary"][];
+                };
+            };
+        };
+    };
+    ListEnvironments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvironmentSummary"][];
+                };
+            };
+        };
+    };
+    ListVersions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VersionSummary"][];
                 };
             };
         };
@@ -1882,6 +1988,44 @@ export interface operations {
             path: {
                 projectId: string;
                 issueId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Issue"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    GetIssueByFingerprint: {
+        parameters: {
+            query: {
+                fingerprint: string;
+            };
+            header?: never;
+            path: {
+                projectId: string;
             };
             cookie?: never;
         };

@@ -177,7 +177,8 @@ public sealed partial class IngestEvaluator(
                     StatusCode = s.StatusCode,
                     StatusMessage = s.StatusMessage,
                     InstanceId = instanceId,
-                    Attributes = new Dictionary<string, string>(s.Attributes),
+                    // Gate credential-bearing attributes to "not captured" rather than dropping them (TOBS-28).
+                    Attributes = AttributeRedaction.Redact(new Dictionary<string, string>(s.Attributes)),
                     Fingerprint = fingerprint,
                     ReceiptId = item.Envelope.ReceiptId,
                     ReceivedAt = item.Envelope.ReceivedAt,
@@ -209,7 +210,7 @@ public sealed partial class IngestEvaluator(
                     TraceId = l.TraceId,
                     SpanId = l.SpanId,
                     InstanceId = instanceId,
-                    Attributes = new Dictionary<string, string>(l.Attributes),
+                    Attributes = AttributeRedaction.Redact(new Dictionary<string, string>(l.Attributes)),
                     Fingerprint = fingerprint,
                     ReceiptId = item.Envelope.ReceiptId,
                     ReceivedAt = item.Envelope.ReceivedAt,

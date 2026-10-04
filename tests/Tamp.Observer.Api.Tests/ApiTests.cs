@@ -100,6 +100,44 @@ public sealed class ApiTests
     }
 
     [Fact]
+    public async Task Metadata_routes_require_authentication()
+    {
+        // The new trace-header resolver routes (TOBS-28) sit under /api, so external authN gates them.
+        using var app = new ApiFactory();
+        using var client = app.CreateClient();
+
+        var envs = await client.GetAsync($"/api/projects/{Project}/environments");
+        var vers = await client.GetAsync($"/api/projects/{Project}/versions");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, envs.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, vers.StatusCode);
+    }
+
+    [Fact]
+    public async Task Issue_by_fingerprint_is_not_found_when_unresolved()
+    {
+        // Admin holds ViewErrors; an unknown fingerprint resolves to nothing -> 404 (not a 500/empty-200).
+        using var app = new ApiFactory();
+        using var client = app.CreateClient();
+        client.DefaultRequestHeaders.Add(TestAuthHandler.SubjectHeader, "user-123");
+
+        var response = await client.GetAsync($"/api/projects/{Project}/issues/by-fingerprint?fingerprint=abc123");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Issue_by_fingerprint_requires_authentication()
+    {
+        using var app = new ApiFactory();
+        using var client = app.CreateClient();
+
+        var response = await client.GetAsync($"/api/projects/{Project}/issues/by-fingerprint?fingerprint=abc123");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
     public async Task Protected_read_returns_data_when_the_capability_is_held()
     {
         // The default caller is an admitted Admin, so ViewTraces is held and latency returns.

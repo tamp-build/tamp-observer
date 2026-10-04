@@ -27,6 +27,22 @@
   let loading = $state(true);
   let error = $state<string | null>(null);
 
+  // Optional ?at=<unixNano> deep-link (e.g. from a trace): jump the player to that moment (TOBS-28).
+  const seekAtNano = $derived.by(() => {
+    const raw = new URLSearchParams(window.location.search).get("at");
+    const n = raw ? Number(raw) : NaN;
+    return Number.isFinite(n) && n > 0 ? n : null;
+  });
+  // Convert the absolute nano timestamp into an offset (ms) from the session's first event.
+  const seekToMs = $derived.by(() => {
+    if (seekAtNano == null) return undefined;
+    const e = events as Array<{ timestamp?: number }> | null;
+    if (!e || e.length === 0) return undefined;
+    const ts = e.map((x) => x.timestamp).filter((n): n is number => typeof n === "number");
+    if (ts.length === 0) return undefined;
+    return Math.max(0, seekAtNano / 1_000_000 - Math.min(...ts));
+  });
+
   const sessionDurationMs = $derived.by(() => {
     const e = events as Array<{ timestamp?: number }> | null;
     if (!e || e.length < 2) return 0;
@@ -103,7 +119,7 @@
       <ErrorState message={`Could not load session (${error}).`} onretry={() => loadSession(sessionId)} />
     {:else if events}
       <div class="overlay-note muted">Reconstructed DOM, not video. Inputs masked at capture (irreversible).</div>
-      <ReplayPlayer {events} />
+      <ReplayPlayer {events} {seekToMs} />
     {/if}
   </section>
 {:else}

@@ -6,6 +6,7 @@
   import type { components } from "../api/schema";
   import { router, link } from "../router.svelte";
   import { services } from "../stores/services.svelte";
+  import { entities } from "../stores/entities.svelte";
   import LoadingState from "../components/ui/LoadingState.svelte";
   import EmptyState from "../components/ui/EmptyState.svelte";
   import ErrorState from "../components/ui/ErrorState.svelte";
@@ -27,8 +28,12 @@
   let loading = $state(true);
   let error = $state<string | null>(null);
   let selectedId = $state<string | null>(null);
+  // Resolved Issue id for the selected error span's fingerprint (TOBS-28), for the exception->issue link.
+  let selectedIssueId = $state<string | null>(null);
 
   const SVC_COLORS = ["var(--svc-1)", "var(--svc-2)", "var(--svc-3)", "#B7A0FF", "#7AD0A8"];
+  // Sentinel the evaluator stores for privacy-gated attribute values (TOBS-28, AttributeRedaction.NotCaptured).
+  const NOT_CAPTURED = "[tamp:not-captured]";
 
   const spans = $derived(trace?.spans ?? []);
   const bounds = $derived.by(() => {
@@ -62,6 +67,9 @@
   const hasError = $derived(spans.some((s) => int64(s.statusCode) === 2));
   const sessionId = $derived(spans.map((s) => s.attributes?.["tamp.session.id"]).find((v) => !!v) ?? null);
   const selected = $derived(selectedId ? byId.get(selectedId) : undefined);
+  // Env/version tags for the header, resolved from the root span's entity ids (TOBS-28).
+  const envName = $derived(root ? entities.envName(projectId, root.environmentId) : null);
+  const versionName = $derived(root ? entities.versionName(projectId, root.versionId) : null);
 
   function left(s: Span): number {
     return ((int64(s.startUnixNano) - bounds.min) / bounds.total) * 100;
@@ -87,7 +95,23 @@
   $effect(() => {
     void traceId;
     services.loadFor(projectId);
+    entities.loadFor(projectId);
     load();
+  });
+
+  // Resolve the selected error span's fingerprint to its Issue, for the exception->issue link (TOBS-28).
+  $effect(() => {
+    const fp = selected?.fingerprint;
+    selectedIssueId = null;
+    if (!fp) return;
+    let stale = false;
+    (async () => {
+      const { data } = await api.GET("/api/projects/{projectId}/issues/by-fingerprint", {
+        params: { path: { projectId }, query: { fingerprint: fp } },
+      });
+      if (!stale && data) selectedIssueId = data.id ?? null;
+    })();
+    return () => { stale = true; };
   });
 </script>
 
@@ -101,12 +125,14 @@
       <div class="pills">
         <span class="pill {hasError ? 'err' : 'ok'}">{hasError ? "Error" : "OK"}</span>
         {#if root}<span class="tag mono">{services.name(projectId, root.serviceId)}</span>{/if}
+        {#if envName}<span class="tag env mono" title="Environment">{envName}</span>{/if}
+        {#if versionName}<span class="tag ver mono" title="Version">{versionName}</span>{/if}
       </div>
       <h1>{root?.name ?? "Trace"}</h1>
       <p class="mono meta muted">{traceId} · {durationMs} ms · {spans.length} spans · {serviceCount} svc{#if root} · {nanosToTime(root.startUnixNano)}{/if}</p>
     </div>
     {#if sessionId}
-      <a class="btn pri" href={router.projectHref(projectId, `/replay/${encodeURIComponent(sessionId)}`)} use:link data-keep-filters="true"><Icon name="play" size={14} />Replay session</a>
+      <a class="btn pri" href={router.projectHref(projectId, `/replay/${encodeURIComponent(sessionId)}`) + (root ? `?at=${root.startUnixNano}` : "")} use:link data-keep-filters="true"><Icon name="play" size={14} />Replay session{#if root} at {nanosToTime(root.startUnixNano)}{/if}</a>
     {/if}
   </header>
 
@@ -138,14 +164,31 @@
   {#if selected}
     <Panel label="Selected span">
       <div class="sel-head"><strong class="mono">{selected.name}</strong><span class="tag">{services.name(projectId, selected.serviceId)}</span><span class="pill {int64(selected.statusCode) === 2 ? 'err' : 'ok'}">{int64(selected.statusCode) === 2 ? "Error" : "OK"}</span></div>
+      {#if selected.attributes?.["exception.type"] || selected.attributes?.["exception.message"]}
+        <div class="exc">
+          <div class="exc-head">
+            <span class="exc-type mono">{selected.attributes?.["exception.type"] ?? "Exception"}</span>
+            {#if selectedIssueId}
+              <a class="exc-issue" href={router.projectHref(projectId, `/issues/${selectedIssueId}`)} use:link data-keep-filters="true">View issue</a>
+            {/if}
+          </div>
+          {#if selected.attributes?.["exception.message"]}
+            <div class="exc-msg mono">{selected.attributes["exception.message"]}</div>
+          {/if}
+          {#if selected.attributes?.["exception.stacktrace"]}
+            <pre class="exc-trace mono">{selected.attributes["exception.stacktrace"]}</pre>
+          {/if}
+        </div>
+      {/if}
       <dl class="attrs">
         <dt class="muted">span id</dt><dd class="mono">{selected.spanId}</dd>
         <dt class="muted">duration</dt><dd class="mono">{ms(selected.durationNano)}</dd>
         {#if selected.statusMessage}<dt class="muted">status</dt><dd class="mono">{selected.statusMessage}</dd>{/if}
-        {#each Object.entries(selected.attributes ?? {}) as [k, v] (k)}
+        {#each Object.entries(selected.attributes ?? {}).filter(([k]) => !k.startsWith("exception.")) as [k, v] (k)}
           <dt class="muted mono akey">{k}</dt>
           <dd class="mono">
-            {#if k === "tamp.session.id"}<a href={router.projectHref(projectId, `/replay/${encodeURIComponent(v)}`)} use:link data-keep-filters="true">{v}</a>
+            {#if v === NOT_CAPTURED}<span class="gated" title="Gated by capture policy">not captured</span>
+            {:else if k === "tamp.session.id"}<a href={router.projectHref(projectId, `/replay/${encodeURIComponent(v)}`)} use:link data-keep-filters="true">{v}</a>
             {:else}{v}{/if}
           </dd>
         {/each}
@@ -179,19 +222,30 @@
   .axis { display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 11px; }
   .span-row { display: grid; grid-template-columns: 240px minmax(0, 1fr) 80px; gap: var(--gap-3); align-items: center; padding: 4px 0; width: 100%; background: none; border: 0; color: var(--text); font: inherit; cursor: pointer; text-align: left; border-radius: var(--r-ctl); }
   .span-row:hover { background: var(--surface-hover); }
-  .span-row.sel { background: var(--regr-wash); }
+  .span-row.sel { background: var(--regr-wash); box-shadow: inset 3px 0 0 var(--regr-fg); }
   .span-row.err .name { color: var(--err); }
   .name-cell { display: flex; align-items: center; gap: 6px; min-width: 0; }
   .chip { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
   .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .track { position: relative; height: 16px; background: var(--table-bg); border-radius: var(--r-tag); }
   .bar { position: absolute; top: 2px; bottom: 2px; border-radius: var(--r-tag); min-width: 2px; }
+  .bar.err { box-shadow: 0 0 0 1px var(--err-outline); }
   .legend { display: flex; flex-wrap: wrap; gap: var(--gap-3); margin-top: var(--gap-3); padding-top: var(--gap-2); border-top: 1px solid var(--divider); }
   .leg { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-2); }
   .sel-head { display: flex; align-items: center; gap: var(--gap-2); margin-bottom: var(--gap-3); }
+  .exc { border: 1px solid var(--err-outline); background: var(--err-bg); border-radius: var(--r-ctl); padding: var(--gap-2) var(--gap-3); margin-bottom: var(--gap-3); display: flex; flex-direction: column; gap: 4px; }
+  .exc-head { display: flex; align-items: center; justify-content: space-between; gap: var(--gap-2); flex-wrap: wrap; }
+  .exc-type { color: var(--err); font-weight: 600; word-break: break-all; }
+  .exc-issue { color: var(--regr-fg); text-decoration: none; font-size: var(--fs-label); white-space: nowrap; }
+  .exc-issue:hover { text-decoration: underline; }
+  .tag.env { background: var(--unres-bg); color: var(--unres-fg); }
+  .tag.ver { background: var(--regr-bg); color: var(--regr-fg); }
+  .exc-msg { color: var(--text); word-break: break-word; }
+  .exc-trace { margin: 4px 0 0; max-height: 220px; overflow: auto; font-size: 12px; color: var(--text-2); white-space: pre; background: var(--table-bg); border-radius: var(--r-tag); padding: var(--gap-2); }
   .attrs { display: grid; grid-template-columns: 200px 1fr; gap: 4px var(--gap-4); margin: 0; }
   .attrs dd { margin: 0; word-break: break-all; }
   .akey { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .gated { color: var(--muted); font-style: italic; }
   .log { display: grid; grid-template-columns: 96px 60px minmax(0, 1fr); gap: var(--gap-3); padding: 4px 0; border-top: 1px solid var(--divider); }
   .log.errrow { background: var(--err-bg); }
   .lvl { font-size: var(--fs-label); font-weight: 600; }
