@@ -132,7 +132,7 @@
       <p class="mono meta muted">{traceId} · {durationMs} ms · {spans.length} spans · {serviceCount} svc{#if root} · {nanosToTime(root.startUnixNano)}{/if}</p>
     </div>
     {#if sessionId}
-      <a class="btn pri" href={router.projectHref(projectId, `/replay/${encodeURIComponent(sessionId)}`)} use:link data-keep-filters="true"><Icon name="play" size={14} />Replay session</a>
+      <a class="btn pri" href={router.projectHref(projectId, `/replay/${encodeURIComponent(sessionId)}`) + (root ? `?at=${root.startUnixNano}` : "")} use:link data-keep-filters="true"><Icon name="play" size={14} />Replay session{#if root} at {nanosToTime(root.startUnixNano)}{/if}</a>
     {/if}
   </header>
 
