@@ -22,12 +22,12 @@ extensions:
 
 receivers:
   filelog:
-    # Tail only SkyFire's container logs. Node paths are the standard CRI symlink farm.
+    # Tail SkyFire's real per-container log files under /var/log/pods (dir = <namespace>_<pod>_<uid>). This is
+    # the canonical input for the `container` operator: it carries pod uid/name/namespace/container, which the
+    # /var/log/containers SYMLINK path does NOT reliably yield in this version ("failed to detect a valid log
+    # path"). The skyfire_* prefix scopes to the skyfire namespace; init containers are included by agreement.
     include:
-      - /var/log/containers/*_skyfire_*.log
-    # Never tail our own agent (defensive; it lives in a different namespace but guard anyway).
-    exclude:
-      - /var/log/containers/*_tamp-observer_*.log
+      - /var/log/pods/skyfire_*/*/*.log
     start_at: end            # don't replay old node logs on first rollout; only new lines
     storage: file_storage    # checkpoint offsets across agent restarts (see extensions above)
     include_file_path: true
@@ -103,8 +103,12 @@ processors:
           key: app
           from: pod
     pod_association:
+      # The container operator sets these resource attrs from the /var/log/pods path; associate by UID first,
+      # then fall back to pod name + namespace. (No `connection` source: filelog has no client connection.)
       - sources: [{ from: resource_attribute, name: k8s.pod.uid }]
-      - sources: [{ from: connection }]
+      - sources:
+          - { from: resource_attribute, name: k8s.pod.name }
+          - { from: resource_attribute, name: k8s.namespace.name }
 
   # Stamp the resource attributes the evaluator keys on. tamp.project.key=skyfire is the admit/quarantine
   # trust-root key (unknown/missing => quarantine); deployment.environment=skyfire scopes capture policy.

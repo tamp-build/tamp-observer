@@ -54,6 +54,12 @@ spec:
   selector:
     matchLabels:
       {{- include "tamp-observer.selectorLabels" (dict "root" . "component" "log-agent") | nindent 6 }}
+  # A single NotReady node otherwise consumes the default maxUnavailable:1 and stalls the whole rollout. Allow a
+  # third of nodes unavailable so updates still progress across the healthy nodes when one node is down.
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 34%
   template:
     metadata:
       labels:
