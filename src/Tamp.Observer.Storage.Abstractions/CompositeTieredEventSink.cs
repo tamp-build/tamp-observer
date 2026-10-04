@@ -26,8 +26,8 @@ public sealed class CompositeTieredEventSink(IEventSink entitySink, IEventSink t
         if (!entities.IsEmpty)
             await _entitySink.WriteAsync(entities, ct);
 
-        // Telemetry to the analytical tier; no entity provisioning and no rollup (kept in Postgres above).
-        var telemetry = batch with { NewServices = [], NewEnvironments = [], NewVersions = [], Issues = [], Rollups = null };
+        // Telemetry to the analytical tier; no entity provisioning, and no rollup/metrics (kept in Postgres above).
+        var telemetry = batch with { NewServices = [], NewEnvironments = [], NewVersions = [], Issues = [], Rollups = null, Metrics = null };
         if (!telemetry.IsEmpty)
             await _telemetrySink.WriteAsync(telemetry, ct);
     }

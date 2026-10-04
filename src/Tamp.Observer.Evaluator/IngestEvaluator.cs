@@ -125,6 +125,7 @@ public sealed partial class IngestEvaluator(
         // Resolve discovered entities and stamp the telemetry, accumulating a batch for the sink.
         var spans = new List<IngestedSpan>();
         var logs = new List<IngestedLog>();
+        var metrics = new List<IngestedMetric>();
         // Time-bucketed rollup maintained on admit (TOBS-25): one row per (service, signal, bucket) for this event.
         var rollup = new RollupAccumulator();
         var receivedAtNano = item.Envelope.ReceivedAt.ToUnixTimeMilliseconds() * 1_000_000L;
@@ -217,6 +218,24 @@ public sealed partial class IngestEvaluator(
                     fingerprint, l.Attributes.GetValueOrDefault(ResourceKeys.SessionId), receivedAtNano);
             }
 
+            foreach (var mp in res.Metrics)
+            {
+                metrics.Add(new IngestedMetric
+                {
+                    ProjectId = project.Id,
+                    ServiceId = service.Id,
+                    EnvironmentId = environmentId,
+                    VersionId = version.Id,
+                    Name = mp.Name,
+                    Value = mp.Value,
+                    TimeUnixNano = mp.TimeUnixNano,
+                    InstanceId = instanceId,
+                    Attributes = new Dictionary<string, string>(mp.Attributes),
+                    ReceiptId = item.Envelope.ReceiptId,
+                    ReceivedAt = item.Envelope.ReceivedAt,
+                });
+            }
+
             // Project error signals into Issues (ADR 0015): ERROR-status spans and error-severity logs.
             foreach (var s in res.Spans)
             {
@@ -245,7 +264,7 @@ public sealed partial class IngestEvaluator(
         rollup.AttributeBytes(item.Payload.Length);
         var batch = new AdmittedBatch(
             resolver.NewServices, resolver.NewEnvironments, resolver.NewVersions, spans, logs,
-            issueProjector.Touched.ToList(), rollup.Build());
+            issueProjector.Touched.ToList(), rollup.Build(), metrics);
         await _sink.WriteAsync(batch, ct);
 
         // Fan out alerts (new / regressed Issues) after the write succeeds, off the critical path.

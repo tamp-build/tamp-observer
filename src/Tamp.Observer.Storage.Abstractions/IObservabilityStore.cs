@@ -26,6 +26,13 @@ public sealed record IssueSeries(string Fingerprint, IReadOnlyList<long> Buckets
 /// window (TOBS-25). Drives the Overview operations table's per-op p95 and calls sparkline.</summary>
 public sealed record OperationSeries(string Operation, long Count, long ErrorCount, long P95Nano, IReadOnlyList<SeriesBucket> Buckets);
 
+/// <summary>The latest value of a gauge/sum metric for a (name, service) over the window (TOBS-43). Drives the
+/// current gauge value and per-service up/down tiles.</summary>
+public sealed record MetricLatest(string Name, Guid ServiceId, double Value, long TimeUnixNano);
+
+/// <summary>One bucket of a metric series: the bucket start (Unix nanos) and the gauge's last value in it (TOBS-43).</summary>
+public sealed record MetricBucket(long StartUnixNano, double Value);
+
 /// <summary>The exception detail of an Issue's latest occurrence: the OTLP exception.* attributes, when present
 /// (TOBS-27). Stacktrace is the raw string; the API parses it into frames.</summary>
 public sealed record ExceptionDetail(string? Type, string? Message, string? Stacktrace);
@@ -79,6 +86,16 @@ public interface IObservabilityStore
     /// (TOBS-25). Providers back this from their rollup; the default is empty until a provider implements it.</summary>
     Task<IReadOnlyList<OperationSeries>> GetOperationSeriesAsync(SpanQuery query, int buckets, int limit = 10, CancellationToken ct = default)
         => Task.FromResult<IReadOnlyList<OperationSeries>>([]);
+
+    /// <summary>Latest value per (metric name, service) over the window (TOBS-43). Default empty until a provider
+    /// implements the metric store reads.</summary>
+    Task<IReadOnlyList<MetricLatest>> GetLatestMetricsAsync(Guid projectId, TimeWindow window, CancellationToken ct = default)
+        => Task.FromResult<IReadOnlyList<MetricLatest>>([]);
+
+    /// <summary>Dense per-bucket last value of a named gauge over the window (TOBS-43), optionally for one service.
+    /// Default empty until a provider implements it.</summary>
+    Task<IReadOnlyList<MetricBucket>> GetMetricSeriesAsync(Guid projectId, string name, TimeWindow window, int buckets, Guid? serviceId = null, CancellationToken ct = default)
+        => Task.FromResult<IReadOnlyList<MetricBucket>>([]);
 
     /// <summary>The exception detail (type/message/stacktrace attributes) of the most recent occurrence carrying
     /// one for the fingerprint, or null (TOBS-27). Drives the stack-trace panel.</summary>

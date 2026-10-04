@@ -68,6 +68,12 @@ public static class ObserverStoreConfiguration
             .Index(x => x.TraceId)
             .Index(x => x.TimeUnixNano);
 
+        // Gauge/sum metric points (ADR 0004 admit path, TOBS-43): queried by name over a time window.
+        options.Schema.For<IngestedMetric>()
+            .Index(x => x.ServiceId)
+            .Index(x => x.Name)
+            .Index(x => x.TimeUnixNano);
+
         // Issue model (ADR 0015): one Issue per (Project, Service, Fingerprint); queried by status/recency.
         options.Schema.For<Issue>()
             .UniqueIndex(x => x.ProjectId, x => x.ServiceId, x => x.Fingerprint)

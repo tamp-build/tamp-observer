@@ -123,6 +123,33 @@ public sealed class RollupIntegrationTests : IAsyncLifetime
         Assert.Equal(2, fp1.Sessions);    // sess-1 (deduped) + sess-2
     }
 
+    private static IngestedMetric Metric(Guid p, Guid s, string name, double v, long t) =>
+        new() { ProjectId = p, ServiceId = s, Name = name, Value = v, TimeUnixNano = t, ReceiptId = "r", ReceivedAt = DateTimeOffset.UtcNow };
+
+    [Fact]
+    public async Task Metrics_latest_and_series_read_back()
+    {
+        var project = Guid.NewGuid();
+        var a = Guid.NewGuid();
+        var b = Guid.NewGuid();
+        var t0 = Bucket * 700;
+        await _sink.WriteAsync(new AdmittedBatch([], [], [], [], [], [], null,
+            [Metric(project, a, "sample.players", 10, t0), Metric(project, a, "sample.players", 25, t0 + Bucket)]));
+        await _sink.WriteAsync(new AdmittedBatch([], [], [], [], [], [], null,
+            [Metric(project, a, "up", 1, t0 + Bucket), Metric(project, b, "up", 0, t0 + Bucket)]));
+
+        var latest = await _reads.GetLatestMetricsAsync(project, new TimeWindow(t0, t0 + 2 * Bucket));
+        Assert.Equal(25, latest.Single(m => m.Name == "sample.players").Value); // newest wins
+        Assert.Equal(2, latest.Count(m => m.Name == "up"));                      // per service
+        Assert.Equal(1, latest.Single(m => m.Name == "up" && m.ServiceId == a).Value);
+        Assert.Equal(0, latest.Single(m => m.Name == "up" && m.ServiceId == b).Value);
+
+        var series = await _reads.GetMetricSeriesAsync(project, "sample.players", new TimeWindow(t0, t0 + 2 * Bucket), buckets: 2);
+        Assert.Equal(2, series.Count);
+        Assert.Equal(10, series[0].Value);
+        Assert.Equal(25, series[1].Value);
+    }
+
     [Fact]
     public async Task Prune_removes_rows_before_cutoff()
     {
