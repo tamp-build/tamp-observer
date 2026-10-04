@@ -19,15 +19,16 @@ public sealed class RollupIntegrationTests : IAsyncLifetime
     private IDocumentStore _store = null!;
     private MartenEventSink _sink = null!;
     private MartenObservabilityStore _reads = null!;
+    private string _conn = null!;
 
     public async Task InitializeAsync()
     {
         await _postgres.StartAsync();
-        var conn = _postgres.GetConnectionString();
-        await RollupSchema.EnsureAsync(conn);
-        _store = ObserverStore.For(conn);
+        _conn = _postgres.GetConnectionString();
+        await RollupSchema.EnsureAsync(_conn);
+        _store = ObserverStore.For(_conn);
         _sink = new MartenEventSink(_store);
-        _reads = new MartenObservabilityStore(_store, conn);
+        _reads = new MartenObservabilityStore(_store, _conn);
     }
 
     public async Task DisposeAsync()
@@ -120,6 +121,24 @@ public sealed class RollupIntegrationTests : IAsyncLifetime
         var fp1 = issues.Single(i => i.Fingerprint == "fp1");
         Assert.Equal(4, fp1.Buckets[0]);  // 3 + 1 occurrences
         Assert.Equal(2, fp1.Sessions);    // sess-1 (deduped) + sess-2
+    }
+
+    [Fact]
+    public async Task Prune_removes_rows_before_cutoff()
+    {
+        var project = Guid.NewGuid();
+        var service = Guid.NewGuid();
+        var oldBucket = Bucket * 10;
+        var newBucket = Bucket * 1000;
+        await WriteSignal(project, service, oldBucket, events: 3, errors: 0, bytes: 0, durationNano: 1_000_000);
+        await WriteSignal(project, service, newBucket, events: 4, errors: 0, bytes: 0, durationNano: 1_000_000);
+
+        await RollupSchema.PruneAsync(_conn, cutoffNano: Bucket * 500);
+
+        var oldWindow = await _reads.GetSpanSeriesAsync(new SpanQuery(project, new TimeWindow(oldBucket, oldBucket + Bucket)), 1);
+        var newWindow = await _reads.GetSpanSeriesAsync(new SpanQuery(project, new TimeWindow(newBucket, newBucket + Bucket)), 1);
+        Assert.Equal(0, oldWindow[0].Count); // pruned
+        Assert.Equal(4, newWindow[0].Count); // retained
     }
 
     [Fact]

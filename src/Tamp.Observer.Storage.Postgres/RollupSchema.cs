@@ -107,6 +107,31 @@ VALUES (?, ?, ?, ?, ?)
 ON CONFLICT (project_id, service_id, fingerprint, session_id) DO UPDATE SET
     last_seen_nano = GREATEST(observer_rollup_issue_session.last_seen_nano, excluded.last_seen_nano);";
 
+    /// <summary>Delete rollup rows older than @cutoff (bucket_start, or last_seen_nano for the session set).
+    /// TOBS-25 retention: the rollup is bounded even though raw span/log retention (TOBS-24) is not built yet.</summary>
+    public static readonly string[] PruneSql =
+    [
+        "DELETE FROM observer.observer_rollup_signal WHERE bucket_start < @cutoff",
+        "DELETE FROM observer.observer_rollup_operation WHERE bucket_start < @cutoff",
+        "DELETE FROM observer.observer_rollup_issue WHERE bucket_start < @cutoff",
+        "DELETE FROM observer.observer_rollup_issue_session WHERE last_seen_nano < @cutoff",
+    ];
+
+    /// <summary>Delete rollup rows older than the cutoff (Unix nanos). Returns total rows removed.</summary>
+    public static async Task<int> PruneAsync(string connectionString, long cutoffNano, CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(connectionString);
+        await conn.OpenAsync(ct);
+        var removed = 0;
+        foreach (var sql in PruneSql)
+        {
+            await using var cmd = new NpgsqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("cutoff", cutoffNano);
+            removed += await cmd.ExecuteNonQueryAsync(ct);
+        }
+        return removed;
+    }
+
     /// <summary>Create the rollup schema objects if they do not exist (idempotent).</summary>
     public static async Task EnsureAsync(string connectionString, CancellationToken ct = default)
     {

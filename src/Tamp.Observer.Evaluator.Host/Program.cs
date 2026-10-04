@@ -48,6 +48,37 @@ if (args.Length >= 2 && args[0] == "allow-user")
     return;
 }
 
+// Admin one-shot: backfill the TOBS-25 rollup from existing spans/logs so historical windows are not blank
+// before the rollup started being maintained on admit. Idempotency note: this increments the rollup, so run it
+// once against a fresh rollup. Usage: rollup-backfill
+if (args.Length >= 1 && args[0] == "rollup-backfill")
+{
+    using var store = ObserverStore.For(connectionString);
+    await RollupSchema.EnsureAsync(connectionString);
+    var accum = new RollupAccumulator();
+    long spanCount = 0, logCount = 0;
+    await using (var q = store.QuerySession())
+    {
+        await foreach (var s in q.Query<IngestedSpan>().ToAsyncEnumerable())
+        {
+            accum.AddSpan(s.ProjectId, s.ServiceId, s.Name, s.StartUnixNano, s.DurationNano, s.StatusCode == 2,
+                s.Fingerprint, s.Attributes.GetValueOrDefault(ResourceKeys.SessionId),
+                s.ReceivedAt.ToUnixTimeMilliseconds() * 1_000_000L);
+            spanCount++;
+        }
+        await foreach (var l in q.Query<IngestedLog>().ToAsyncEnumerable())
+        {
+            accum.AddLog(l.ProjectId, l.ServiceId, l.TimeUnixNano, l.SeverityNumber >= 17,
+                l.Fingerprint, l.Attributes.GetValueOrDefault(ResourceKeys.SessionId),
+                l.ReceivedAt.ToUnixTimeMilliseconds() * 1_000_000L);
+            logCount++;
+        }
+    }
+    await new MartenEventSink(store).WriteAsync(new AdmittedBatch([], [], [], [], [], [], accum.Build()));
+    Console.WriteLine($"rollup-backfill: folded {spanCount} spans + {logCount} logs into the rollup");
+    return;
+}
+
 var builder = Host.CreateApplicationBuilder(args);
 
 builder.Services.AddTampObserverStore(connectionString);
@@ -105,7 +136,32 @@ builder.Services.AddSingleton<IAlertDispatcher>(sp =>
 builder.Services.AddSingleton<IngestEvaluator>();
 builder.Services.AddHostedService<SpoolIngestWorker>();
 
+// Rollup retention (TOBS-25): bound the rollup even though raw-telemetry retention (TOBS-24) is not built.
+// Default 30 days, pruned hourly; configurable via OBSERVER_ROLLUP_RETENTION_DAYS.
+var rollupRetentionDays = int.TryParse(Environment.GetEnvironmentVariable("OBSERVER_ROLLUP_RETENTION_DAYS"), out var rd) && rd > 0 ? rd : 30;
+builder.Services.AddHostedService(_ => new RollupRetentionService(connectionString, TimeSpan.FromDays(rollupRetentionDays), TimeSpan.FromHours(1)));
+
 await builder.Build().RunAsync();
+
+/// <summary>Prunes rollup rows older than the retention window on a fixed interval (TOBS-25). Best-effort: a
+/// failed prune is swallowed and retried next tick, so it never takes the evaluator down.</summary>
+sealed class RollupRetentionService(string connectionString, TimeSpan retention, TimeSpan interval) : BackgroundService
+{
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            try
+            {
+                var cutoff = (DateTimeOffset.UtcNow - retention).ToUnixTimeMilliseconds() * 1_000_000L;
+                await RollupSchema.PruneAsync(connectionString, cutoff, stoppingToken);
+            }
+            catch { /* best-effort; retry next interval */ }
+            try { await Task.Delay(interval, stoppingToken); }
+            catch (OperationCanceledException) { break; }
+        }
+    }
+}
 
 /// <summary>Live-config alert dispatcher (ADR 0016, TOBS-29): on each dispatch it reads the persisted
 /// <see cref="ChannelSettings"/> and builds the enabled channels and routing matrix from it, so admin edits in the
