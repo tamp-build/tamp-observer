@@ -17,6 +17,15 @@ export function hasToken(): boolean {
   return bearerToken !== null;
 }
 
+// Invoked when the API answers 401 (an expired or missing bearer). The app registers a handler that bounces the
+// user to the IdP rather than leaving a silently broken view (TOBS-40). Kept as a callback so this module does
+// not import the auth/session layer (which imports this client).
+let onUnauthorized: (() => void) | null = null;
+
+export function setUnauthorizedHandler(fn: (() => void) | null): void {
+  onUnauthorized = fn;
+}
+
 const authMiddleware: Middleware = {
   onRequest({ request }) {
     if (bearerToken) {
@@ -28,6 +37,14 @@ const authMiddleware: Middleware = {
       request.headers.set("X-Tamp-Session-Id", sid);
     }
     return request;
+  },
+  onResponse({ response }) {
+    // A 401 means the bearer is gone or expired; hand off to the registered re-auth handler. 403 is distinct
+    // (authenticated but not admitted) and is handled by the session store, not here.
+    if (response.status === 401) {
+      onUnauthorized?.();
+    }
+    return response;
   },
 };
 

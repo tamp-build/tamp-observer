@@ -57,24 +57,51 @@ function mgr(): UserManager {
 }
 
 /// Resolve the current user: completes the redirect if returning from the IdP (code in the URL), otherwise
-/// returns any stored session. Cleans the auth params from the URL after a successful callback.
+/// returns any stored session. Cleans the auth params from the URL after a successful callback. A stored but
+/// expired session resolves to null so the caller treats it as signed-out and bounces to the IdP (TOBS-40):
+/// we do not use refresh tokens (no offline_access scope), so a dead token cannot be renewed in place.
 export async function resolveUser(): Promise<User | null> {
   const params = new URLSearchParams(window.location.search);
   if (params.has("code") && params.has("state")) {
     try {
       const user = await mgr().signinRedirectCallback();
       window.history.replaceState({}, document.title, window.location.pathname);
-      return user;
+      return user && !user.expired ? user : null;
     } catch {
       window.history.replaceState({}, document.title, window.location.pathname);
       return null;
     }
   }
-  return mgr().getUser();
+  const user = await mgr().getUser();
+  return user && !user.expired ? user : null;
 }
 
-export function login(): Promise<void> {
+// Where to send the user after a successful login. Survives the IdP round-trip in sessionStorage (same tab),
+// since our redirect_uri is always the origin root and so cannot itself carry the intended route.
+const RETURN_KEY = "tobs_return_to";
+
+/// Begin the IdP redirect. Stashes where to come back to (the current route by default) so re-auth lands the
+/// user where they were, not on the home page (TOBS-40).
+export function login(returnTo?: string): Promise<void> {
+  try {
+    const target = returnTo ?? window.location.pathname + window.location.search + window.location.hash;
+    // Never stash a callback URL (code/state) as the return target.
+    if (!target.includes("code=")) sessionStorage.setItem(RETURN_KEY, target);
+  } catch {
+    // sessionStorage can throw in locked-down contexts; losing the return target is non-fatal.
+  }
   return mgr().signinRedirect();
+}
+
+/// Read and clear the stashed post-login return route, if any.
+export function takeReturnTo(): string | null {
+  try {
+    const v = sessionStorage.getItem(RETURN_KEY);
+    if (v) sessionStorage.removeItem(RETURN_KEY);
+    return v;
+  } catch {
+    return null;
+  }
 }
 
 /// Local logout: clear the stored session (Dex has no RP-initiated logout). Next login re-prompts.

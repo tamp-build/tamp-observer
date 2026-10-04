@@ -3,8 +3,8 @@
   import "./lib/styles/app.css";
 
   import { onMount } from "svelte";
-  import { setToken } from "./lib/api/client";
-  import { initAuth, resolveUser, login, logout, isBundledDevAuth } from "./lib/auth";
+  import { setToken, setUnauthorizedHandler } from "./lib/api/client";
+  import { initAuth, resolveUser, login, logout, isBundledDevAuth, takeReturnTo } from "./lib/auth";
   import { startRecording, type Recording } from "./lib/replay/recorder";
   import { session } from "./lib/stores/session.svelte";
   import { instance } from "./lib/stores/instance.svelte";
@@ -31,12 +31,28 @@
 
   let booting = $state(true);
   let recording: Recording | null = null;
+  // Guards against redirecting to the IdP more than once if 401s arrive in a burst (TOBS-40).
+  let reauthing = false;
 
   const route = $derived(router.route);
   const projectId = $derived(route.params.projectId ?? instance.projects[0]?.id);
 
+  // Mid-session the bearer can expire; the API then 401s. Bounce the user back through the IdP (preserving the
+  // current route) instead of leaving a silently broken page. A 401 while we still hold a non-expired token is a
+  // server/config problem, not an expiry, so we do not loop the user through login for it.
+  async function reauth(): Promise<void> {
+    if (reauthing) return;
+    const u = session.user;
+    if (u && u.expired === false) return;
+    reauthing = true;
+    setToken(null);
+    session.reset();
+    await login();
+  }
+
   onMount(async () => {
     await initAuth();
+    setUnauthorizedHandler(() => void reauth());
     session.devAuth = isBundledDevAuth();
     const user = await resolveUser();
 
@@ -60,6 +76,11 @@
       await instance.load();
       const cfg = await loadConfig();
       recording = startRecording(cfg.clientProjectKey || "spa");
+      // Land the user back where they were before the IdP round-trip, if anywhere (TOBS-40).
+      const returnTo = takeReturnTo();
+      if (returnTo && returnTo !== "/" && returnTo !== route.path) {
+        router.navigate(returnTo, { replace: true });
+      }
     }
     booting = false;
   });
