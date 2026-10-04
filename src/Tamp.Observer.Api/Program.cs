@@ -858,6 +858,29 @@ api.MapGet("/projects/{projectId:guid}/logs", async (
     .Produces<IReadOnlyList<IngestedLog>>()
     .Produces(StatusCodes.Status403Forbidden);
 
+// Live tail (TOBS-38). ViewLogs. Pull-based: the client polls with `after` = the newest TimeUnixNano it has
+// seen and gets records strictly newer than it, oldest-first, so it appends and advances the cursor. No
+// persistent connection (SSE/WebSocket) -- a plain polled GET survives the air-gap / CF-Access front door and
+// reconnects for free. The same narrowing filters as /logs apply so a tail can follow one service/category/search.
+api.MapGet("/projects/{projectId:guid}/logs/tail", async (
+        Guid projectId, long after, Guid? service, int? minSeverity, int? limit,
+        string? category, string? q,
+        HttpContext http, IAllowedIdentityStore allow, IObservabilityStore store, CancellationToken ct) =>
+    {
+        var denied = await HttpAuthorization.RequireAsync(http, allow, Capability.ViewLogs, ct);
+        if (denied is not null)
+            return denied;
+        // Window lower bound = cursor, upper bound open; AfterUnixNano makes the bound strict so the cursor row
+        // is never re-sent. Ascending so the client can append in order.
+        var logs = await store.GetLogsAsync(
+            new LogQuery(projectId, new TimeWindow(after, long.MaxValue), service, minSeverity, limit ?? 200,
+                Category: category, Search: q, AfterUnixNano: after, Ascending: true), ct);
+        return Results.Ok(logs);
+    })
+    .WithName("ProjectLogsTail")
+    .Produces<IReadOnlyList<IngestedLog>>()
+    .Produces(StatusCodes.Status403Forbidden);
+
 // Alerts (ADR 0016). ViewErrors. Built-in rules fire on new/regressed issues today; spike/threshold/heartbeat
 // rules and persisted history are future work, so history is empty for now.
 api.MapGet("/projects/{projectId:guid}/alerts", async (

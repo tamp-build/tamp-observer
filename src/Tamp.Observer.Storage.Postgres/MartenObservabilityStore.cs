@@ -157,7 +157,10 @@ public sealed class MartenObservabilityStore(IDocumentStore store, string connec
         }
         if (query.BeforeUnixNano is long before)
             q = q.Where(l => l.TimeUnixNano < before);
-        return await q.OrderByDescending(l => l.TimeUnixNano).Take(query.Limit <= 0 ? 200 : query.Limit).ToListAsync(ct);
+        if (query.AfterUnixNano is long after)
+            q = q.Where(l => l.TimeUnixNano > after);
+        var ordered = query.Ascending ? q.OrderBy(l => l.TimeUnixNano) : q.OrderByDescending(l => l.TimeUnixNano);
+        return await ordered.Take(query.Limit <= 0 ? 200 : query.Limit).ToListAsync(ct);
     }
 
     public async Task<IssueOccurrence?> GetLatestOccurrenceAsync(Guid projectId, string fingerprint, CancellationToken ct = default)

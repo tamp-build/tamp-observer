@@ -122,14 +122,17 @@ FROM {ClickHouseSchema.LogsTable} WHERE project_id = {{projectId:UUID}} AND trac
             where += " AND positionCaseInsensitiveUTF8(body, {search:String}) > 0";
         if (query.BeforeUnixNano is not null)
             where += " AND time_unix_nano < {before:Int64}";
+        if (query.AfterUnixNano is not null)
+            where += " AND time_unix_nano > {after:Int64}";
 
         var logs = new List<IngestedLog>();
+        var order = query.Ascending ? "ASC" : "DESC";
         await using var cmd = (ClickHouseCommand)conn.CreateCommand();
         cmd.CommandText = $@"
 SELECT project_id, service_id, environment_id, version_id, time_unix_nano, severity_number, severity_text, body,
        trace_id, span_id, instance_id, attributes, receipt_id, received_at
 FROM {ClickHouseSchema.LogsTable} WHERE {where}
-ORDER BY time_unix_nano DESC LIMIT {(query.Limit <= 0 ? 200 : query.Limit)}";
+ORDER BY time_unix_nano {order} LIMIT {(query.Limit <= 0 ? 200 : query.Limit)}";
         cmd.AddParameter("projectId", "UUID", query.ProjectId);
         cmd.AddParameter("start", "Int64", query.Window.StartUnixNano);
         cmd.AddParameter("end", "Int64", query.Window.EndUnixNano);
@@ -151,6 +154,8 @@ ORDER BY time_unix_nano DESC LIMIT {(query.Limit <= 0 ? 200 : query.Limit)}";
             cmd.AddParameter("search", "String", query.Search);
         if (query.BeforeUnixNano is not null)
             cmd.AddParameter("before", "Int64", query.BeforeUnixNano.Value);
+        if (query.AfterUnixNano is not null)
+            cmd.AddParameter("after", "Int64", query.AfterUnixNano.Value);
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
         {

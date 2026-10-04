@@ -228,6 +228,12 @@ WHERE json_extract_string(data,'$.ProjectId') = $projectId AND json_extract_stri
             where += " AND CAST(json_extract_string(data,'$.TimeUnixNano') AS BIGINT) < $before";
             bind.Add(("before", before));
         }
+        if (query.AfterUnixNano is long after)
+        {
+            where += " AND CAST(json_extract_string(data,'$.TimeUnixNano') AS BIGINT) > $after";
+            bind.Add(("after", after));
+        }
+        var order = query.Ascending ? "ASC" : "DESC";
         var sql = $@"
 SELECT json_extract_string(data,'$.ProjectId') AS project_id,
        json_extract_string(data,'$.ServiceId') AS service_id,
@@ -244,7 +250,7 @@ SELECT json_extract_string(data,'$.ProjectId') AS project_id,
        json_extract_string(data,'$.InstanceId') AS instance_id,
        json_extract_string(data,'$.ReceiptId') AS receipt_id
 FROM {_logs} WHERE {where}
-ORDER BY time_nano DESC LIMIT {(query.Limit <= 0 ? 200 : query.Limit)}";
+ORDER BY time_nano {order} LIMIT {(query.Limit <= 0 ? 200 : query.Limit)}";
         var logs = new List<IngestedLog>();
         await using var cmd = Command(conn, sql, bind.ToArray());
         await using var reader = await cmd.ExecuteReaderAsync(ct);

@@ -46,6 +46,9 @@ public sealed record TraceView(IReadOnlyList<IngestedSpan> Spans, IReadOnlyList<
 /// (<c>attributes["log.category"]</c>), case-insensitive free-text <see cref="Search"/> over the body, and the
 /// correlation keys TraceId / SessionId. <see cref="BeforeUnixNano"/> pages OLDER records (keyset pagination:
 /// return rows strictly before this time, newest first) so the explorer can "load older" without OFFSET scans.
+/// <see cref="AfterUnixNano"/> + <see cref="Ascending"/> drive live tail: return rows strictly NEWER than the
+/// cursor, oldest-first, so the client appends and advances the cursor each poll (pull-based tail, no persistent
+/// connection -- consistent with the air-gap posture).
 /// All filters are optional; the baseline query (project + window, newest-first, bounded by Limit) is unchanged.
 /// </summary>
 public sealed record LogQuery(
@@ -60,7 +63,9 @@ public sealed record LogQuery(
     Guid? VersionId = null,
     string? TraceId = null,
     string? SessionId = null,
-    long? BeforeUnixNano = null);
+    long? BeforeUnixNano = null,
+    long? AfterUnixNano = null,
+    bool Ascending = false);
 
 /// <summary>The latest occurrence of an Issue: the span or log that most recently matched it, with the
 /// correlation keys needed for the walk (ADR 0014). Fingerprint links it back to its Issue (needed when the

@@ -146,6 +146,29 @@ public sealed class ReadInterfaceTests : IAsyncLifetime
         Assert.Equal(3000, older[0].TimeUnixNano); // newest-first among those older than 4000
     }
 
+    [Fact]
+    public async Task Log_tail_returns_strictly_newer_rows_oldest_first()
+    {
+        var project = Guid.NewGuid();
+        var service = Guid.NewGuid();
+        await StoreRichLog(project, service, 1000, 17, "db.query", "first", "s");
+        await StoreRichLog(project, service, 2000, 17, "db.query", "second", "s");
+        await StoreRichLog(project, service, 3000, 17, "db.query", "third", "s");
+
+        // Tail from a cursor at 1000: only strictly-newer rows, oldest-first for appending.
+        var tail = await _reads.GetLogsAsync(new LogQuery(
+            project, new TimeWindow(1000, long.MaxValue), AfterUnixNano: 1000, Ascending: true));
+
+        Assert.Equal(2, tail.Count);
+        Assert.Equal(2000, tail[0].TimeUnixNano); // oldest-first
+        Assert.Equal(3000, tail[1].TimeUnixNano);
+
+        // Advancing the cursor to the newest seen returns nothing until more arrives.
+        var caughtUp = await _reads.GetLogsAsync(new LogQuery(
+            project, new TimeWindow(3000, long.MaxValue), AfterUnixNano: 3000, Ascending: true));
+        Assert.Empty(caughtUp);
+    }
+
     private async Task StoreRichLog(
         Guid project, Guid service, long time, int severity, string category, string body, string session)
     {
