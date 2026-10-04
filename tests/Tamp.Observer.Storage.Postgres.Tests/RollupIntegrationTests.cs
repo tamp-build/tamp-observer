@@ -151,6 +151,28 @@ public sealed class RollupIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Telemetry_prune_removes_old_spans_logs_metrics_keeps_new()
+    {
+        var project = Guid.NewGuid();
+        var service = Guid.NewGuid();
+        var oldT = Bucket * 10;
+        var newT = Bucket * 1000;
+        IngestedSpan Span(long start) => new() { ProjectId = project, ServiceId = service, TraceId = "t", SpanId = Guid.NewGuid().ToString(), Name = "op", StartUnixNano = start, EndUnixNano = start + 1, DurationNano = 1, ReceiptId = "r", ReceivedAt = DateTimeOffset.UtcNow };
+        IngestedLog Log(long time) => new() { ProjectId = project, ServiceId = service, TimeUnixNano = time, Body = "b", ReceiptId = "r", ReceivedAt = DateTimeOffset.UtcNow };
+
+        await _sink.WriteAsync(new AdmittedBatch([], [], [], [Span(oldT), Span(newT)], [Log(oldT), Log(newT)], [], null,
+            [Metric(project, service, "m", 1, oldT), Metric(project, service, "m", 2, newT)]));
+
+        var removed = await TelemetryRetention.PruneAsync(_conn, cutoffNano: Bucket * 500);
+        Assert.Equal(3, removed); // 1 span + 1 log + 1 metric older than the cutoff
+
+        await using var q = _store.QuerySession();
+        Assert.Equal(1, await q.Query<IngestedSpan>().Where(s => s.ProjectId == project).CountAsync());
+        Assert.Equal(1, await q.Query<IngestedLog>().Where(l => l.ProjectId == project).CountAsync());
+        Assert.Equal(1, await q.Query<IngestedMetric>().Where(m => m.ProjectId == project).CountAsync());
+    }
+
+    [Fact]
     public async Task Prune_removes_rows_before_cutoff()
     {
         var project = Guid.NewGuid();
