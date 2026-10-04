@@ -1,4 +1,5 @@
 using Marten;
+using Npgsql;
 using Tamp.Observer.Domain;
 using Tamp.Observer.Storage.Abstractions;
 
@@ -11,9 +12,10 @@ namespace Tamp.Observer.Storage.Postgres;
 /// (DuckDB/ClickHouse) would instead push these down as native <c>percentile_cont</c> / <c>quantile</c>
 /// and <c>GROUP BY</c>, which is exactly why the interface is capability-based intent, not shared SQL.
 /// </summary>
-public sealed class MartenObservabilityStore(IDocumentStore store) : IObservabilityStore
+public sealed class MartenObservabilityStore(IDocumentStore store, string connectionString) : IObservabilityStore
 {
     private readonly IDocumentStore _store = store;
+    private readonly string _connectionString = connectionString;
 
     public async Task<LatencyPercentiles> GetLatencyPercentilesAsync(SpanQuery query, CancellationToken ct = default)
     {
@@ -35,15 +37,82 @@ public sealed class MartenObservabilityStore(IDocumentStore store) : IObservabil
 
     public async Task<IReadOnlyList<OperationStat>> GetTopOperationsAsync(SpanQuery query, int limit = 10, CancellationToken ct = default)
     {
-        await using var session = _store.QuerySession();
-        var spans = await WindowedSpans(session, query).ToListAsync(ct);
+        // Served from the operation rollup (TOBS-25): sum calls/errors per operation over the window.
+        var sql = "SELECT operation, SUM(count), SUM(error_count) FROM observer.observer_rollup_operation "
+            + "WHERE project_id = @p AND bucket_start >= @s AND bucket_start < @e"
+            + (query.ServiceId is not null ? " AND service_id = @svc" : "")
+            + " GROUP BY operation ORDER BY SUM(count) DESC, operation LIMIT @lim";
+        var result = new List<OperationStat>();
+        try
+        {
+            await using var conn = await OpenAsync(ct);
+            await using var cmd = new NpgsqlCommand(sql, conn);
+            AddScope(cmd, query);
+            cmd.Parameters.AddWithValue("lim", limit <= 0 ? 10 : limit);
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+            while (await reader.ReadAsync(ct))
+                result.Add(new OperationStat(reader.GetString(0), reader.GetInt64(1), reader.GetInt64(2)));
+        }
+        catch (PostgresException ex) when (ex.SqlState == "42P01") { }
+        return result;
+    }
 
-        return spans
-            .GroupBy(s => s.Name)
-            .Select(g => new OperationStat(g.Key, g.LongCount(), g.LongCount(s => s.StatusCode == 2)))
-            .OrderByDescending(o => o.Count)
-            .ThenBy(o => o.Operation, StringComparer.Ordinal)
+    public async Task<IReadOnlyList<OperationSeries>> GetOperationSeriesAsync(SpanQuery query, int buckets, int limit = 10, CancellationToken ct = default)
+    {
+        buckets = Math.Clamp(buckets, 1, 500);
+        var width = BucketWidth(query.Window, buckets);
+        limit = limit <= 0 ? 10 : limit;
+
+        // Per (operation, rollup bucket) rows, folded into the requested output buckets; top operations by total calls.
+        var sql = "SELECT operation, bucket_start, count, error_count, lat_hist FROM observer.observer_rollup_operation "
+            + "WHERE project_id = @p AND bucket_start >= @s AND bucket_start < @e"
+            + (query.ServiceId is not null ? " AND service_id = @svc" : "");
+        var byOp = new Dictionary<string, (long[] Counts, long[] Errors, long[][] Lat, long Total)>(StringComparer.Ordinal);
+        try
+        {
+            await using var conn = await OpenAsync(ct);
+            await using var cmd = new NpgsqlCommand(sql, conn);
+            AddScope(cmd, query);
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+            while (await reader.ReadAsync(ct))
+            {
+                var op = reader.GetString(0);
+                var b = BucketIndex(reader.GetInt64(1), query.Window.StartUnixNano, width, buckets);
+                var count = reader.GetInt64(2);
+                if (!byOp.TryGetValue(op, out var agg))
+                {
+                    agg = (new long[buckets], new long[buckets], new long[buckets][], 0);
+                    for (var i = 0; i < buckets; i++) agg.Lat[i] = LatencyHistogram.Empty();
+                    byOp[op] = agg;
+                }
+                agg.Counts[b] += count;
+                agg.Errors[b] += reader.GetInt64(3);
+                LatencyHistogram.AddInto(agg.Lat[b], reader.GetFieldValue<long[]>(4));
+                byOp[op] = agg with { Total = agg.Total + count };
+            }
+        }
+        catch (PostgresException ex) when (ex.SqlState == "42P01") { }
+
+        return byOp
+            .OrderByDescending(kv => kv.Value.Total)
+            .ThenBy(kv => kv.Key, StringComparer.Ordinal)
             .Take(limit)
+            .Select(kv =>
+            {
+                var all = LatencyHistogram.Empty();
+                var series = new List<SeriesBucket>(buckets);
+                long total = 0, errs = 0;
+                for (var i = 0; i < buckets; i++)
+                {
+                    LatencyHistogram.AddInto(all, kv.Value.Lat[i]);
+                    total += kv.Value.Counts[i];
+                    errs += kv.Value.Errors[i];
+                    series.Add(new SeriesBucket(
+                        query.Window.StartUnixNano + (long)i * width, kv.Value.Counts[i], kv.Value.Errors[i],
+                        (long)LatencyHistogram.Percentile(kv.Value.Lat[i], 0.95)));
+                }
+                return new OperationSeries(kv.Key, total, errs, (long)LatencyHistogram.Percentile(all, 0.95), series);
+            })
             .ToList();
     }
 
@@ -115,47 +184,92 @@ public sealed class MartenObservabilityStore(IDocumentStore store) : IObservabil
     public async Task<IReadOnlyList<SeriesBucket>> GetSpanSeriesAsync(SpanQuery query, int buckets, CancellationToken ct = default)
     {
         buckets = Math.Clamp(buckets, 1, 500);
-        await using var session = _store.QuerySession();
-        var spans = await WindowedSpans(session, query).ToListAsync(ct);
         var width = BucketWidth(query.Window, buckets);
         var counts = new long[buckets];
         var errors = new long[buckets];
-        foreach (var s in spans)
+        var bytes = new long[buckets];
+        var lat = new long[buckets][];
+        for (var i = 0; i < buckets; i++) lat[i] = LatencyHistogram.Empty();
+
+        // Served from the materialized rollup (TOBS-25): fold the dense 60s rollup buckets into the requested
+        // output buckets and derive p95 per output bucket from the summed latency histogram.
+        var sql = "SELECT bucket_start, event_count, error_count, bytes, lat_hist FROM observer.observer_rollup_signal "
+            + "WHERE project_id = @p AND signal = 'span' AND bucket_start >= @s AND bucket_start < @e"
+            + (query.ServiceId is not null ? " AND service_id = @svc" : "");
+        try
         {
-            var b = BucketIndex(s.StartUnixNano, query.Window.StartUnixNano, width, buckets);
-            counts[b]++;
-            if (s.StatusCode == 2) errors[b]++;
+            await using var conn = new NpgsqlConnection(_connectionString);
+            await conn.OpenAsync(ct);
+            await using var cmd = new NpgsqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("p", query.ProjectId);
+            cmd.Parameters.AddWithValue("s", query.Window.StartUnixNano);
+            cmd.Parameters.AddWithValue("e", query.Window.EndUnixNano);
+            if (query.ServiceId is Guid svc) cmd.Parameters.AddWithValue("svc", svc);
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+            while (await reader.ReadAsync(ct))
+            {
+                var bucketStart = reader.GetInt64(0);
+                var b = BucketIndex(bucketStart, query.Window.StartUnixNano, width, buckets);
+                counts[b] += reader.GetInt64(1);
+                errors[b] += reader.GetInt64(2);
+                bytes[b] += reader.GetInt64(3);
+                LatencyHistogram.AddInto(lat[b], reader.GetFieldValue<long[]>(4));
+            }
         }
-        return BuildSeries(query.Window.StartUnixNano, width, counts, errors);
+        catch (PostgresException ex) when (ex.SqlState == "42P01")
+        {
+            // Rollup table not created yet (fresh install before the evaluator's first run): empty series.
+        }
+
+        var list = new List<SeriesBucket>(buckets);
+        for (var i = 0; i < buckets; i++)
+            list.Add(new SeriesBucket(
+                query.Window.StartUnixNano + (long)i * width, counts[i], errors[i],
+                (long)LatencyHistogram.Percentile(lat[i], 0.95), bytes[i]));
+        return list;
     }
 
     public async Task<IReadOnlyList<IssueSeries>> GetIssueSeriesAsync(Guid projectId, TimeWindow window, int buckets, CancellationToken ct = default)
     {
         buckets = Math.Clamp(buckets, 1, 500);
-        await using var session = _store.QuerySession();
-        var spans = await session.Query<IngestedSpan>()
-            .Where(s => s.ProjectId == projectId && s.Fingerprint != null
-                && s.StartUnixNano >= window.StartUnixNano && s.StartUnixNano < window.EndUnixNano)
-            .ToListAsync(ct);
-        var logs = await session.Query<IngestedLog>()
-            .Where(l => l.ProjectId == projectId && l.Fingerprint != null
-                && l.TimeUnixNano >= window.StartUnixNano && l.TimeUnixNano < window.EndUnixNano)
-            .ToListAsync(ct);
-
         var width = BucketWidth(window, buckets);
-        var byFp = new Dictionary<string, (long[] Counts, HashSet<string> Sessions)>();
-        void Add(string? fp, long t, IReadOnlyDictionary<string, string> attrs)
+        var byFp = new Dictionary<string, long[]>(StringComparer.Ordinal);
+        var sessions = new Dictionary<string, int>(StringComparer.Ordinal);
+        try
         {
-            if (fp is null) return;
-            if (!byFp.TryGetValue(fp, out var agg))
-                byFp[fp] = agg = (new long[buckets], new HashSet<string>(StringComparer.Ordinal));
-            agg.Counts[BucketIndex(t, window.StartUnixNano, width, buckets)]++;
-            if (attrs.TryGetValue("tamp.session.id", out var sid) && !string.IsNullOrEmpty(sid)) agg.Sessions.Add(sid);
+            await using var conn = await OpenAsync(ct);
+            // Per-fingerprint occurrence buckets from the issue rollup.
+            await using (var cmd = new NpgsqlCommand(
+                "SELECT fingerprint, bucket_start, count FROM observer.observer_rollup_issue "
+                + "WHERE project_id = @p AND bucket_start >= @s AND bucket_start < @e", conn))
+            {
+                cmd.Parameters.AddWithValue("p", projectId);
+                cmd.Parameters.AddWithValue("s", window.StartUnixNano);
+                cmd.Parameters.AddWithValue("e", window.EndUnixNano);
+                await using var reader = await cmd.ExecuteReaderAsync(ct);
+                while (await reader.ReadAsync(ct))
+                {
+                    var fp = reader.GetString(0);
+                    if (!byFp.TryGetValue(fp, out var arr)) byFp[fp] = arr = new long[buckets];
+                    arr[BucketIndex(reader.GetInt64(1), window.StartUnixNano, width, buckets)] += reader.GetInt64(2);
+                }
+            }
+            // Distinct sessions per fingerprint from the session dedup set (by last-seen in the window).
+            await using (var cmd = new NpgsqlCommand(
+                "SELECT fingerprint, COUNT(DISTINCT session_id) FROM observer.observer_rollup_issue_session "
+                + "WHERE project_id = @p AND last_seen_nano >= @s AND last_seen_nano < @e GROUP BY fingerprint", conn))
+            {
+                cmd.Parameters.AddWithValue("p", projectId);
+                cmd.Parameters.AddWithValue("s", window.StartUnixNano);
+                cmd.Parameters.AddWithValue("e", window.EndUnixNano);
+                await using var reader = await cmd.ExecuteReaderAsync(ct);
+                while (await reader.ReadAsync(ct))
+                    sessions[reader.GetString(0)] = (int)reader.GetInt64(1);
+            }
         }
-        foreach (var s in spans) Add(s.Fingerprint, s.StartUnixNano, s.Attributes);
-        foreach (var l in logs) Add(l.Fingerprint, l.TimeUnixNano, l.Attributes);
+        catch (PostgresException ex) when (ex.SqlState == "42P01") { }
 
-        return byFp.Select(kv => new IssueSeries(kv.Key, kv.Value.Counts, kv.Value.Sessions.Count)).ToList();
+        return byFp.Select(kv => new IssueSeries(kv.Key, kv.Value, sessions.GetValueOrDefault(kv.Key))).ToList();
     }
 
     public async Task<ExceptionDetail?> GetLatestExceptionAsync(Guid projectId, string fingerprint, CancellationToken ct = default)
@@ -178,16 +292,25 @@ public sealed class MartenObservabilityStore(IDocumentStore store) : IObservabil
             attrs.GetValueOrDefault("exception.stacktrace"));
     }
 
+    private async Task<NpgsqlConnection> OpenAsync(CancellationToken ct)
+    {
+        var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        return conn;
+    }
+
+    // Bind the common rollup query scope: project, window, and optional service filter.
+    private static void AddScope(NpgsqlCommand cmd, SpanQuery q)
+    {
+        cmd.Parameters.AddWithValue("p", q.ProjectId);
+        cmd.Parameters.AddWithValue("s", q.Window.StartUnixNano);
+        cmd.Parameters.AddWithValue("e", q.Window.EndUnixNano);
+        if (q.ServiceId is Guid svc) cmd.Parameters.AddWithValue("svc", svc);
+    }
+
     internal static long BucketWidth(TimeWindow w, int buckets) => Math.Max(1, (w.EndUnixNano - w.StartUnixNano) / buckets);
     internal static int BucketIndex(long t, long start, long width, int buckets) =>
         (int)Math.Clamp((t - start) / width, 0, buckets - 1);
-    internal static IReadOnlyList<SeriesBucket> BuildSeries(long start, long width, long[] counts, long[] errors)
-    {
-        var list = new List<SeriesBucket>(counts.Length);
-        for (var i = 0; i < counts.Length; i++)
-            list.Add(new SeriesBucket(start + (long)i * width, counts[i], errors[i]));
-        return list;
-    }
 
     public async Task<IssueOccurrence?> GetLatestOccurrenceByTraceAsync(Guid projectId, string traceId, CancellationToken ct = default)
     {

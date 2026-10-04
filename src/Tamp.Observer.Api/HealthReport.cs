@@ -7,9 +7,10 @@ namespace Tamp.Observer.Api;
 
 // The Storage & health aggregation (ADR 0014, README 7.8): gathers live stats from the real pipeline components
 // the API can reach without extra infrastructure. Postgres (pg_stat_*) and Valkey (INFO + stream introspection)
-// are gathered live; the quarantine count is real from Marten. Time-series (throughput, freshness, lag history),
+// are gathered live; the quarantine count is real from Marten. Ingest rate and freshness p95 come from the
+// materialized rollup (TOBS-25). The remaining time-series (throughput-by-signal history, raw:replay lag history),
 // per-pod CPU/memory/restarts, retention schedule and the health-event log need sources we do not collect yet
-// (a metrics store, the k8s metrics API, a retention scheduler, an events log) and come back null/empty, which
+// (history arrays on the health endpoint, the k8s metrics API, an events log) and come back null/empty, which
 // the page renders as honest "not collected yet" rather than fabricated numbers.
 
 public sealed record HealthView(
@@ -57,8 +58,12 @@ public static class HealthReport
         var dominant = valkey?.Streams.OrderByDescending(s => s.Pending).FirstOrDefault();
         var lagging = valkey?.LaggingCount ?? 0;
 
+        // Ingest rate + freshness p95 come from the materialized signal rollup (TOBS-25) over a recent window,
+        // replacing the former "not collected yet" placeholders. Null only if the rollup is unreachable.
+        var (ingestRate, freshnessP95Sec) = await RollupKpisAsync(pgConn, ct);
+
         var kpis = new HealthKpis(
-            IngestRatePerSec: null, FreshnessP95Sec: null,
+            IngestRatePerSec: ingestRate, FreshnessP95Sec: freshnessP95Sec,
             BufferedPending: buffered, DominantStream: dominant?.Pending > 0 ? dominant.Name : null,
             Dropped24h: 0, Rejected24h: rejected24h, DeadLetters: quarantineTotal);
 
@@ -131,6 +136,39 @@ public static class HealthReport
         { TotalMinutes: >= 1 } => $"{(int)up.TotalMinutes}m",
         _ => $"{(int)up.TotalSeconds}s",
     };
+
+    private const int RollupKpiWindowMinutes = 15;
+
+    // Ingest rate (events/sec) and freshness p95 (seconds) from the signal rollup over the last window (TOBS-25).
+    // Returns (null, null) if the rollup table is unreachable so the page still renders "not collected yet".
+    private static async Task<(double? Rate, double? FreshP95Sec)> RollupKpisAsync(string pgConn, CancellationToken ct)
+    {
+        try
+        {
+            await using var conn = new NpgsqlConnection(pgConn);
+            await conn.OpenAsync(ct);
+            var nowNano = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() * 1_000_000L;
+            var startNano = nowNano - (long)RollupKpiWindowMinutes * 60 * 1_000_000_000L;
+            long totalEvents = 0;
+            var fresh = LatencyHistogram.Empty();
+            await using var cmd = new NpgsqlCommand(
+                "SELECT event_count, fresh_hist FROM observer.observer_rollup_signal WHERE bucket_start >= @s", conn);
+            cmd.Parameters.AddWithValue("s", startNano);
+            await using var r = await cmd.ExecuteReaderAsync(ct);
+            while (await r.ReadAsync(ct))
+            {
+                totalEvents += r.GetInt64(0);
+                LatencyHistogram.AddInto(fresh, r.GetFieldValue<long[]>(1));
+            }
+            var rate = totalEvents / (RollupKpiWindowMinutes * 60.0);
+            var freshP95Sec = LatencyHistogram.Percentile(fresh, 0.95) / 1_000_000_000.0;
+            return (rate, freshP95Sec);
+        }
+        catch
+        {
+            return (null, null);
+        }
+    }
 
     private static async Task<(long Rejected24h, long Total)> QuarantineAsync(IDocumentStore docs, CancellationToken ct)
     {

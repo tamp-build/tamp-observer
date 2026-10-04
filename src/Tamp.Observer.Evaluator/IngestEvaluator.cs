@@ -125,6 +125,9 @@ public sealed partial class IngestEvaluator(
         // Resolve discovered entities and stamp the telemetry, accumulating a batch for the sink.
         var spans = new List<IngestedSpan>();
         var logs = new List<IngestedLog>();
+        // Time-bucketed rollup maintained on admit (TOBS-25): one row per (service, signal, bucket) for this event.
+        var rollup = new RollupAccumulator();
+        var receivedAtNano = item.Envelope.ReceivedAt.ToUnixTimeMilliseconds() * 1_000_000L;
 
         foreach (var (res, project, serviceName) in pending)
         {
@@ -178,6 +181,8 @@ public sealed partial class IngestEvaluator(
                     ReceiptId = item.Envelope.ReceiptId,
                     ReceivedAt = item.Envelope.ReceivedAt,
                 });
+                rollup.AddSpan(project.Id, service.Id, s.Name, s.StartUnixNano, s.EndUnixNano - s.StartUnixNano,
+                    s.StatusCode == 2, fingerprint, s.Attributes.GetValueOrDefault(ResourceKeys.SessionId), receivedAtNano);
             }
 
             foreach (var l in res.Logs)
@@ -208,6 +213,8 @@ public sealed partial class IngestEvaluator(
                     ReceiptId = item.Envelope.ReceiptId,
                     ReceivedAt = item.Envelope.ReceivedAt,
                 });
+                rollup.AddLog(project.Id, service.Id, l.TimeUnixNano, l.SeverityNumber >= 17,
+                    fingerprint, l.Attributes.GetValueOrDefault(ResourceKeys.SessionId), receivedAtNano);
             }
 
             // Project error signals into Issues (ADR 0015): ERROR-status spans and error-severity logs.
@@ -235,9 +242,10 @@ public sealed partial class IngestEvaluator(
             }
         }
 
+        rollup.AttributeBytes(item.Payload.Length);
         var batch = new AdmittedBatch(
             resolver.NewServices, resolver.NewEnvironments, resolver.NewVersions, spans, logs,
-            issueProjector.Touched.ToList());
+            issueProjector.Touched.ToList(), rollup.Build());
         await _sink.WriteAsync(batch, ct);
 
         // Fan out alerts (new / regressed Issues) after the write succeeds, off the critical path.

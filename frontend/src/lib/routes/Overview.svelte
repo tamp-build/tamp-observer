@@ -1,8 +1,8 @@
 <script lang="ts">
   // Project overview (README 7.9), matched to the design: change banner, 4 KPI tiles, needs-attention issues,
   // operations table, and a right rail (sessions + alerts). Merges the built reads (latency, operations, issues,
-  // alerts, sessions). Time-series (per-tile sparklines, the error-rate chart) and the releases rail need a
-  // metrics history / release feed we do not collect yet, so those render honest "not collected yet".
+  // alerts, sessions). Per-tile sparklines, the error-rate chart, and per-operation p95 are served from the
+  // materialized rollup (TOBS-25); the releases rail still needs a release feed we do not collect yet.
   import { api } from "../api/client";
   import type { components } from "../api/schema";
   import { router, link } from "../router.svelte";
@@ -30,6 +30,7 @@
   type Session = components["schemas"]["ReplaySessionSummary"];
   type Series = components["schemas"]["IssueSeries"];
   type Bucket = components["schemas"]["SeriesBucket"];
+  type OpSeries = components["schemas"]["OperationSeries"];
 
   let latency = $state<Latency | null>(null);
   let ops = $state<Op[]>([]);
@@ -38,6 +39,7 @@
   let alerts = $state<Alerts | null>(null);
   let sessions = $state<Session[]>([]);
   let spanSeries = $state<Bucket[]>([]);
+  let opSeries = $state<OpSeries[]>([]);
   let issueSeriesMap = $state<Record<string, Series>>({});
   let loading = $state(true);
 
@@ -48,6 +50,8 @@
   const openIssues = $derived(counts ? int64(counts.unresolved) + int64(counts.regressed) : 0);
   const reqSeries = $derived(spanSeries.map((b) => int64(b.count)));
   const rateSeries = $derived(spanSeries.map((b) => (int64(b.count) > 0 ? (int64(b.errorCount) / int64(b.count)) * 100 : 0)));
+  const p95Series = $derived(spanSeries.map((b) => int64(b.p95Nano)));
+  const opP95 = $derived(new Map(opSeries.map((o) => [o.operation, int64(o.p95Nano)])));
   const sessionsHit = $derived(Object.values(issueSeriesMap).reduce((a, s) => a + int64(s.sessions), 0));
 
   function ms(v: number | string | undefined): string {
@@ -61,7 +65,7 @@
   async function load() {
     loading = true;
     const { start, end } = filters.rangeNanos;
-    const [lat, op, iss, c, al, se, sr, isr] = await Promise.all([
+    const [lat, op, iss, c, al, se, sr, isr, opsr] = await Promise.all([
       api.GET("/api/projects/{projectId}/latency", { params: { path: { projectId }, query: { start, end } } }),
       api.GET("/api/projects/{projectId}/operations", { params: { path: { projectId }, query: { start, end, limit: 10 } } }),
       api.GET("/api/projects/{projectId}/issues", { params: { path: { projectId }, query: { limit: 5 } } }),
@@ -70,6 +74,7 @@
       api.GET("/api/projects/{projectId}/sessions", { params: { path: { projectId } } }),
       api.GET("/api/projects/{projectId}/series", { params: { path: { projectId }, query: { start, end, buckets: 48 } } }),
       api.GET("/api/projects/{projectId}/issues/series", { params: { path: { projectId }, query: { start, end, buckets: 24 } } }),
+      api.GET("/api/projects/{projectId}/operations/series", { params: { path: { projectId }, query: { start, end, buckets: 24, limit: 10 } } }),
     ]);
     latency = lat.data ?? null;
     ops = op.data ?? [];
@@ -78,6 +83,7 @@
     alerts = al.data ?? null;
     sessions = (se.data ?? []).slice(0, 4);
     spanSeries = sr.data ?? [];
+    opSeries = opsr.data ?? [];
     const map: Record<string, Series> = {};
     for (const s of isr.data ?? []) map[s.fingerprint] = s;
     issueSeriesMap = map;
@@ -112,7 +118,7 @@
   <div class="tiles">
     <div class="tile"><span class="h">Requests</span><span class="big">{int64(latency?.count).toLocaleString()}</span><Sparkline values={reqSeries} /><span class="muted small">spans in window</span></div>
     <div class="tile"><span class="h">Error rate</span><span class="big" class:up={errorRate >= 5}>{errorRate.toFixed(1)}%</span><Sparkline values={rateSeries} color="var(--err)" /><span class="muted small">{totalErrors.toLocaleString()} failed of {totalCalls.toLocaleString()}</span></div>
-    <div class="tile"><span class="h">Latency p95</span><span class="big">{ms(latency?.p95)}</span><span class="muted small">p50 {ms(latency?.p50)} · p99 {ms(latency?.p99)}</span></div>
+    <div class="tile"><span class="h">Latency p95</span><span class="big">{ms(latency?.p95)}</span><Sparkline values={p95Series} color="var(--accent-2, var(--accent))" /><span class="muted small">p50 {ms(latency?.p50)} · p99 {ms(latency?.p99)}</span></div>
     <a class="tile linked" href={router.projectHref(projectId, "/issues")} use:link data-keep-filters="true">
       <span class="h">Open issues</span><span class="big">{openIssues}</span>
       <span class="pills">{#if counts && int64(counts.regressed) > 0}<span class="pill regr">{counts.regressed} regressed</span>{/if}<span class="pill unres">{counts?.unresolved ?? 0} unresolved</span></span>
@@ -168,7 +174,7 @@
               <span class="num mono">{int64(op.count).toLocaleString()}</span>
               <span class="num mono" class:err={int64(op.errorCount) > 0}>{int64(op.errorCount).toLocaleString()}</span>
               <span class="rate"><span class="bar"><span style="width:{opErrorRate(op)}%;background:var(--err)"></span></span><span class="mono pctn">{opErrorRate(op)}%</span></span>
-              <span class="num mono muted">—</span>
+              {#if opP95.get(op.operation)}<span class="num mono">{ms(opP95.get(op.operation))}</span>{:else}<span class="num mono muted">—</span>{/if}
             </div>
           {/each}
         {/if}
