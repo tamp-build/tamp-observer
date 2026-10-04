@@ -1,0 +1,40 @@
+{{- if .Values.logAgent.provisionProject }}
+{{- $jobName := printf "%s-provision-sample" (include "tamp-observer.fullname" .) }}
+# One-shot: register the `sample` trust-root Project (ADR 0007) so Sample telemetry stamped with
+# tamp.project.key=sample is admitted instead of quarantined as an unknown project. Runs the evaluator image's
+# `create-project` CLI one-shot (same command the install NOTES print for manual setup). A Project.Key carries a
+# unique index, so this must run once per key; it is a post-install hook and is not re-applied on upgrade.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ $jobName }}
+  labels:
+    {{- include "tamp-observer.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": post-install
+    "helm.sh/hook-weight": "5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      labels:
+        {{- include "tamp-observer.selectorLabels" (dict "root" . "component" "provision-sample") | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: provision
+          image: {{ include "tamp-observer.image" (dict "root" . "repository" .Values.evaluator.repository "tag" .Values.evaluator.tag) | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["create-project", "sample", "Sample"]
+          env:
+            - name: OBSERVER_DB
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "tamp-observer.secretName" . }}
+                  key: observer-db
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits: { cpu: 500m, memory: 256Mi }
+{{- end }}

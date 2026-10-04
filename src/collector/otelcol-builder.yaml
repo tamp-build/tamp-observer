@@ -13,18 +13,37 @@ dist:
   otelcol_version: 0.162.0
 
 receivers:
-  # The one front door that matters for the OTLP-pure boundary (ADR 0009).
+  # The one front door that matters for the OTLP-pure boundary (ADR 0009). This is the GATEWAY role.
   - gomod: go.opentelemetry.io/collector/receiver/otlpreceiver v0.162.0
+  # Edge AGENT role (TOBS-41): tail node-level container log files so workloads whose logger has no
+  # OTLP/syslog appender (e.g. Sample -> Console -> stdout) still reach the pipeline. Same distro, a
+  # second role selected by config; not a second product.
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/filelogreceiver v0.162.0
+
+extensions:
+  # Edge AGENT role (TOBS-41): persist filelog read offsets to a host checkpoint dir so an agent pod restart
+  # resumes where it left off instead of re-reading (dupes) or skipping (loss). Gateway role ignores it.
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/storage/filestorage v0.162.0
 
 processors:
-  # Minimal processor only; the collector stays a dumb fast pipe (ADR 0003/0004).
+  # Minimal processor for the gateway role; the collector stays a dumb fast pipe (ADR 0003/0004).
   - gomod: go.opentelemetry.io/collector/processor/batchprocessor v0.162.0
+  # Edge AGENT role (TOBS-41): enrich tailed logs with pod/namespace/labels, then stamp the resource
+  # attributes (tamp.project.key, service.name, deployment.environment) the evaluator keys admit/quarantine on.
+  # k8sattributes has graduated to stable 1.x versioning; v1.1.0 is cut from the same contrib release commit
+  # as the v0.162.0 beta modules (there is no v0.162.0 of this module).
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/k8sattributesprocessor v1.1.0
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourceprocessor v0.162.0
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/transformprocessor v0.162.0
 
 exporters:
   # Raw-bucket landing exporters (ADR 0004 section 2): the write-side tier dial. The pipeline config
-  # picks which one to use. rawfile = floor, valkeystream = high tier.
+  # picks which one to use. rawfile = floor, valkeystream = high tier. (GATEWAY role.)
   - gomod: github.com/tamp-build/tamp-observer/collector/rawfileexporter v0.0.0
   - gomod: github.com/tamp-build/tamp-observer/collector/valkeystreamexporter v0.0.0
+  # Edge AGENT role (TOBS-41): the agent is a plain OTLP client of the central gateway collector; it does
+  # NOT land raw bytes itself. Standard OTLP exporter carries enriched logs agent -> gateway (gRPC :4317).
+  - gomod: go.opentelemetry.io/collector/exporter/otlpexporter v0.162.0
   # Kept for dev visibility alongside the raw landing.
   - gomod: go.opentelemetry.io/collector/exporter/debugexporter v0.162.0
 

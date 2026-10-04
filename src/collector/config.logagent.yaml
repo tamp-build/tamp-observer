@@ -1,0 +1,149 @@
+# Edge log-AGENT config (TOBS-41). A second ROLE of our collector distro, not a second product:
+# it tails node-level container log files and ships enriched OTLP logs to the central GATEWAY collector.
+# Chosen over a sidecar (needs per-pod injection, misses KEDA scale-to-zero pods) and over kubectl-logs
+# polling (fragile, loses data on restart). Runs as a DaemonSet; see deploy/helm .../log-agent.yaml.
+#
+# Target workload: Sample (namespace `sample`) whose C++ logger has only Console/File/DB appenders -> all
+# output goes to stdout -> container log files on the node. We capture out-of-process at the platform.
+#
+# PARSER NOTE: tuned to microk8s's real structured format output (confirmed 2026-10-04). Each Sample stdout line is:
+#   <TS> <LEVEL> [<category>] <message>
+# where TS = `YYYY-MM-DD_HH:MM:SS` (underscore between date and time, whole seconds, UTC), LEVEL is %-5s padded
+# (so 1-2 spaces follow), and the logger category is in square brackets (structured format's 0x04 bit). Runtime is
+# containerd/CRI. We take the record TIME from the CRI envelope (RFC3339 nanos, UTC) via the `container`
+# operator and keep Sample's whole-second inline TS as an attribute. Separator is SPACES, not pipes.
+
+extensions:
+  # Persist read offsets to a host checkpoint dir (hostPath volume in the DaemonSet) so an agent pod restart
+  # resumes where it left off rather than re-reading (dupes) or skipping (loss).
+  file_storage:
+    directory: /var/lib/tamp-observer-logagent
+    create_directory: true   # self-heal if the hostPath mount is empty on first start
+
+receivers:
+  filelog:
+    # Tail Sample's real per-container log files under /var/log/pods (dir = <namespace>_<pod>_<uid>). This is
+    # the canonical input for the `container` operator: it carries pod uid/name/namespace/container, which the
+    # /var/log/containers SYMLINK path does NOT reliably yield in this version ("failed to detect a valid log
+    # path"). The sample_* prefix scopes to the sample namespace; init containers are included by agreement.
+    include:
+      - /var/log/pods/sample_*/*/*.log
+    start_at: end            # don't replay old node logs on first rollout; only new lines
+    storage: file_storage    # checkpoint offsets across agent restarts (see extensions above)
+    include_file_path: true
+    include_file_name: false
+    operators:
+      # 1) Unwrap the CRI envelope (containerd). Promotes stream/time and recombines CRI partial lines (P/F
+      #    logtag) into one log line. The operator auto-detects the runtime format (CRI vs docker json-file),
+      #    so no explicit `format` field (it was removed from this operator in recent filelog versions).
+      - type: container
+        add_metadata_from_filepath: true
+
+      # 2) RECOMBINE: join application-level multiline records (C++ crash stack dumps, embedded-newline SQL)
+      #    into one. Continuation lines LACK the prefix, so a new logical record STARTS only when a line begins
+      #    with the structured format timestamp (note the UNDERSCORE between date and time). Most db.query errors are
+      #    single-line, so this is a no-op for them and correctly coalesces the rare multiliners.
+      - type: recombine
+        combine_field: body
+        is_first_entry: 'body matches "^[0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{2}:[0-9]{2}:[0-9]{2}\\s"'
+        source_identifier: attributes["log.file.path"]
+        max_log_size: 102400
+
+      # 3) REGEX: split "<TS> <LEVEL> [<category>] <message>" into fields. Space-separated; LEVEL is %-5s padded
+      #    (\s+ absorbs the pad). The category in [...] is the high-value signal TOBS-42 leans on (db.query).
+      - type: regex_parser
+        regex: '^(?P<sample_ts>\d{4}-\d{2}-\d{2}_\d{2}:\d{2}:\d{2})\s+(?P<level>[A-Z]+)\s+\[(?P<category>[\w.]+)\]\s+(?P<msg>(?s:.*))$'
+        parse_from: body
+        # 3a) SEVERITY: map Sample LEVEL text -> OTLP severity. Backend keys Issues/filters on >=17 (ERROR)
+        #     and >=13 (WARN), so FATAL/ERROR/WARN/INFO/DEBUG/TRACE land on the right OTLP bands.
+        severity:
+          parse_from: attributes.level
+          mapping:
+            fatal: FATAL
+            error: ERROR
+            warn: [WARN, WARNING]
+            info: INFO
+            debug: DEBUG
+            trace: TRACE
+        # NOTE: no timestamp block here on purpose. The record TIME comes from the CRI envelope (RFC3339 nanos,
+        # UTC) that the `container` operator already set -- more precise than Sample's whole-second inline TS.
+
+      # 4) Promote the parsed message to the body; keep category as log.category (string attrs survive the
+      #    evaluator parse) and retain Sample's inline whole-second TS as an attribute for reference.
+      - type: move
+        from: attributes.msg
+        to: body
+      - type: move
+        from: attributes.category
+        to: attributes["log.category"]
+      - type: move
+        from: attributes.sample_ts
+        to: attributes["sample.timestamp"]
+      # Drop the scratch level field; severity is already parsed onto the record.
+      - type: remove
+        field: attributes.level
+
+processors:
+  # Enrich each record with pod/namespace/labels. Cross-namespace (agent tails `sample` pods): needs the
+  # ClusterRole in the DaemonSet manifest (get/list/watch pods). Association is by pod UID from the CRI metadata
+  # the `container` operator added, falling back to IP.
+  k8sattributes:
+    auth_type: serviceAccount
+    passthrough: false
+    extract:
+      metadata:
+        - k8s.namespace.name
+        - k8s.pod.name
+        - k8s.pod.uid
+      labels:
+        # Sample pods carry app in (service-b,service-a,service-c,service-d,service-e,...).
+        # Promote that label straight into service.name so the evaluator's EntityResolver discovers one
+        # Service per daemon (service-b, service-a, ...).
+        - tag_name: service.name
+          key: app
+          from: pod
+    pod_association:
+      # The container operator sets these resource attrs from the /var/log/pods path; associate by UID first,
+      # then fall back to pod name + namespace. (No `connection` source: filelog has no client connection.)
+      - sources: [{ from: resource_attribute, name: k8s.pod.uid }]
+      - sources:
+          - { from: resource_attribute, name: k8s.pod.name }
+          - { from: resource_attribute, name: k8s.namespace.name }
+
+  # Stamp the resource attributes the evaluator keys on. tamp.project.key=sample is the admit/quarantine
+  # trust-root key (unknown/missing => quarantine); deployment.environment=sample scopes capture policy.
+  resource:
+    attributes:
+      - key: tamp.project.key
+        value: sample
+        action: upsert
+      - key: deployment.environment
+        value: sample
+        action: upsert
+      # Fallback so a pod whose `app` label is somehow absent still resolves to a Service instead of blanking.
+      - key: service.name
+        from_attribute: k8s.pod.name
+        action: insert
+
+  batch: {}
+
+exporters:
+  # The agent is a plain OTLP client of the central gateway collector (release `-collector` Service, gRPC 4317).
+  # It does NOT land raw bytes itself -- the gateway owns the raw-bucket tier.
+  otlp:
+    endpoint: ${env:OBSERVER_GATEWAY_OTLP}   # e.g. tamp-observer-collector.tamp-observer.svc:4317
+    tls:
+      insecure: true                         # in-cluster plaintext; front it with mTLS if the link leaves the cluster
+    retry_on_failure:
+      enabled: true
+  debug:
+    verbosity: normal
+
+service:
+  extensions: [file_storage]
+  pipelines:
+    # Agent role carries LOGS only. Traces/metrics stay the gateway's OTLP front door (metrics arrive in TOBS-43).
+    logs:
+      receivers: [filelog]
+      processors: [k8sattributes, resource, batch]
+      exporters: [otlp]
