@@ -28,9 +28,12 @@ public static partial class LogGrouping
     }
 
     /// <summary>
-    /// Replace volatile literals with placeholders so every occurrence of one error class maps to one stable key.
-    /// Order matters: GUIDs and hex are consumed before bare digits, and quoted spans before digits so an id
-    /// inside quotes does not leak a stray '#'.
+    /// Replace volatile NUMERIC literals (GUIDs, hex, bare numbers) with placeholders so every occurrence of one
+    /// error class maps to one stable key. Quoted spans are deliberately NOT stripped: a quoted table/column/script
+    /// name (e.g. `spell_gen_clone` vs `spell_darkshore_corpse_soothe`) is the class DISCRIMINATOR, not a volatile
+    /// value — stripping it over-collapses distinct error classes into one Issue (the bug the live SkyFire restart
+    /// corpus exposed, TOBS-42). Numbers inside quotes (ids like '45204') are still parameterized by the number
+    /// pass, so a quoted literal value with digits still collapses while a pure-identifier name is preserved.
     /// </summary>
     public static string Normalize(string? body)
     {
@@ -38,9 +41,6 @@ public static partial class LogGrouping
         var s = body.Trim();
         s = GuidRegex().Replace(s, "#");
         s = HexRegex().Replace(s, "#");
-        s = SingleQuoteRegex().Replace(s, "'?'");
-        s = DoubleQuoteRegex().Replace(s, "\"?\"");
-        s = BacktickRegex().Replace(s, "`?`");
         s = NumberRegex().Replace(s, "#");
         s = WhitespaceRegex().Replace(s, " ").Trim();
         return s.Length <= 200 ? s : s[..200];
@@ -51,15 +51,6 @@ public static partial class LogGrouping
 
     [GeneratedRegex("0x[0-9a-fA-F]+")]
     private static partial Regex HexRegex();
-
-    [GeneratedRegex("'[^']*'")]
-    private static partial Regex SingleQuoteRegex();
-
-    [GeneratedRegex("\"[^\"]*\"")]
-    private static partial Regex DoubleQuoteRegex();
-
-    [GeneratedRegex("`[^`]*`")]
-    private static partial Regex BacktickRegex();
 
     [GeneratedRegex(@"\d+(\.\d+)?")]
     private static partial Regex NumberRegex();
