@@ -42,11 +42,16 @@ public sealed record ParsedLog(
     long TimeUnixNano, int SeverityNumber, string? SeverityText, string? Body,
     string? TraceId, string? SpanId, IReadOnlyDictionary<string, string> Attributes);
 
+/// <summary>A gauge/sum number data point extracted from a metrics payload (TOBS-43).</summary>
+public sealed record ParsedMetricPoint(
+    string Name, long TimeUnixNano, double Value, IReadOnlyDictionary<string, string> Attributes);
+
 /// <summary>One resource block with its resolved attributes and the signal bodies under it.</summary>
 public sealed record ParsedResource(
     ResourceAttributes Attributes,
     IReadOnlyList<ParsedSpan> Spans,
-    IReadOnlyList<ParsedLog> Logs);
+    IReadOnlyList<ParsedLog> Logs,
+    IReadOnlyList<ParsedMetricPoint> Metrics);
 
 /// <summary>
 /// Parses OTLP payload bytes into resources plus the span/log bodies the admit path stores (ADR 0004).
@@ -75,7 +80,7 @@ public static class OtlpParser
                         Hex(s.TraceId), Hex(s.SpanId), NullableHex(s.ParentSpanId), s.Name, s.Kind,
                         (long)s.StartTimeUnixNano, (long)s.EndTimeUnixNano,
                         s.Status?.Code ?? 0, s.Status?.Message, StringAttrs(s.Attributes)));
-            result.Add(new ParsedResource(Attrs(rs.Resource), spans, []));
+            result.Add(new ParsedResource(Attrs(rs.Resource), spans, [], []));
         }
         return result;
     }
@@ -93,7 +98,7 @@ public static class OtlpParser
                         (long)lr.TimeUnixNano, lr.SeverityNumber, EmptyToNull(lr.SeverityText),
                         BodyString(lr.Body), NullableHex(lr.TraceId), NullableHex(lr.SpanId),
                         StringAttrs(lr.Attributes)));
-            result.Add(new ParsedResource(Attrs(rl.Resource), [], logs));
+            result.Add(new ParsedResource(Attrs(rl.Resource), [], logs, []));
         }
         return result;
     }
@@ -103,7 +108,23 @@ public static class OtlpParser
         var data = MetricsData.Parser.ParseFrom(payload);
         var result = new List<ParsedResource>(data.ResourceMetrics.Count);
         foreach (var rm in data.ResourceMetrics)
-            result.Add(new ParsedResource(Attrs(rm.Resource), [], []));
+        {
+            var points = new List<ParsedMetricPoint>();
+            foreach (var sm in rm.ScopeMetrics)
+                foreach (var m in sm.Metrics)
+                {
+                    // Gauge and Sum carry NumberDataPoints; histograms/summaries are deferred (TOBS-43).
+                    IEnumerable<NumberDataPoint> dataPoints = [];
+                    if (m.Gauge is not null) dataPoints = dataPoints.Concat(m.Gauge.DataPoints);
+                    if (m.Sum is not null) dataPoints = dataPoints.Concat(m.Sum.DataPoints);
+                    foreach (var dp in dataPoints)
+                    {
+                        var value = dp.ValueCase == NumberDataPoint.ValueOneofCase.AsInt ? dp.AsInt : dp.AsDouble;
+                        points.Add(new ParsedMetricPoint(m.Name, (long)dp.TimeUnixNano, value, StringAttrs(dp.Attributes)));
+                    }
+                }
+            result.Add(new ParsedResource(Attrs(rm.Resource), [], [], points));
+        }
         return result;
     }
 

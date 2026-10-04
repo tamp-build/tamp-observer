@@ -31,6 +31,7 @@
   type Series = components["schemas"]["IssueSeries"];
   type Bucket = components["schemas"]["SeriesBucket"];
   type OpSeries = components["schemas"]["OperationSeries"];
+  type Metric = components["schemas"]["MetricLatest"];
 
   let latency = $state<Latency | null>(null);
   let ops = $state<Op[]>([]);
@@ -40,8 +41,13 @@
   let sessions = $state<Session[]>([]);
   let spanSeries = $state<Bucket[]>([]);
   let opSeries = $state<OpSeries[]>([]);
+  let metrics = $state<Metric[]>([]);
+  let metricSeries = $state<Record<string, number[]>>({});
   let issueSeriesMap = $state<Record<string, Series>>({});
   let loading = $state(true);
+
+  // Distinct metric names present, newest-value first, for the metrics panel.
+  const metricNames = $derived([...new Set(metrics.map((m) => m.name))]);
 
   const projectName = $derived(instance.project(projectId)?.name ?? "Project");
   const totalCalls = $derived(ops.reduce((a, o) => a + int64(o.count), 0));
@@ -65,7 +71,7 @@
   async function load() {
     loading = true;
     const { start, end } = filters.rangeNanos;
-    const [lat, op, iss, c, al, se, sr, isr, opsr] = await Promise.all([
+    const [lat, op, iss, c, al, se, sr, isr, opsr, mt] = await Promise.all([
       api.GET("/api/projects/{projectId}/latency", { params: { path: { projectId }, query: { start, end } } }),
       api.GET("/api/projects/{projectId}/operations", { params: { path: { projectId }, query: { start, end, limit: 10 } } }),
       api.GET("/api/projects/{projectId}/issues", { params: { path: { projectId }, query: { limit: 5 } } }),
@@ -75,6 +81,7 @@
       api.GET("/api/projects/{projectId}/series", { params: { path: { projectId }, query: { start, end, buckets: 48 } } }),
       api.GET("/api/projects/{projectId}/issues/series", { params: { path: { projectId }, query: { start, end, buckets: 24 } } }),
       api.GET("/api/projects/{projectId}/operations/series", { params: { path: { projectId }, query: { start, end, buckets: 24, limit: 10 } } }),
+      api.GET("/api/projects/{projectId}/metrics", { params: { path: { projectId }, query: { start, end } } }),
     ]);
     latency = lat.data ?? null;
     ops = op.data ?? [];
@@ -84,10 +91,24 @@
     sessions = (se.data ?? []).slice(0, 4);
     spanSeries = sr.data ?? [];
     opSeries = opsr.data ?? [];
+    metrics = mt.data ?? [];
     const map: Record<string, Series> = {};
     for (const s of isr.data ?? []) map[s.fingerprint] = s;
     issueSeriesMap = map;
     loading = false;
+
+    // Per-metric-name sparklines (gauge series). Fetched after the main load so the page paints first.
+    const names = [...new Set(metrics.map((m) => m.name))];
+    const seriesMap: Record<string, number[]> = {};
+    await Promise.all(
+      names.map(async (name) => {
+        const r = await api.GET("/api/projects/{projectId}/metrics/series", {
+          params: { path: { projectId }, query: { start, end, name, buckets: 48 } },
+        });
+        seriesMap[name] = (r.data ?? []).map((b) => Number(b.value));
+      }),
+    );
+    metricSeries = seriesMap;
   }
 
   $effect(() => {
@@ -179,6 +200,24 @@
           {/each}
         {/if}
       </section>
+
+      <!-- Metrics (TOBS-43): latest gauges + per-name series (e.g. SkyFire player count, per-service up/down) -->
+      {#if metrics.length > 0}
+        <section class="panel">
+          <div class="panel-head"><h2 class="h">Metrics</h2><span class="muted small">latest gauges</span></div>
+          {#each metricNames as name (name)}
+            <div class="metric-row">
+              <span class="mono opname">{name}</span>
+              <Sparkline values={metricSeries[name] ?? []} />
+              <span class="mvals">
+                {#each metrics.filter((m) => m.name === name) as m (m.serviceId)}
+                  <span class="mono muted">{services.name(projectId, m.serviceId)} <b class="mono">{Number(m.value)}</b></span>
+                {/each}
+              </span>
+            </div>
+          {/each}
+        </section>
+      {/if}
     </div>
 
     <div class="side-col">
@@ -265,4 +304,8 @@
   .axis { display: flex; justify-content: space-between; font-size: 11px; margin-top: 4px; }
   .sid { color: var(--text); }
   .atitle { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .metric-row { display: flex; align-items: center; gap: var(--gap-3); padding: 6px var(--gap-4); border-top: 1px solid var(--divider); }
+  .metric-row .opname { min-width: 180px; }
+  .mvals { display: flex; flex-wrap: wrap; gap: var(--gap-3); margin-left: auto; font-size: var(--fs-label); }
+  .mvals b { color: var(--text-1); }
 </style>

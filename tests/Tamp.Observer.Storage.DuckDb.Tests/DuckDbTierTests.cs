@@ -93,6 +93,32 @@ public sealed class DuckDbTierTests : IAsyncLifetime
         Assert.True(op2.P95Nano >= op1.P95Nano); // op2 is slower
     }
 
+    [Fact]
+    public async Task Metrics_latest_and_series_via_duckdb()
+    {
+        var project = Guid.NewGuid();
+        var a = Guid.NewGuid();
+        var b = Guid.NewGuid();
+        await using (var s = _store.LightweightSession())
+        {
+            s.Store(new IngestedMetric { ProjectId = project, ServiceId = a, Name = "skyfire.players", Value = 10, TimeUnixNano = 1000, ReceiptId = "r", ReceivedAt = DateTimeOffset.UtcNow });
+            s.Store(new IngestedMetric { ProjectId = project, ServiceId = a, Name = "skyfire.players", Value = 25, TimeUnixNano = 2000, ReceiptId = "r", ReceivedAt = DateTimeOffset.UtcNow });
+            s.Store(new IngestedMetric { ProjectId = project, ServiceId = a, Name = "up", Value = 1, TimeUnixNano = 2000, ReceiptId = "r", ReceivedAt = DateTimeOffset.UtcNow });
+            s.Store(new IngestedMetric { ProjectId = project, ServiceId = b, Name = "up", Value = 0, TimeUnixNano = 2000, ReceiptId = "r", ReceivedAt = DateTimeOffset.UtcNow });
+            await s.SaveChangesAsync();
+        }
+
+        var latest = await _reads.GetLatestMetricsAsync(project, new TimeWindow(1000, 3000));
+        Assert.Equal(25, latest.Single(m => m.Name == "skyfire.players").Value);
+        Assert.Equal(2, latest.Count(m => m.Name == "up"));
+        Assert.Equal(0, latest.Single(m => m.Name == "up" && m.ServiceId == b).Value);
+
+        var series = await _reads.GetMetricSeriesAsync(project, "skyfire.players", new TimeWindow(1000, 3000), buckets: 2);
+        Assert.Equal(2, series.Count);
+        Assert.Equal(10, series[0].Value);
+        Assert.Equal(25, series[1].Value);
+    }
+
     private async Task StoreSpans(Guid project, Guid service, Guid version, string trace,
         params (string name, long start, long duration, int status)[] spans)
     {

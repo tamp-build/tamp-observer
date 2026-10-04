@@ -292,6 +292,45 @@ public sealed class MartenObservabilityStore(IDocumentStore store, string connec
             attrs.GetValueOrDefault("exception.stacktrace"));
     }
 
+    public async Task<IReadOnlyList<MetricLatest>> GetLatestMetricsAsync(Guid projectId, TimeWindow window, CancellationToken ct = default)
+    {
+        await using var session = _store.QuerySession();
+        var points = await session.Query<IngestedMetric>()
+            .Where(m => m.ProjectId == projectId
+                && m.TimeUnixNano >= window.StartUnixNano && m.TimeUnixNano < window.EndUnixNano)
+            .ToListAsync(ct);
+        return points
+            .GroupBy(m => (m.Name, m.ServiceId))
+            .Select(g => g.OrderByDescending(m => m.TimeUnixNano).First())
+            .Select(m => new MetricLatest(m.Name, m.ServiceId, m.Value, m.TimeUnixNano))
+            .OrderBy(m => m.Name, StringComparer.Ordinal)
+            .ToList();
+    }
+
+    public async Task<IReadOnlyList<MetricBucket>> GetMetricSeriesAsync(Guid projectId, string name, TimeWindow window, int buckets, Guid? serviceId = null, CancellationToken ct = default)
+    {
+        buckets = Math.Clamp(buckets, 1, 500);
+        await using var session = _store.QuerySession();
+        var q = session.Query<IngestedMetric>()
+            .Where(m => m.ProjectId == projectId && m.Name == name
+                && m.TimeUnixNano >= window.StartUnixNano && m.TimeUnixNano < window.EndUnixNano);
+        if (serviceId is Guid svc) q = q.Where(m => m.ServiceId == svc);
+        var points = await q.ToListAsync(ct);
+
+        var width = BucketWidth(window, buckets);
+        var last = new double?[buckets];
+        var lastAt = new long[buckets];
+        foreach (var m in points)
+        {
+            var b = BucketIndex(m.TimeUnixNano, window.StartUnixNano, width, buckets);
+            if (last[b] is null || m.TimeUnixNano >= lastAt[b]) { last[b] = m.Value; lastAt[b] = m.TimeUnixNano; }
+        }
+        var series = new List<MetricBucket>(buckets);
+        for (var i = 0; i < buckets; i++)
+            series.Add(new MetricBucket(window.StartUnixNano + (long)i * width, last[i] ?? 0));
+        return series;
+    }
+
     private async Task<NpgsqlConnection> OpenAsync(CancellationToken ct)
     {
         var conn = new NpgsqlConnection(_connectionString);

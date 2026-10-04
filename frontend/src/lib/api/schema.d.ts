@@ -340,6 +340,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{projectId}/metrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ProjectMetrics"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{projectId}/metrics/series": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ProjectMetricSeries"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects/{projectId}/traces/{traceId}": {
         parameters: {
             query?: never;
@@ -831,6 +863,21 @@ export interface components {
             admitted: boolean;
             role: null | string;
             capabilities: string[];
+        };
+        MetricBucket: {
+            /** Format: int64 */
+            startUnixNano: number | string;
+            /** Format: double */
+            value: number | string;
+        };
+        MetricLatest: {
+            name: string;
+            /** Format: uuid */
+            serviceId: string;
+            /** Format: double */
+            value: number | string;
+            /** Format: int64 */
+            timeUnixNano: number | string;
         };
         OperationSeries: {
             operation: string;
@@ -1598,6 +1645,73 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OperationSeries"][];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ProjectMetrics: {
+        parameters: {
+            query: {
+                start: number | string;
+                end: number | string;
+            };
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricLatest"][];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ProjectMetricSeries: {
+        parameters: {
+            query: {
+                start: number | string;
+                end: number | string;
+                name: string;
+                service?: string;
+                buckets?: number | string;
+            };
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricBucket"][];
                 };
             };
             /** @description Forbidden */
