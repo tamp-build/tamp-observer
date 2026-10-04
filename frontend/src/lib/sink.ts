@@ -74,6 +74,12 @@ export async function installClientSink(): Promise<void> {
   projectKey = cfg.clientProjectKey;
 
   errors.setSink(enqueue);
+  // Drain the backlog: errors captured between installClientObservability() and now (this sink installs
+  // asynchronously after fetching /config.json) would otherwise be toasted but never ingested. That window
+  // routinely catches the earliest failures (e.g. a resource/script error during initial page load). Forward
+  // them oldest-first so the backend sees them too.
+  for (const e of [...errors.recent].reverse()) enqueue(e);
+  void flush();
   timer = window.setInterval(() => void flush(), FLUSH_MS);
   // Flush on the way out so the last errors are not lost.
   window.addEventListener("pagehide", () => void flush(true));
