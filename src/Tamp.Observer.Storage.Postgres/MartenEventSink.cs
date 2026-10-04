@@ -24,6 +24,8 @@ public sealed class MartenEventSink(IDocumentStore store) : IEventSink
         foreach (var version in batch.NewVersions) session.Store(version);
         foreach (var span in batch.Spans) session.Store(span);
         foreach (var log in batch.Logs) session.Store(log);
+        if (batch.Metrics is not null)
+            foreach (var metric in batch.Metrics) session.Store(metric);
         // Issues are upserts (new or updated projections); Marten Store() inserts or updates by Id.
         foreach (var issue in batch.Issues) session.Store(issue);
 

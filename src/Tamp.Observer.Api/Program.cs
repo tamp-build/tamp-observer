@@ -570,6 +570,37 @@ api.MapGet("/projects/{projectId:guid}/operations/series", async (
     .Produces<IReadOnlyList<OperationSeries>>()
     .Produces(StatusCodes.Status403Forbidden);
 
+// Latest value per (metric name, service) over the window (TOBS-43). Drives the live player-count value and
+// per-service up/down tiles. ViewTraces.
+api.MapGet("/projects/{projectId:guid}/metrics", async (
+        Guid projectId, long start, long end,
+        HttpContext http, IAllowedIdentityStore allow, IObservabilityStore store, CancellationToken ct) =>
+    {
+        var denied = await HttpAuthorization.RequireAsync(http, allow, Capability.ViewTraces, ct);
+        if (denied is not null)
+            return denied;
+        var latest = await store.GetLatestMetricsAsync(projectId, new TimeWindow(start, end), ct);
+        return Results.Ok(latest);
+    })
+    .WithName("ProjectMetrics")
+    .Produces<IReadOnlyList<MetricLatest>>()
+    .Produces(StatusCodes.Status403Forbidden);
+
+// Dense per-bucket last value of a named gauge over the window (TOBS-43). Drives the player-count sparkline.
+api.MapGet("/projects/{projectId:guid}/metrics/series", async (
+        Guid projectId, long start, long end, string name, Guid? service, int? buckets,
+        HttpContext http, IAllowedIdentityStore allow, IObservabilityStore store, CancellationToken ct) =>
+    {
+        var denied = await HttpAuthorization.RequireAsync(http, allow, Capability.ViewTraces, ct);
+        if (denied is not null)
+            return denied;
+        var series = await store.GetMetricSeriesAsync(projectId, name, new TimeWindow(start, end), buckets ?? 48, service, ct);
+        return Results.Ok(series);
+    })
+    .WithName("ProjectMetricSeries")
+    .Produces<IReadOnlyList<MetricBucket>>()
+    .Produces(StatusCodes.Status403Forbidden);
+
 // The correlation walk: all spans and logs sharing a trace id within a project (read interface, ADR 0006).
 api.MapGet("/projects/{projectId:guid}/traces/{traceId}", async (
         Guid projectId,

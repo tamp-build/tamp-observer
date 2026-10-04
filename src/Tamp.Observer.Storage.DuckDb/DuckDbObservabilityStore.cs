@@ -21,6 +21,7 @@ public sealed class DuckDbObservabilityStore(string postgresConnectionString, st
     private readonly string _attach = ToLibpq(postgresConnectionString);
     private readonly string _spans = $"pg.{schema}.mt_doc_ingestedspan";
     private readonly string _logs = $"pg.{schema}.mt_doc_ingestedlog";
+    private readonly string _metrics = $"pg.{schema}.mt_doc_ingestedmetric";
 
     // One long-lived in-process DuckDB connection with the Postgres attach held open, reused across reads
     // (TOBS-34). The connection is single-threaded, so access is serialized through the gate; with the attach
@@ -346,6 +347,64 @@ FROM {_spans} WHERE {where} GROUP BY op, b";
                 sb.Add(new SeriesBucket(query.Window.StartUnixNano + (long)i * width, cc[i], ee[i]));
             return new OperationSeries(t.Op, t.Count, t.Err, t.P95, sb);
         }).ToList();
+    }
+
+    public async Task<IReadOnlyList<MetricLatest>> GetLatestMetricsAsync(Guid projectId, TimeWindow window, CancellationToken ct = default)
+    {
+        var sql = $@"
+SELECT name, svc, val, t FROM (
+  SELECT json_extract_string(data,'$.Name') AS name,
+         json_extract_string(data,'$.ServiceId') AS svc,
+         CAST(json_extract_string(data,'$.Value') AS DOUBLE) AS val,
+         CAST(json_extract_string(data,'$.TimeUnixNano') AS BIGINT) AS t
+  FROM {_metrics}
+  WHERE json_extract_string(data,'$.ProjectId') = $projectId
+    AND CAST(json_extract_string(data,'$.TimeUnixNano') AS BIGINT) >= $start
+    AND CAST(json_extract_string(data,'$.TimeUnixNano') AS BIGINT) < $end)
+QUALIFY row_number() OVER (PARTITION BY name, svc ORDER BY t DESC) = 1";
+        var result = new List<MetricLatest>();
+        await using var lease = await OpenAsync(ct);
+        await using var cmd = Command(lease.Conn, sql,
+            [("projectId", projectId.ToString()), ("start", window.StartUnixNano), ("end", window.EndUnixNano)]);
+        await using var r = await cmd.ExecuteReaderAsync(ct);
+        while (await r.ReadAsync(ct))
+            result.Add(new MetricLatest((string)r["name"], Guid.Parse((string)r["svc"]), Dbl(r["val"]), Convert.ToInt64(r["t"])));
+        return result.OrderBy(m => m.Name, StringComparer.Ordinal).ToList();
+    }
+
+    public async Task<IReadOnlyList<MetricBucket>> GetMetricSeriesAsync(Guid projectId, string name, TimeWindow window, int buckets, Guid? serviceId = null, CancellationToken ct = default)
+    {
+        buckets = Math.Clamp(buckets, 1, 500);
+        var width = Math.Max(1, (window.EndUnixNano - window.StartUnixNano) / buckets);
+        var where = "json_extract_string(data,'$.ProjectId') = $projectId"
+            + " AND json_extract_string(data,'$.Name') = $name"
+            + " AND CAST(json_extract_string(data,'$.TimeUnixNano') AS BIGINT) >= $start"
+            + " AND CAST(json_extract_string(data,'$.TimeUnixNano') AS BIGINT) < $end";
+        var bind = new List<(string, object)>
+        {
+            ("projectId", projectId.ToString()), ("name", name),
+            ("start", window.StartUnixNano), ("end", window.EndUnixNano), ("width", width),
+        };
+        if (serviceId is Guid svc)
+        {
+            where += " AND json_extract_string(data,'$.ServiceId') = $serviceId";
+            bind.Add(("serviceId", svc.ToString()));
+        }
+        var sql = $@"
+SELECT CAST((CAST(json_extract_string(data,'$.TimeUnixNano') AS BIGINT) - $start) / $width AS INTEGER) AS b,
+       arg_max(CAST(json_extract_string(data,'$.Value') AS DOUBLE),
+               CAST(json_extract_string(data,'$.TimeUnixNano') AS BIGINT)) AS v
+FROM {_metrics} WHERE {where} GROUP BY b";
+        var last = new double[buckets];
+        await using var lease = await OpenAsync(ct);
+        await using var cmd = Command(lease.Conn, sql, bind.ToArray());
+        await using var r = await cmd.ExecuteReaderAsync(ct);
+        while (await r.ReadAsync(ct))
+            last[Math.Clamp(Convert.ToInt32(r["b"]), 0, buckets - 1)] = Dbl(r["v"]);
+        var series = new List<MetricBucket>(buckets);
+        for (var i = 0; i < buckets; i++)
+            series.Add(new MetricBucket(window.StartUnixNano + (long)i * width, last[i]));
+        return series;
     }
 
     public async Task<IReadOnlyList<IssueSeries>> GetIssueSeriesAsync(Guid projectId, TimeWindow window, int buckets, CancellationToken ct = default)

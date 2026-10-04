@@ -17,12 +17,14 @@ public sealed record AdmittedBatch(
     IReadOnlyList<Issue> Issues,
     // The time-bucketed rollup deltas to fold in on this write (TOBS-25). Optional so existing callers/tests
     // keep compiling; null is treated as empty.
-    RollupDelta? Rollups = null)
+    RollupDelta? Rollups = null,
+    // Gauge/sum metric data points admitted on this write (TOBS-43). Optional; null is treated as empty.
+    IReadOnlyList<IngestedMetric>? Metrics = null)
 {
     public bool IsEmpty =>
         NewServices.Count == 0 && NewEnvironments.Count == 0 && NewVersions.Count == 0
         && Spans.Count == 0 && Logs.Count == 0 && Issues.Count == 0
-        && (Rollups?.IsEmpty ?? true);
+        && (Rollups?.IsEmpty ?? true) && (Metrics is null || Metrics.Count == 0);
 }
 
 /// <summary>
