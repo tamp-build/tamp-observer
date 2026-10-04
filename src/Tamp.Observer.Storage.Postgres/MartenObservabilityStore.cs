@@ -1,4 +1,5 @@
 using Marten;
+using Npgsql;
 using Tamp.Observer.Domain;
 using Tamp.Observer.Storage.Abstractions;
 
@@ -11,9 +12,10 @@ namespace Tamp.Observer.Storage.Postgres;
 /// (DuckDB/ClickHouse) would instead push these down as native <c>percentile_cont</c> / <c>quantile</c>
 /// and <c>GROUP BY</c>, which is exactly why the interface is capability-based intent, not shared SQL.
 /// </summary>
-public sealed class MartenObservabilityStore(IDocumentStore store) : IObservabilityStore
+public sealed class MartenObservabilityStore(IDocumentStore store, string connectionString) : IObservabilityStore
 {
     private readonly IDocumentStore _store = store;
+    private readonly string _connectionString = connectionString;
 
     public async Task<LatencyPercentiles> GetLatencyPercentilesAsync(SpanQuery query, CancellationToken ct = default)
     {
@@ -115,18 +117,49 @@ public sealed class MartenObservabilityStore(IDocumentStore store) : IObservabil
     public async Task<IReadOnlyList<SeriesBucket>> GetSpanSeriesAsync(SpanQuery query, int buckets, CancellationToken ct = default)
     {
         buckets = Math.Clamp(buckets, 1, 500);
-        await using var session = _store.QuerySession();
-        var spans = await WindowedSpans(session, query).ToListAsync(ct);
         var width = BucketWidth(query.Window, buckets);
         var counts = new long[buckets];
         var errors = new long[buckets];
-        foreach (var s in spans)
+        var bytes = new long[buckets];
+        var lat = new long[buckets][];
+        for (var i = 0; i < buckets; i++) lat[i] = LatencyHistogram.Empty();
+
+        // Served from the materialized rollup (TOBS-25): fold the dense 60s rollup buckets into the requested
+        // output buckets and derive p95 per output bucket from the summed latency histogram.
+        var sql = "SELECT bucket_start, event_count, error_count, bytes, lat_hist FROM observer.observer_rollup_signal "
+            + "WHERE project_id = @p AND signal = 'span' AND bucket_start >= @s AND bucket_start < @e"
+            + (query.ServiceId is not null ? " AND service_id = @svc" : "");
+        try
         {
-            var b = BucketIndex(s.StartUnixNano, query.Window.StartUnixNano, width, buckets);
-            counts[b]++;
-            if (s.StatusCode == 2) errors[b]++;
+            await using var conn = new NpgsqlConnection(_connectionString);
+            await conn.OpenAsync(ct);
+            await using var cmd = new NpgsqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("p", query.ProjectId);
+            cmd.Parameters.AddWithValue("s", query.Window.StartUnixNano);
+            cmd.Parameters.AddWithValue("e", query.Window.EndUnixNano);
+            if (query.ServiceId is Guid svc) cmd.Parameters.AddWithValue("svc", svc);
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+            while (await reader.ReadAsync(ct))
+            {
+                var bucketStart = reader.GetInt64(0);
+                var b = BucketIndex(bucketStart, query.Window.StartUnixNano, width, buckets);
+                counts[b] += reader.GetInt64(1);
+                errors[b] += reader.GetInt64(2);
+                bytes[b] += reader.GetInt64(3);
+                LatencyHistogram.AddInto(lat[b], reader.GetFieldValue<long[]>(4));
+            }
         }
-        return BuildSeries(query.Window.StartUnixNano, width, counts, errors);
+        catch (PostgresException ex) when (ex.SqlState == "42P01")
+        {
+            // Rollup table not created yet (fresh install before the evaluator's first run): empty series.
+        }
+
+        var list = new List<SeriesBucket>(buckets);
+        for (var i = 0; i < buckets; i++)
+            list.Add(new SeriesBucket(
+                query.Window.StartUnixNano + (long)i * width, counts[i], errors[i],
+                (long)LatencyHistogram.Percentile(lat[i], 0.95), bytes[i]));
+        return list;
     }
 
     public async Task<IReadOnlyList<IssueSeries>> GetIssueSeriesAsync(Guid projectId, TimeWindow window, int buckets, CancellationToken ct = default)
@@ -181,13 +214,6 @@ public sealed class MartenObservabilityStore(IDocumentStore store) : IObservabil
     internal static long BucketWidth(TimeWindow w, int buckets) => Math.Max(1, (w.EndUnixNano - w.StartUnixNano) / buckets);
     internal static int BucketIndex(long t, long start, long width, int buckets) =>
         (int)Math.Clamp((t - start) / width, 0, buckets - 1);
-    internal static IReadOnlyList<SeriesBucket> BuildSeries(long start, long width, long[] counts, long[] errors)
-    {
-        var list = new List<SeriesBucket>(counts.Length);
-        for (var i = 0; i < counts.Length; i++)
-            list.Add(new SeriesBucket(start + (long)i * width, counts[i], errors[i]));
-        return list;
-    }
 
     public async Task<IssueOccurrence?> GetLatestOccurrenceByTraceAsync(Guid projectId, string traceId, CancellationToken ct = default)
     {

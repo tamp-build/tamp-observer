@@ -20,13 +20,14 @@ public sealed class CompositeTieredEventSink(IEventSink entitySink, IEventSink t
         if (batch.IsEmpty)
             return;
 
-        // Entities and issues to the system of record; nothing telemetry-shaped.
+        // Entities and issues to the system of record; nothing telemetry-shaped. The TOBS-25 rollup rides here
+        // too so it always lands in Postgres (read by the Marten and DuckDB providers), not the columnar tier.
         var entities = batch with { Spans = [], Logs = [] };
         if (!entities.IsEmpty)
             await _entitySink.WriteAsync(entities, ct);
 
-        // Telemetry to the analytical tier; no entity provisioning.
-        var telemetry = batch with { NewServices = [], NewEnvironments = [], NewVersions = [], Issues = [] };
+        // Telemetry to the analytical tier; no entity provisioning and no rollup (kept in Postgres above).
+        var telemetry = batch with { NewServices = [], NewEnvironments = [], NewVersions = [], Issues = [], Rollups = null };
         if (!telemetry.IsEmpty)
             await _telemetrySink.WriteAsync(telemetry, ct);
     }

@@ -74,6 +74,10 @@ if (sinkTier == "clickhouse")
     }
 }
 
+// The evaluator owns the materialized rollup schema (TOBS-25), as it is the writer. Postgres is always the
+// system of record, so ensure the rollup tables exist on every boot, regardless of the telemetry-tier dial.
+await RollupSchema.EnsureAsync(connectionString);
+
 builder.Services.AddSingleton<IRawBucketReader>(_ => rawBucketTier switch
 {
     "valkey" => new ValkeyRawBucketReader(valkeyConnection),

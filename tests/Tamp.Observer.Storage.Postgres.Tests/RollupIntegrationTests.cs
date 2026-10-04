@@ -1,0 +1,98 @@
+using Marten;
+using Tamp.Observer.Domain;
+using Tamp.Observer.Storage.Abstractions;
+using Tamp.Observer.Storage.Postgres;
+using Testcontainers.PostgreSql;
+using Xunit;
+
+namespace Tamp.Observer.Storage.Postgres.Tests;
+
+/// <summary>
+/// Proves the materialized signal rollup (TOBS-25): the sink folds per-bucket deltas into the rollup table via
+/// an atomic upsert, and GetSpanSeriesAsync serves counts/errors/p95/bytes from it, summed over the window.
+/// </summary>
+[Trait("Category", "Integration")]
+public sealed class RollupIntegrationTests : IAsyncLifetime
+{
+    private const long Bucket = 60_000_000_000L; // 60s
+    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:16-alpine").Build();
+    private IDocumentStore _store = null!;
+    private MartenEventSink _sink = null!;
+    private MartenObservabilityStore _reads = null!;
+
+    public async Task InitializeAsync()
+    {
+        await _postgres.StartAsync();
+        var conn = _postgres.GetConnectionString();
+        await RollupSchema.EnsureAsync(conn);
+        _store = ObserverStore.For(conn);
+        _sink = new MartenEventSink(_store);
+        _reads = new MartenObservabilityStore(_store, conn);
+    }
+
+    public async Task DisposeAsync()
+    {
+        _store.Dispose();
+        await _postgres.DisposeAsync();
+    }
+
+    private static long[] Hist(long durationNano, long count)
+    {
+        var h = LatencyHistogram.Empty();
+        for (var i = 0; i < count; i++) LatencyHistogram.Observe(h, durationNano);
+        return h;
+    }
+
+    private async Task WriteSignal(Guid project, Guid service, long bucketStart, long events, long errors, long bytes, long durationNano)
+    {
+        var row = new SignalRollupRow(project, service, "span", bucketStart, events, errors, bytes,
+            Hist(durationNano, events), LatencyHistogram.Empty());
+        await _sink.WriteAsync(new AdmittedBatch([], [], [], [], [], [], new RollupDelta([row])));
+    }
+
+    [Fact]
+    public async Task Series_sums_buckets_and_upsert_increments()
+    {
+        var project = Guid.NewGuid();
+        var service = Guid.NewGuid();
+        var b0 = Bucket * 100;
+
+        // Two writes to the SAME (service, signal, bucket) must add via ON CONFLICT, not overwrite.
+        await WriteSignal(project, service, b0, events: 3, errors: 1, bytes: 300, durationNano: 2_000_000);
+        await WriteSignal(project, service, b0, events: 2, errors: 0, bytes: 200, durationNano: 2_000_000);
+        // A second bucket one minute later.
+        await WriteSignal(project, service, b0 + Bucket, events: 4, errors: 2, bytes: 400, durationNano: 2_000_000);
+
+        // One output bucket covering both rollup buckets: totals sum.
+        var whole = await _reads.GetSpanSeriesAsync(
+            new SpanQuery(project, new TimeWindow(b0, b0 + 2 * Bucket)), buckets: 1);
+        Assert.Single(whole);
+        Assert.Equal(9, whole[0].Count);       // 3 + 2 + 4
+        Assert.Equal(3, whole[0].ErrorCount);  // 1 + 0 + 2
+        Assert.Equal(900, whole[0].Bytes);     // 300 + 200 + 400
+        // All samples are 2ms (2000µs) -> p95 in the [1024µs, 2048µs) band.
+        Assert.InRange(whole[0].P95Nano, 1024L * 1000, 2048L * 1000);
+
+        // Two output buckets: the per-bucket split is preserved.
+        var split = await _reads.GetSpanSeriesAsync(
+            new SpanQuery(project, new TimeWindow(b0, b0 + 2 * Bucket)), buckets: 2);
+        Assert.Equal(2, split.Count);
+        Assert.Equal(5, split[0].Count);  // first bucket: 3 + 2
+        Assert.Equal(4, split[1].Count);  // second bucket
+    }
+
+    [Fact]
+    public async Task Service_filter_scopes_the_series()
+    {
+        var project = Guid.NewGuid();
+        var a = Guid.NewGuid();
+        var b = Guid.NewGuid();
+        var b0 = Bucket * 200;
+        await WriteSignal(project, a, b0, events: 5, errors: 0, bytes: 0, durationNano: 1_000_000);
+        await WriteSignal(project, b, b0, events: 7, errors: 0, bytes: 0, durationNano: 1_000_000);
+
+        var onlyA = await _reads.GetSpanSeriesAsync(
+            new SpanQuery(project, new TimeWindow(b0, b0 + Bucket), a), buckets: 1);
+        Assert.Equal(5, onlyA[0].Count);
+    }
+}

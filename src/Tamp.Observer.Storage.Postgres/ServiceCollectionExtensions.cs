@@ -22,7 +22,10 @@ public static class ServiceCollectionExtensions
 
         // The Postgres translators for the two ADR 0006 seams: the write sink and the read interface.
         services.AddSingleton<IEventSink, MartenEventSink>();
-        services.AddSingleton<IObservabilityStore, MartenObservabilityStore>();
+        // The read store needs the raw connection string too: the TOBS-25 rollup tables are plain SQL (not Marten
+        // documents), read via Npgsql.
+        services.AddSingleton<IObservabilityStore>(sp => new MartenObservabilityStore(
+            sp.GetRequiredService<IDocumentStore>(), connectionString));
 
         // The authorization chokepoint (ADR 0013).
         services.AddSingleton<IAuthorizationService, MartenAuthorizationService>();

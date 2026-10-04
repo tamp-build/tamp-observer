@@ -14,8 +14,10 @@ public sealed record LatencyPercentiles(long Count, double P50, double P95, doub
 /// <summary>Per-operation frequency and error count.</summary>
 public sealed record OperationStat(string Operation, long Count, long ErrorCount);
 
-/// <summary>One bucket of a time series: the bucket's start (Unix nanos) and the volume + errors in it (TOBS-25).</summary>
-public sealed record SeriesBucket(long StartUnixNano, long Count, long ErrorCount);
+/// <summary>One bucket of a time series: the bucket's start (Unix nanos), the volume + errors in it, and (when
+/// served from the rollup, TOBS-25) the p95 latency in nanos and the bytes ingested in the bucket. P95Nano/Bytes
+/// default to 0 for providers/signals that do not carry them.</summary>
+public sealed record SeriesBucket(long StartUnixNano, long Count, long ErrorCount, long P95Nano = 0, long Bytes = 0);
 
 /// <summary>An Issue's occurrence series over a window: dense per-bucket counts and distinct session count (TOBS-25).</summary>
 public sealed record IssueSeries(string Fingerprint, IReadOnlyList<long> Buckets, int Sessions);

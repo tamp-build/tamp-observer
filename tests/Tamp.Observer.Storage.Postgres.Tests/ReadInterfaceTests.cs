@@ -22,8 +22,10 @@ public sealed class ReadInterfaceTests : IAsyncLifetime
     public async Task InitializeAsync()
     {
         await _postgres.StartAsync();
-        _store = ObserverStore.For(_postgres.GetConnectionString());
-        _reads = new MartenObservabilityStore(_store);
+        var conn = _postgres.GetConnectionString();
+        await RollupSchema.EnsureAsync(conn);
+        _store = ObserverStore.For(conn);
+        _reads = new MartenObservabilityStore(_store, conn);
     }
 
     public async Task DisposeAsync()
