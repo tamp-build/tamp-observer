@@ -66,6 +66,33 @@ public sealed class DuckDbTierTests : IAsyncLifetime
         Assert.Equal("boom", view.Logs[0].Body);
     }
 
+    [Fact]
+    public async Task Span_series_has_native_p95_and_operation_series()
+    {
+        var project = Guid.NewGuid();
+        var service = Guid.NewGuid();
+        var version = Guid.NewGuid();
+        await StoreSpans(project, service, version, "trace-s",
+            ("op1", 1000, 10, 0), ("op1", 1010, 20, 0), ("op1", 1020, 30, 0),
+            ("op2", 1030, 40, 2), ("op2", 1040, 50, 0));
+        var query = new SpanQuery(project, new TimeWindow(1000, 2000), ServiceId: service);
+
+        var series = await _reads.GetSpanSeriesAsync(query, buckets: 1);
+        Assert.Single(series);
+        Assert.Equal(5, series[0].Count);
+        Assert.InRange(series[0].P95Nano, 30, 50); // exact quantile_cont over [10..50]
+
+        var ops = await _reads.GetOperationSeriesAsync(query, buckets: 1);
+        Assert.Equal(2, ops.Count);
+        var op1 = ops.Single(o => o.Operation == "op1");
+        Assert.Equal(3, op1.Count);
+        Assert.Equal(3, op1.Buckets[0].Count);
+        var op2 = ops.Single(o => o.Operation == "op2");
+        Assert.Equal(2, op2.Count);
+        Assert.Equal(1, op2.ErrorCount);
+        Assert.True(op2.P95Nano >= op1.P95Nano); // op2 is slower
+    }
+
     private async Task StoreSpans(Guid project, Guid service, Guid version, string trace,
         params (string name, long start, long duration, int status)[] spans)
     {
