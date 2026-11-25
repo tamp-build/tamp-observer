@@ -1,4 +1,4 @@
-import { errors, type AppError } from "./stores/errors.svelte";
+import { errors, type AppError, type ErrorKind } from "./stores/errors.svelte";
 import { loadConfig } from "./config";
 import { currentSessionId } from "./replay/recorder";
 
@@ -26,10 +26,34 @@ let projectKey = "";
 let queue: ClientEventPayload[] = [];
 let timer: number | null = null;
 
+// Severity per captured kind. The server maps level "warn" to severityNumber 13 / WARN and anything
+// else to 17 / ERROR, so this is the only thing that decides how a client event shows up in the
+// observability data.
+//
+// `console` is the odd one out and the reason this map exists: only console.error is patched
+// (observability.ts patchConsole), so a "console" event is app code choosing to log, not a failure
+// the app suffered. Reporting it at the same severity as an unhandled exception or a 5xx makes
+// developer log noise indistinguishable from a real fault — exactly what this product exists to
+// avoid — and left the server's WARN path unreachable.
+//
+// Typed as an exhaustive Record<ErrorKind, …> deliberately: adding a kind to ErrorKind without
+// choosing a level here is a compile error, so this cannot quietly collapse back into a conditional
+// that returns the same value either way (tamp-observer#14).
+const LEVEL_BY_KIND: Record<ErrorKind, "warn" | "error"> = {
+  console: "warn",
+  network: "error",
+  timeout: "error",
+  server: "error",
+  client: "error",
+  render: "error",
+  script: "error",
+  unhandled: "error",
+};
+
 function toPayload(e: AppError): ClientEventPayload {
   return {
     kind: e.kind,
-    level: e.kind === "console" ? "error" : "error",
+    level: LEVEL_BY_KIND[e.kind],
     message: e.message,
     url: e.url,
     status: e.status,
