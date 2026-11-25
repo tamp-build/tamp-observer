@@ -12,7 +12,7 @@ const FLUSH_MS = 5000;
 const MAX_BATCH = 25;
 const MAX_QUEUE = 100;
 
-interface ClientEventPayload {
+export interface ClientEventPayload {
   kind: string;
   level: string;
   message: string;
@@ -50,7 +50,12 @@ const LEVEL_BY_KIND: Record<ErrorKind, "warn" | "error"> = {
   unhandled: "error",
 };
 
-function toPayload(e: AppError): ClientEventPayload {
+/**
+ * The wire shape for one captured error. Exported so the kind-to-level mapping can be tested
+ * directly: tamp-observer#14 was a bug in exactly this function that no test could have caught,
+ * because the frontend had no test runner at all.
+ */
+export function toPayload(e: AppError): ClientEventPayload {
   return {
     kind: e.kind,
     level: LEVEL_BY_KIND[e.kind],
