@@ -73,6 +73,45 @@ public sealed class ClickHouseTierTests : IAsyncLifetime
         Assert.Equal("boom", view.Logs[0].Body);
     }
 
+    /// <summary>
+    /// GetLogsAsync was the one read intent with no ClickHouse coverage, which mattered when its
+    /// LIMIT moved from an interpolated int to a bound {limit:UInt32} parameter (tamp-observer#17,
+    /// csharpsquid:S2077). A bound LIMIT is not something to assume ClickHouse accepts, so this
+    /// exercises it against the real server: a limit smaller than the match count must truncate,
+    /// and the ordering flag must still decide which end of the window survives.
+    /// </summary>
+    [Fact]
+    public async Task Logs_respect_the_bound_limit_and_the_ordering_flag()
+    {
+        var project = Guid.NewGuid();
+        var service = Guid.NewGuid();
+        var version = Guid.NewGuid();
+
+        // Five logs, distinct timestamps so ordering is unambiguous.
+        var logs = Enumerable.Range(0, 5)
+            .Select(i => Log(project, service, version, $"trace-{i}", $"line-{i}", timeUnixNano: 1000 + i))
+            .ToArray();
+        await _sink.WriteAsync(new AdmittedBatch([], [], [], [], logs, []));
+
+        var window = new TimeWindow(900, 2000);
+
+        // Unlimited: all five come back, so the fixture itself is sound.
+        var all = await _reads.GetLogsAsync(new LogQuery(project, window, ServiceId: service));
+        Assert.Equal(5, all.Count);
+
+        // Limit below the match count must truncate -- this is the bound parameter doing its job.
+        var capped = await _reads.GetLogsAsync(new LogQuery(project, window, ServiceId: service, Limit: 2));
+        Assert.Equal(2, capped.Count);
+
+        // Descending (the default) keeps the newest; ascending keeps the oldest. Same limit,
+        // different rows, which proves LIMIT is applied after ORDER BY rather than before.
+        Assert.Equal("line-4", capped[0].Body);
+        var ascending = await _reads.GetLogsAsync(
+            new LogQuery(project, window, ServiceId: service, Limit: 2, Ascending: true));
+        Assert.Equal(2, ascending.Count);
+        Assert.Equal("line-0", ascending[0].Body);
+    }
+
     private static IngestedSpan Span(Guid p, Guid svc, Guid ver, string trace, string name, long start, long duration, int status) => new()
     {
         ProjectId = p, ServiceId = svc, VersionId = ver, EnvironmentId = Guid.NewGuid(),
@@ -81,10 +120,10 @@ public sealed class ClickHouseTierTests : IAsyncLifetime
         StatusCode = status, InstanceId = "host-1", ReceiptId = Guid.NewGuid().ToString("N"), ReceivedAt = DateTimeOffset.UtcNow,
     };
 
-    private static IngestedLog Log(Guid p, Guid svc, Guid ver, string trace, string body) => new()
+    private static IngestedLog Log(Guid p, Guid svc, Guid ver, string trace, string body, long timeUnixNano = 1000) => new()
     {
         ProjectId = p, ServiceId = svc, VersionId = ver, TraceId = trace,
-        TimeUnixNano = 1000, SeverityNumber = 9, SeverityText = "INFO", Body = body,
+        TimeUnixNano = timeUnixNano, SeverityNumber = 9, SeverityText = "INFO", Body = body,
         InstanceId = "host-1", ReceiptId = Guid.NewGuid().ToString("N"), ReceivedAt = DateTimeOffset.UtcNow,
     };
 }

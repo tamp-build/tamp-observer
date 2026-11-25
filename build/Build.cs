@@ -137,8 +137,14 @@ class Build : TampBuild
             .SetOrganization(SonarOrganization)
             .SetHostUrl(SonarHostUrl)
             .SetToken(SonarToken)
-            // The build script is build tooling (NUKE-style DSL), not shipped product code.
-            .SetProperty("sonar.exclusions", "build/**")
+            // build/**            — build tooling (NUKE-style DSL), not shipped product code.
+            // src/*.TestIngestor/** — a synthetic-telemetry generator (IsPackable=false, Exe) used
+            //                       to put fake spans through the pipeline during development. Its
+            //                       findings are noise in every category: csharpsquid:S2245 fires on
+            //                       `new Random(1337)`, whose fixed seed is the entire point, since
+            //                       generated telemetry has to be reproducible. Excluding the project
+            //                       is more honest than suppressing that rule one call at a time.
+            .SetProperty("sonar.exclusions", "build/**,src/Tamp.Observer.TestIngestor/**")
             .SetProperty("sonar.cs.opencover.reportsPaths", $"{CoverageDir.Value}/**/coverage.opencover.xml")
             .SetProperty("sonar.go.coverage.reportPaths", GoCoverage.Value)));
 

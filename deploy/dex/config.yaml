@@ -28,6 +28,22 @@ oauth2:
 enablePasswordDB: true
 staticPasswords:
   # dev@tamp.local / password  (bcrypt). Dev convenience only; never ship this.
+  #
+  # SonarCloud flags this hash as a committed credential (secrets:S8215, BLOCKER). It is
+  # accepted rather than fixed, because there is nothing here to revoke: the password is the
+  # literal string "password", it is published in this very comment, and it authenticates
+  # against an in-memory Dex (`storage: type: memory`) served over plain HTTP on
+  # id.localhost:5556 — a provider that exists only on a developer's own machine and holds no
+  # state between restarts. Replacing the hash would change nothing about who can use it.
+  #
+  # What WOULD be worth doing, if this file ever stops being dev-only: inject the hash from the
+  # environment instead of committing it. Note that Dex applies os.ExpandEnv to its config and a
+  # bcrypt hash is full of `$`, so that change needs testing rather than assuming — which is why
+  # it was not done as a drive-by here.
+  #
+  # If you are reading this because you are adapting the deployment for real use: delete this
+  # whole staticPasswords block and point OBSERVER_OIDC_AUTHORITY at your own IdP. The API
+  # validates real OIDC tokens on the same code path, so nothing else has to change.
   - email: "dev@tamp.local"
     hash: "$2y$10$JvXbjkRvTryTbLEEcCpMre6xtVle8WoInZfSnJ10SvvkrH.uBRnfa"
     username: "dev"
