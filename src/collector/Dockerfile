@@ -9,7 +9,9 @@ RUN go run go.opentelemetry.io/collector/cmd/builder@v0.162.0 --config otelcol-b
 WORKDIR /build/_dist
 RUN CGO_ENABLED=0 go build -trimpath -o /collector .
 
-FROM gcr.io/distroless/static-debian12 AS final
+# The :nonroot tag rather than a USER line: distroless ships the variant with uid 65532 already set,
+# which is the upstream-supported way to do this (docker:S6471). Static binary, nothing to write.
+FROM gcr.io/distroless/static-debian12:nonroot AS final
 COPY --from=build /collector /collector
 # Both raw-bucket configs are baked in; the active one is chosen by the container command (the floor file-spool
 # config by default, the Valkey config via the deploy/compose.valkey.yml overlay).

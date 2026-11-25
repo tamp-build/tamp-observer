@@ -5,7 +5,10 @@
 FROM node:22-alpine AS frontend
 WORKDIR /frontend
 COPY frontend/package.json frontend/package-lock.json ./
-RUN npm ci
+# --ignore-scripts: nothing in the SPA's dependency tree needs a lifecycle script to build, and a
+# postinstall hook in a transitive package is arbitrary code execution inside the image build
+# (docker:S6505). Verified by building this stage.
+RUN npm ci --ignore-scripts
 COPY frontend/ ./
 # Uses the committed schema.d.ts (openapi.json is already in the context); no live backend needed here.
 RUN npm run build
@@ -31,5 +34,10 @@ ENV HOME=/app
 # the ATTACH to a dummy database fails by design, hence `|| true`. At run time INSTALL finds it cached.
 RUN OBSERVER_STORE=duckdb OBSERVER_DB="Host=localhost;Port=5432;Database=x;Username=x;Password=x" \
     dotnet Tamp.Observer.Api.dll selftest-store || true
+# Drop to the image's non-root app user (docker:S6471). This comes AFTER the selftest RUN above so
+# the DuckDB extension cache is populated while still root, then handed over -- the app only needs
+# to read it at run time, and chown keeps it writable if a future INSTALL wants to refresh it.
+RUN chown -R $APP_UID:$APP_UID /app
+USER $APP_UID
 EXPOSE 8080
 ENTRYPOINT ["dotnet", "Tamp.Observer.Api.dll"]

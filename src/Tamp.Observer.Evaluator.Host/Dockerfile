@@ -9,4 +9,6 @@ RUN dotnet publish src/Tamp.Observer.Evaluator.Host/Tamp.Observer.Evaluator.Host
 FROM mcr.microsoft.com/dotnet/runtime:10.0 AS final
 WORKDIR /app
 COPY --from=dotnet /app/publish ./
+# Non-root app user (docker:S6471). Nothing here writes to disk.
+USER $APP_UID
 ENTRYPOINT ["dotnet", "Tamp.Observer.Evaluator.Host.dll"]
