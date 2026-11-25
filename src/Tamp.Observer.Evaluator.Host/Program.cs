@@ -133,7 +133,15 @@ if (Environment.GetEnvironmentVariable("OBSERVER_ALERT_TELEGRAM_TOKEN") is { Len
 if (Environment.GetEnvironmentVariable("OBSERVER_ALERT_SMTP_HOST") is { Length: > 0 } smtpHost
     && Environment.GetEnvironmentVariable("OBSERVER_ALERT_SMTP_FROM") is { Length: > 0 } smtpFrom
     && Environment.GetEnvironmentVariable("OBSERVER_ALERT_SMTP_TO") is { Length: > 0 } smtpTo)
-    envChannels.Add(new SmtpChannel(new SmtpChannelOptions { Host = smtpHost, From = smtpFrom, To = smtpTo.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) }));
+    envChannels.Add(new SmtpChannel(new SmtpChannelOptions
+    {
+        Host = smtpHost,
+        From = smtpFrom,
+        To = smtpTo.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+        // TLS is on unless explicitly disabled (tamp-observer#15). The opt-out exists so a
+        // plaintext-only relay on a trusted path stays usable; it has to be asked for by name.
+        UseSsl = !string.Equals(Environment.GetEnvironmentVariable("OBSERVER_ALERT_SMTP_NO_TLS"), "1", StringComparison.Ordinal),
+    }));
 
 builder.Services.AddSingleton(alertHttp);
 builder.Services.AddSingleton<IAlertDispatcher>(sp =>

@@ -40,6 +40,9 @@ public static class ChannelFactory
             Host = s.Smtp.Host!,
             From = s.Smtp.From!,
             To = s.Smtp.To!.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+            // Carried through rather than left to the option default, so the admin-configured
+            // choice is the one that takes effect (tamp-observer#15).
+            UseSsl = s.Smtp.UseSsl,
         }),
         "slack" when s.Slack.Configured => new SlackChannel(http, s.Slack.WebhookUrl!),
         "telegram" when s.Telegram.Configured => new TelegramChannel(http, s.Telegram.BotToken!, s.Telegram.ChatId!),
