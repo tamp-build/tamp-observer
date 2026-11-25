@@ -35,6 +35,25 @@ public class SmtpConfig
     /// <summary>Comma-separated recipient list.</summary>
     public string? To { get; set; }
 
+    /// <summary>
+    /// Encrypt the connection to the relay. <b>Defaults to true</b> (tamp-observer#15) — on port 25
+    /// that means STARTTLS, which an internal relay normally offers.
+    /// </summary>
+    /// <remarks>
+    /// Settable so the secure default is not a dead end: a plaintext-only relay on a trusted path
+    /// (loopback, or an in-enclave MTA that terminates TLS elsewhere) remains usable by turning this
+    /// off deliberately.
+    /// <para>
+    /// <b>A document written before this property existed inherits the default</b>, so upgrading an
+    /// installation turns TLS on by itself. That is the intended outcome, and it is not an assumption:
+    /// whether an absent JSON member keeps its C# initializer or gets overwritten with
+    /// <c>default(T)</c> is exactly the trap tamp#166 was, so it is pinned against real Marten and
+    /// Postgres by <c>EntityRoundTripTests.Smtp_UseSsl_default_survives_a_document_written_before_the_property_existed</c>.
+    /// An operator whose relay cannot do STARTTLS has to set this to false explicitly after upgrading.
+    /// </para>
+    /// </remarks>
+    public bool UseSsl { get; set; } = true;
+
     public bool Configured => !string.IsNullOrWhiteSpace(Host) && !string.IsNullOrWhiteSpace(From) && !string.IsNullOrWhiteSpace(To);
 }
 

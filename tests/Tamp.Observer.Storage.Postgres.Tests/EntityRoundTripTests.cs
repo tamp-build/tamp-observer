@@ -31,6 +31,62 @@ public sealed class EntityRoundTripTests : IAsyncLifetime
         await _postgres.DisposeAsync();
     }
 
+    /// <summary>
+    /// tamp-observer#15 made SmtpConfig.UseSsl default to true. That default is only useful if it
+    /// survives a document written BEFORE the property existed -- and whether an absent JSON member
+    /// keeps its C# initializer or gets overwritten with default(T) is exactly the trap tamp#166 was,
+    /// so it is tested against the real serializer rather than reasoned about.
+    ///
+    /// Whichever way Marten behaves, this test records it, because it decides whether existing
+    /// installations silently gain TLS on upgrade or silently keep plaintext.
+    /// </summary>
+    [Fact]
+    public async Task Smtp_UseSsl_default_survives_a_document_written_before_the_property_existed()
+    {
+        // An explicit false must persist as false -- otherwise the opt-out is broken.
+        await using (var session = _store.LightweightSession())
+        {
+            session.Store(new ChannelSettings { Smtp = new SmtpConfig { Host = "relay", From = "a@b", To = "c@d", UseSsl = false } });
+            await session.SaveChangesAsync();
+        }
+        await using (var session = _store.QuerySession())
+        {
+            var loaded = await session.LoadAsync<ChannelSettings>(ChannelSettings.SingletonId);
+            Assert.NotNull(loaded);
+            Assert.False(loaded!.Smtp.UseSsl);
+        }
+
+        // Now simulate a legacy document: strip the key from the stored JSON, the way a document
+        // written before the property existed would look.
+        await using (var conn = new Npgsql.NpgsqlConnection(_postgres.GetConnectionString()))
+        {
+            await conn.OpenAsync();
+            await using var cmd = conn.CreateCommand();
+            // Strip both casings: the serializer Marten uses decides which one is on disk.
+            cmd.CommandText = "update observer.mt_doc_channelsettings set data = (data #- '{Smtp,UseSsl}') #- '{Smtp,useSsl}'";
+            await cmd.ExecuteNonQueryAsync();
+
+            await using var check = conn.CreateCommand();
+            check.CommandText = "select data #> '{Smtp}' from observer.mt_doc_channelsettings";
+            var smtpJson = (string?)(await check.ExecuteScalarAsync())?.ToString();
+            Assert.NotNull(smtpJson);
+            Assert.DoesNotContain("seSsl", smtpJson!, StringComparison.Ordinal);   // the key really is gone
+        }
+
+        await using (var verify = _store.QuerySession())
+        {
+            var legacy = await verify.LoadAsync<ChannelSettings>(ChannelSettings.SingletonId);
+            Assert.NotNull(legacy);
+
+            // The assertion that matters. If this is true, the initializer survived and upgrading an
+            // installation turns TLS ON by itself. If it is false, the absent member was overwritten
+            // with default(bool) and legacy installs stay on plaintext until an operator opts in.
+            Assert.True(legacy!.Smtp.UseSsl,
+                "an absent useSsl member did not keep its initializer -- legacy installations will " +
+                "stay on plaintext, so #15 needs an explicit migration rather than just a default");
+        }
+    }
+
     [Fact]
     public async Task Project_persists_and_round_trips_by_key()
     {
