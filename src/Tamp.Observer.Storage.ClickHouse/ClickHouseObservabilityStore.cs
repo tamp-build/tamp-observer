@@ -48,12 +48,13 @@ FROM {ClickHouseSchema.SpansTable} WHERE {where}";
         var sql = $@"
 SELECT name, count() AS c, countIf(status_code = 2) AS e
 FROM {ClickHouseSchema.SpansTable} WHERE {where}
-GROUP BY name ORDER BY c DESC, name ASC LIMIT {top}";
+GROUP BY name ORDER BY c DESC, name ASC LIMIT {{limit:UInt32}}";
 
         await using var conn = new ClickHouseConnection(connectionString);
         await conn.OpenAsync(ct);
         await using var cmd = (ClickHouseCommand)conn.CreateCommand();
         cmd.CommandText = sql;
+        cmd.AddParameter("limit", "UInt32", top);
         BindSpanParams(cmd, query, hasService);
 
         var result = new List<OperationStat>();
@@ -132,7 +133,11 @@ FROM {ClickHouseSchema.LogsTable} WHERE project_id = {{projectId:UUID}} AND trac
 SELECT project_id, service_id, environment_id, version_id, time_unix_nano, severity_number, severity_text, body,
        trace_id, span_id, instance_id, attributes, receipt_id, received_at
 FROM {ClickHouseSchema.LogsTable} WHERE {where}
-ORDER BY time_unix_nano {order} LIMIT {(query.Limit <= 0 ? 200 : query.Limit)}";
+ORDER BY time_unix_nano {order} LIMIT {{limit:UInt32}}";
+        // Bound rather than interpolated. The value was already safe -- an int from a
+        // clamped request -- but binding it leaves no interpolated caller-derived value in
+        // the SQL text at all, which is what csharpsquid:S2077 actually asks for.
+        cmd.AddParameter("limit", "UInt32", query.Limit <= 0 ? 200 : Math.Clamp(query.Limit, 1, 10_000));
         cmd.AddParameter("projectId", "UUID", query.ProjectId);
         cmd.AddParameter("start", "Int64", query.Window.StartUnixNano);
         cmd.AddParameter("end", "Int64", query.Window.EndUnixNano);
