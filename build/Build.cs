@@ -144,9 +144,19 @@ class Build : TampBuild
             //                       `new Random(1337)`, whose fixed seed is the entire point, since
             //                       generated telemetry has to be reproducible. Excluding the project
             //                       is more honest than suppressing that rule one call at a time.
-            .SetProperty("sonar.exclusions", "build/**,src/Tamp.Observer.TestIngestor/**")
+            .SetProperty("sonar.exclusions",
+                // build/**            — build tooling, not shipped product code.
+                // TestIngestor/**     — a synthetic-telemetry generator; its fixed RNG seed is the point.
+                // design/**           — UI design mockups (19 standalone .html files, nothing references
+                //                       them). They were 12.8% of the project's duplication and the entire
+                //                       reason the gate's duplication condition failed: source/*.dc.html
+                //                       and static/*.html are two renderings of the SAME page, so they
+                //                       duplicate each other 40-90% BY CONSTRUCTION. Measuring code
+                //                       duplication across design mockups answers no question anyone has.
+                "build/**,src/Tamp.Observer.TestIngestor/**,design/**")
             .SetProperty("sonar.cs.opencover.reportsPaths", $"{CoverageDir.Value}/**/coverage.opencover.xml")
-            .SetProperty("sonar.go.coverage.reportPaths", GoCoverage.Value)));
+            .SetProperty("sonar.go.coverage.reportPaths", GoCoverage.Value)
+));
 
     Target SonarEnd => _ => _
         .After(nameof(Test), nameof(CollectorCoverageMap))
@@ -241,8 +251,23 @@ class Build : TampBuild
             s.Script = "check";
         }));
 
-    Target FrontendBuild => _ => _
+    Target FrontendTest => _ => _
         .DependsOn(nameof(FrontendCheck))
+        .Description("Run the SPA's unit tests (vitest) over src/lib's pure logic.")
+        .Executes(() => Npm.Run(NpmBin, s =>
+        {
+            s.SetWorkingDirectory(Frontend);
+            // Plain `test`, not `test:coverage`. The coverage side is NOT wired into Sonar: the v8
+            // provider does not remap through this project's TypeScript source maps and reports
+            // every file at 0% lines even when its tests pass (format.ts came out 100% functions,
+            // 100% branches, 0% lines), and istanbul aborts instrumenting the untested files.
+            // Feeding Sonar a report that says 0% would be worse than feeding it nothing -- see the
+            // note on tamp-observer#19. `npm run test:coverage` still works locally.
+            s.Script = "test";
+        }));
+
+    Target FrontendBuild => _ => _
+        .DependsOn(nameof(FrontendTest))
         .Description("Build the Svelte SPA to static assets in frontend/dist (ADR 0014).")
         .Executes(() => Npm.Run(NpmBin, s =>
         {
